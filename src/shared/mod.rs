@@ -92,9 +92,15 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
     // Rust binary; point Chromium at the resources shipped with CEF_PATH.
     #[cfg(target_os = "linux")]
     if let Some(root) = linux_cef_runtime_dir() {
-        settings.resources_dir_path = CefString::from(
-            root.join("resources").to_string_lossy().as_ref(),
-        );
+        // cef-dll-sys flattens CEF's `Resources/` directory into the CEF root.
+        // Some distributions keep a `resources/` subdirectory instead.
+        let resources = if root.join("resources").is_dir() {
+            root.join("resources")
+        } else {
+            root.clone()
+        };
+        settings.resources_dir_path =
+            CefString::from(resources.to_string_lossy().as_ref());
         settings.locales_dir_path =
             CefString::from(root.join("locales").to_string_lossy().as_ref());
     }
