@@ -644,6 +644,32 @@ wrap_load_handler! {
     }
 }
 
+wrap_resource_request_handler! {
+    struct SimpleHandlerResourceRequestHandler {}
+
+    impl ResourceRequestHandler {
+        fn on_before_resource_load(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            _callback: Option<&mut Callback>,
+        ) -> ReturnValue {
+            if !crate::settings::load().dnt {
+                return ReturnValue::CONTINUE;
+            }
+            if let Some(request) = request {
+                let name = CefString::from("DNT");
+                let value = CefString::from("1");
+                request.set_header_by_name(Some(&name), Some(&value), 1);
+                let name = CefString::from("Sec-GPC");
+                request.set_header_by_name(Some(&name), Some(&value), 1);
+            }
+            ReturnValue::CONTINUE
+        }
+    }
+}
+
 wrap_request_handler! {
     struct SimpleHandlerRequestHandler {
         inner: Arc<Mutex<SimpleHandler>>,
@@ -660,6 +686,23 @@ wrap_request_handler! {
         ) -> i32 {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_before_browse(browser, frame, request, user_gesture, is_redirect)
+        }
+
+        fn resource_request_handler(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _request: Option<&mut Request>,
+            _is_navigation: i32,
+            _is_download: i32,
+            _request_initiator: Option<&CefString>,
+            _disable_default_handling: Option<&mut i32>,
+        ) -> Option<ResourceRequestHandler> {
+            if crate::settings::load().dnt {
+                Some(SimpleHandlerResourceRequestHandler::new())
+            } else {
+                None
+            }
         }
     }
 }
