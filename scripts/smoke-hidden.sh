@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 PORT="${FDB_SMOKE_PORT:-9222}"
 LOG="${TMPDIR:-/tmp}/free-domain-browser-cef-smoke.log"
 rm -f "$LOG"
-cargo run -- --initial-show-state=hidden --remote-debugging-port="$PORT" >"$LOG" 2>&1 &
+cargo run -- --initial-show-state=hidden --remote-debugging-port="$PORT" --url="${FDB_SMOKE_URL:-https://github.com/}" >"$LOG" 2>&1 &
 PID=$!
 cleanup() {
   kill "$PID" 2>/dev/null || true
@@ -19,6 +19,11 @@ for _ in $(seq 1 120); do
     curl -s --max-time 3 "http://127.0.0.1:$PORT/json" |
       python3 -c 'import json,sys; targets=json.load(sys.stdin); print(f"{len(targets)} targets"); [print(t.get("url","")[:80]) for t in targets]'
     if grep -q "DevTools listening" "$LOG"; then echo "log: DevTools listening"; else echo "missing DevTools log"; exit 1; fi
+    if [ -n "${FDB_SMOKE_EXPECT:-}" ]; then
+      curl -s --max-time 3 "http://127.0.0.1:$PORT/json" |
+        python3 -c 'import json,sys; urls=[t.get("url","") for t in json.load(sys.stdin)]; sys.exit(0 if any("'"$FDB_SMOKE_EXPECT"'" in u for u in urls) else 1)' ||
+        { echo "expected target not found: $FDB_SMOKE_EXPECT"; exit 1; }
+    fi
     exit 0
   fi
   sleep 1
