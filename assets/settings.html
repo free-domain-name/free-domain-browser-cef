@@ -1,0 +1,27 @@
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{margin:0;background:#141821;color:#e8edf7;font:14px -apple-system,system-ui;padding:32px 40px}
+h1{font-size:22px;margin:0 0 4px}p.sub{margin:0 0 28px;color:#93a0b8}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px}
+.card{background:#1d2430;border:1px solid #2b3548;border-radius:12px;padding:18px}
+.card h2{font-size:14px;margin:0 0 12px;color:#c8d4ea;text-transform:uppercase;letter-spacing:.06em}
+label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;color:#c6d0e2}
+input[type=text]{width:100%;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:9px 11px;font:inherit}
+input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
+.note{color:#8290a8;font-size:12px;line-height:1.5;margin-top:10px}
+.pill{display:inline-block;background:#22304a;color:#9dbcff;border-radius:999px;padding:3px 9px;font-size:11px}
+</style></head><body>
+<h1>Settings</h1><p class="sub">Free Domain Browser · CEF prototype</p>
+<div class="grid">
+<div class="card"><h2>Appearance</h2>
+<label>Dark chrome <input type="checkbox" checked></label>
+<label>Compact tab strip <input type="checkbox"></label>
+<label>Show status messages <input type="checkbox" checked></label>
+</div>
+<div class="card"><h2>Navigation</h2>
+<label>Home page</label><input type="text" value="https://yahoo.com/">
+<div class="note">Registry names like <b>hello.fdn</b> resolve through the sharded GitHub registry before loading.</div>
+</div>
+<div class="card"><h2>Registry</h2><div class="note">Source <span class="pill">GitHub raw</span></div><div class="note">Negative lookup cache: 5 minutes.<br>Record TTL capped at 24 hours.</div></div>
+<div class="card"><h2>Privacy</h2><label>Block third-party cookies <input type="checkbox" checked></label><label>Send do-not-track <input type="checkbox"></label></div>
+</div>
+</body></html>

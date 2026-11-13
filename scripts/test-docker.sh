@@ -9,4 +9,10 @@ mkdir -p target/docker-out
   -v "$ROOT/assets:/assets:ro" \
   -v "$ROOT/target/docker-out:/out" \
   free-domain-browser-cef-web-test
-echo "screenshot: $ROOT/target/docker-out/chrome.png"
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  -v "$ROOT/target/docker-out:/out" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --window-size=1000,700 --screenshot=/out/settings.png file:///assets/settings.html
+echo "screenshots: $ROOT/target/docker-out/chrome.png $ROOT/target/docker-out/settings.png"

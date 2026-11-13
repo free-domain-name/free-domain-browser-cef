@@ -32,9 +32,12 @@ static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock:
 pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
+    chrome_browser_id: Option<i32>,
     is_closing: bool,
     weak_self: Weak<Mutex<Self>>,
 }
+
+const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
 fn navigation_target(url: &str) -> Option<String> {
@@ -64,6 +67,7 @@ impl SimpleHandler {
             Mutex::new(Self {
                 is_alloy_style,
                 browser_list: Vec::new(),
+                chrome_browser_id: None,
                 is_closing: false,
                 weak_self: weak.clone(),
             })
@@ -97,6 +101,12 @@ impl SimpleHandler {
                 RuntimeStyle::CHROME
             }
         );
+
+        // The chrome view is created first; remember it so page views cannot
+        // drive chrome-only synthetic navigation.
+        if self.chrome_browser_id.is_none() {
+            self.chrome_browser_id = Some(browser.identifier());
+        }
 
         // Add to the list of existing browsers.
         self.browser_list.push(browser);
@@ -190,8 +200,17 @@ impl SimpleHandler {
     ) -> i32 {
         let Some(request) = request else { return 0; };
         let url = CefString::from(&request.url()).to_string();
-        let Some(target) = navigation_target(&url) else { return 0; };
         let Some(current) = browser else { return 0; };
+        if self.chrome_browser_id != Some(current.identifier()) {
+            return 0;
+        }
+        let settings = url == "https://fdb.invalid/settings";
+        let target = if settings {
+            get_data_uri(SETTINGS_HTML.as_bytes(), "text/html")
+        } else {
+            let Some(target) = navigation_target(&url) else { return 0; };
+            target
+        };
         let mut current = current.clone();
         let target_id = self
             .browser_list
@@ -206,7 +225,10 @@ impl SimpleHandler {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build();
-            let url = match runtime {
+            let url = if target.starts_with("data:") {
+                target.clone()
+            } else {
+                match runtime {
                 Ok(runtime) => runtime.block_on(async move {
                     let cache = std::env::temp_dir().join("fdn-registry");
                     let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
@@ -225,6 +247,7 @@ impl SimpleHandler {
                     }
                 }),
                 Err(_) => target,
+                }
             };
             let mut task = ResolveNavigation::new(target_id, url);
             post_task(ThreadId::UI, Some(&mut task));
