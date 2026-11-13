@@ -296,6 +296,16 @@ impl SimpleHandler {
         frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
     }
 
+    fn apply_settings(&self) {
+        let settings = crate::settings::load();
+        let payload = serde_json::json!({
+            "compact_tabs": settings.compact_tabs,
+            "show_status": settings.show_status,
+        });
+        let script = format!("window.fdbSettings&&fdbSettings({payload})");
+        self.chrome_execute(0, &script);
+    }
+
     fn chrome_execute(&self, source_id: i32, script: &str) {
         let Some(chrome_id) = self.chrome_browser_id else { return; };
         if source_id == chrome_id { return; }
@@ -578,13 +588,7 @@ impl SimpleHandler {
         if self.chrome_browser_id != Some(browser.identifier()) {
             return;
         }
-        let settings = crate::settings::load();
-        let payload = serde_json::json!({
-            "compact_tabs": settings.compact_tabs,
-            "show_status": settings.show_status,
-        });
-        let script = format!("window.fdbSettings&&fdbSettings({payload})");
-        self.chrome_execute(0, &script);
+        self.apply_settings();
     }
 
     fn on_load_error(
@@ -873,6 +877,12 @@ wrap_display_handler! {
                 Some(BridgeAction::Page(target_id, url)) => post_page(target_id, url),
                 Some(BridgeAction::SaveSettings(settings)) => {
                     let _ = crate::settings::save(&settings);
+                    if let Some(instance) = SimpleHandler::instance() {
+                        instance
+                            .lock()
+                            .expect("Failed to lock handler")
+                            .apply_settings();
+                    }
                 }
                 Some(BridgeAction::BrowserCommand(target_id, kind)) => {
                     post_browser_command(target_id, kind);
