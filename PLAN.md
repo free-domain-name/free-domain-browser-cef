@@ -52,7 +52,8 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Custom lightweight chrome: tab strip, address bar, back/forward/reload,
   security indicator, settings/chat buttons.
 - [x] Tab titles and address bar sync from content page events.
-- [x] Tab close/new/select and Cmd/Ctrl-T/W, Ctrl-Tab in the chrome page.
+- [x] Tab close/new/select and Cmd/Ctrl-T/W, Ctrl-Tab, Cmd-L/R.
+- [x] Real new-tab page with search and shortcuts.
 - [ ] Port the full Tauri toolbar/skins UI (deferred; current chrome is functional
   but not pixel-matched).
 - [ ] Appearance/skins.
@@ -86,13 +87,12 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [ ] Apply settings to CEF request context/cache and chrome UI.
 - Tests: round-trip save/load; empty home falls back to default.
 
-## Phase 6 — chat backend
+## Phase 6 — chat (UI only)
 
-- [ ] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`.
-- [ ] Adapt app state/event bridge to CEF IPC (no Tauri events).
-- [ ] Implement rooms, send/receive, identity, settings.
-- [ ] Two-client local test; message delivery and reconnect.
-- Acceptance: two hidden CEF instances exchange a message.
+- [x] Functional local chat UI: rooms, send, per-room localStorage history.
+- [ ] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
+  and the iroh transport.
+- [ ] Two-client test.
 
 ## Phase 7 — packaging and release
 

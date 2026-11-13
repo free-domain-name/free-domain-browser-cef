@@ -56,6 +56,7 @@ const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
 const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
 const CONFLICT_HTML: &str = include_str!("../../../assets/conflict.html");
 const CLAIM_HTML: &str = include_str!("../../../assets/claim.html");
+const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
 
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
@@ -384,6 +385,7 @@ impl SimpleHandler {
                 crate::settings::Settings::from_value(&value).map(BridgeAction::SaveSettings)
             }
             "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
+            "new_tab" => Some(BridgeAction::Page(target_id, internal_page_url(NEWTAB_HTML))),
             "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),

@@ -1,4 +1,4 @@
-<html><head><meta charset="utf-8"></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
+<html><head><meta charset="utf-8"><title>Free Domain Browser</title></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
 <div id="tabs" style="height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;box-sizing:border-box;background:#171b24"></div>
 <div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
 <b style="font-size:13px">Free Domain Browser</b>
@@ -32,11 +32,11 @@ function render(){
   var plus=document.createElement('button');
   plus.textContent='+';plus.title='New tab';
   plus.style.cssText='border:0;border-radius:6px;padding:5px 9px;background:#2a3040;color:#fff;font:inherit;cursor:pointer';
-  plus.onclick=function(){newTab('https://example.com/')};
+  plus.onclick=function(){newTab('')};
   box.appendChild(plus);
   document.getElementById('url').value=current().url||'';
 }
-function newTab(u){tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();navigate(u)}
+function newTab(u){tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'new_tab'})}}
 function closeTab(i){if(tabs.length<2)return;tabs.splice(i,1);if(active>=tabs.length)active=tabs.length-1;render();navigate(current().url)}
 function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
@@ -46,8 +46,10 @@ function chat(){send({cmd:'chat'})}
 window.fdbUpdate=function(url,title){var t=current();if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
 document.addEventListener('keydown',function(e){
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('https://example.com/')}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('')}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
   if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();navigate(current().url)}
 });
 render();</script>

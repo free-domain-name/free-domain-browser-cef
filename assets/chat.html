@@ -14,7 +14,18 @@ footer{display:flex;gap:10px;padding:16px 24px;border-top:1px solid #263042}
 input{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit}
 button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit}
 .note{font-size:12px;color:#8d9ab1;padding:0 24px 10px}
-</style></head><body>
-<aside><h1>Free Domain Chat</h1><div class="room active"># general</div><div class="room"># registry</div><div class="room"># support</div></aside>
-<main><header># general</header><div class="messages"><div class="msg"><div class="meta">alice · 10:32</div>Registry lookup now resolves before the page loads.</div><div class="msg me"><div class="meta">you · 10:34</div>Nice. Tabs and settings are in the CEF shell too.</div></div><div class="note">CEF chat prototype — local UI only for now.</div><footer><input placeholder="Message #general"><button>Send</button></footer></main>
+</style><title>Free Domain Chat</title></head><body>
+<aside><h1>Free Domain Chat</h1><div class="room active" data-room="general"># general</div><div class="room" data-room="registry"># registry</div><div class="room" data-room="support"># support</div></aside>
+<main><header id="room"># general</header><div class="messages" id="messages"></div><div class="note">Local chat prototype — messages stay in this browser profile.</div><footer><input id="text" placeholder="Message #general"><button id="send">Send</button></footer></main>
+<script>
+var room='general';
+function key(){return 'fdb-chat-'+room}
+function load(){try{return JSON.parse(localStorage.getItem(key())||'[]')}catch(e){return []}}
+function save(v){try{localStorage.setItem(key(),JSON.stringify(v))}catch(e){}}
+function render(){var box=document.getElementById('messages');box.innerHTML='';var list=load();if(!list.length){box.innerHTML='<div class="note" style="padding:0">No messages yet.</div>'}list.forEach(function(m){var d=document.createElement('div');d.className='msg'+(m.me?' me':'');var meta=document.createElement('div');meta.className='meta';meta.textContent=(m.me?'you':'local')+' · '+m.time;d.appendChild(meta);d.appendChild(document.createTextNode(m.text));box.appendChild(d)});box.scrollTop=box.scrollHeight}
+function send(){var input=document.getElementById('text');var text=input.value.trim();if(!text)return;var list=load();list.push({text:text,me:true,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});save(list);input.value='';render()}
+document.getElementById('send').onclick=send;document.getElementById('text').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+document.querySelectorAll('.room').forEach(function(el){el.onclick=function(){document.querySelectorAll('.room').forEach(function(x){x.classList.remove('active')});el.classList.add('active');room=el.dataset.room;document.getElementById('room').textContent='#'+room;document.getElementById('text').placeholder='Message #'+room;render()}});
+render();
+</script>
 </body></html>
