@@ -96,7 +96,8 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 
 ## Phase 7 — packaging and release (partial)
 
-- [x] `scripts/package-release.sh` builds an unsigned release `.app` zip.
+- [x] `scripts/package-release.sh` builds an unsigned release `.app` zip;
+  verified release bundle + 145 MB zip.
 - [x] Release build path for app + helper (`--release`).
 - [ ] Bundle locales/`cef.pak`/`icudtl.dat` explicitly (framework provides them).
 - [ ] Code-sign app + helpers with a stable identity. Ad-hoc debug rebuilds
