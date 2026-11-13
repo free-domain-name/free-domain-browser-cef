@@ -18,9 +18,9 @@ Still pending: native registry scheme handler and a signed release bundle.
 
 ## Requirements
 
-- macOS arm64
+- macOS arm64 or x86_64 Linux
 - CEF binary distribution 156.0.26 (`CEF_PATH`)
-- CMake + Ninja on `PATH`
+- CMake + Ninja on `PATH` (and the usual CEF Linux runtime libraries)
 
 ## Build and run
 
@@ -47,6 +47,28 @@ cargo run -- --initial-show-state=hidden
 ```
 
 `./scripts/run.sh` sets up local CEF/CMake paths and forwards the same flags.
+
+### Linux
+
+The CEF build script's automatic download currently fails with
+`response body is larger than request limit: 10485760`; download the
+distribution explicitly instead:
+
+```sh
+./scripts/fetch-cef-linux.sh          # writes ./cef-binary
+./scripts/run.sh                     # builds target/bootstrap and launches
+```
+
+If you already unpacked CEF yourself, point at it:
+
+```sh
+CEF_PATH=/opt/cef_binary_156.0.26_linux64 ./scripts/run.sh
+```
+
+On Linux `cargo run` uses the `bundle` launcher too, but there is no `.app`;
+it builds `target/bootstrap/debug/free-domain-browser-cef`, sets
+`LD_LIBRARY_PATH` to `CEF_PATH`, and launches it. Debug builds disable the
+Chromium sandbox so a non-setuid `chrome-sandbox` does not block startup.
 
 Build the bundle without launching:
 

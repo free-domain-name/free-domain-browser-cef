@@ -97,7 +97,80 @@ fn main() -> anyhow::Result<()> {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+fn main() -> anyhow::Result<()> {
+    use std::path::Path;
+
+    let release = std::env::args().any(|arg| arg == "--release");
+    let bootstrap_dir = if release {
+        "target/bootstrap/release"
+    } else {
+        "target/bootstrap/debug"
+    };
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let mut build = std::process::Command::new(cargo);
+    build.args([
+        "build",
+        "--bin",
+        "free-domain-browser-cef",
+        "--bin",
+        "free_domain_browser_cef_helper",
+        "--target-dir",
+        "target/bootstrap",
+    ]);
+    if release {
+        build.arg("--release");
+    }
+    let status = build.status()?;
+    if !status.success() {
+        anyhow::bail!("failed to build CEF binaries");
+    }
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--build-only") {
+        return Ok(());
+    }
+
+    let executable = Path::new(bootstrap_dir).join("free-domain-browser-cef");
+    if !executable.exists() {
+        anyhow::bail!("missing {}", executable.display());
+    }
+    let mut command = std::process::Command::new(&executable);
+    command.args(args);
+    if let Some(root) = std::env::var_os("CEF_PATH") {
+        let mut paths = vec![std::path::PathBuf::from(root)];
+        if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        command.env("LD_LIBRARY_PATH", std::env::join_paths(paths)?);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            command.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+
+    let mut child = command.spawn()?;
+    let child_pid = child.id() as i32;
+    ctrlc::set_handler(move || {
+        unsafe {
+            libc::kill(-child_pid, libc::SIGTERM);
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            libc::kill(-child_pid, libc::SIGKILL);
+        }
+        std::process::exit(130);
+    })?;
+    let status = child.wait()?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn main() {
-    eprintln!("The bundle helper currently targets macOS only.");
+    eprintln!("The bundle helper currently targets macOS and Linux only.");
 }

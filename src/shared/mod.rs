@@ -55,7 +55,7 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
     let cache_root = std::env::temp_dir().join("free-domain-browser-cef");
     let cache_root = cache_root.to_string_lossy().into_owned();
     let cache_path = format!("{cache_root}/cache");
-    let settings = Settings {
+    let mut settings = Settings {
         // Debug bundles run without the macOS sandbox so they can be launched
         // from a terminal/agent. Release builds use the CEF sandbox.
         no_sandbox: i32::from(cfg!(debug_assertions)),
@@ -64,6 +64,19 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
         remote_debugging_port: if cfg!(debug_assertions) { 9222 } else { 0 },
         ..Default::default()
     };
+
+    // On Linux the CEF binary distribution is not discovered relative to the
+    // Rust binary; point Chromium at the resources shipped with CEF_PATH.
+    #[cfg(target_os = "linux")]
+    if let Some(root) = std::env::var_os("CEF_PATH") {
+        let root = std::path::PathBuf::from(root);
+        settings.resources_dir_path = CefString::from(
+            root.join("resources").to_string_lossy().as_ref(),
+        );
+        settings.locales_dir_path =
+            CefString::from(root.join("locales").to_string_lossy().as_ref());
+    }
+
     assert_eq!(
         initialize(
             Some(main_args),
