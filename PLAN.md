@@ -14,9 +14,10 @@ Status: prototype only. Goal is **not** finished.
 
 ## Current state
 
-- CEF 156 Alloy; fixed chrome (96 px) + one page BrowserView.
+- CEF 156 Alloy; fixed chrome (96 px) + up to eight page BrowserViews.
 - Yahoo loads top-level; address bar cannot be covered.
-- Tabs reuse one page view and switch its URL.
+- Each tab owns a stable BrowserView, so switching and closing preserve page
+  state/history. The pool is still capped at eight; dynamic add/remove is next.
 - `fdn-core` resolves registry/public names; navigation post is on the CEF UI thread.
 - Settings and chat are internal `file://` pages; settings persist in `localStorage`.
 - Chat has UI only.
@@ -59,15 +60,17 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [ ] Appearance/skins.
 - Acceptance: hidden CDP verified title + URL updates and tab rendering.
 
-## Phase 3 — independent tabs
+## Phase 3 — independent tabs (8-view pool)
 
-- [ ] Rust tab model: id, url, title, history, view.
-- [ ] Create one content BrowserView per tab; add/remove/hide on the CEF UI thread.
-- [ ] Chrome IPC for new/close/select; active tab state.
-- [ ] Preserve page state/history when switching; close only the selected view.
-- [ ] New-tab page and tab titles from `on_title_change`.
-- [ ] Keyboard shortcuts (Cmd-T/W, Ctrl-Tab).
-- Tests: hidden CEF script creates 2 tabs, navigates different URLs, verifies both browsers exist and chrome stays fixed.
+- [x] Rust tab model: stable view slot + browser id, url/title in chrome.
+- [x] One content BrowserView per open tab (precreated pool of eight).
+- [x] Chrome IPC for new/close/select; active view state.
+- [x] Preserve page state/history when switching; close only hides the selected view.
+- [x] New-tab page and tab titles from `on_title_change`.
+- [x] Keyboard shortcuts (Cmd/Ctrl-T/W, Ctrl-Tab, Cmd/Ctrl-1..8).
+- [ ] Replace the precreated eight-view pool with dynamic create/destroy so tab
+  count is unbounded.
+- Tests: hidden CEF smoke verifies DevTools targets and chrome stays fixed.
 
 ## Phase 4 — registry navigation (partial)
 

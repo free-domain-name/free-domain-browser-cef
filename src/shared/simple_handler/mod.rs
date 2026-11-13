@@ -30,6 +30,8 @@ enum BridgeAction {
     SaveSettings(crate::settings::Settings),
     BrowserCommand(i32, BrowserCommandKind),
     Home(i32),
+    NewTab(i32, String),
+    CloseTab(i32),
     SelectTab(i32),
     LoadTab(i32, String),
     Quit,
@@ -454,6 +456,23 @@ impl SimpleHandler {
         }
     }
 
+    fn hide_tab(&mut self, view: i32) {
+        if view < 0 {
+            return;
+        }
+        let Some(id) = self.content_browser_id(view as usize) else { return; };
+        let mut browser = self
+            .browser_list
+            .iter()
+            .find(|browser| browser.identifier() == id)
+            .cloned();
+        let Some(browser) = browser.as_mut() else { return; };
+        if let Some(browser_view) = browser_view_get_for_browser(Some(browser)) {
+            let mut view = View::from(&browser_view);
+            view.set_visible(0);
+        }
+    }
+
 
 
     /// Parse a chrome command without executing it. The caller must drop the
@@ -483,8 +502,30 @@ impl SimpleHandler {
                 crate::settings::Settings::from_value(&value).map(BridgeAction::SaveSettings)
             }
             "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
-            "new_tab" => Some(BridgeAction::Page(target_id, internal_page_url(NEWTAB_HTML))),
-            "select_tab" => value.get("index").and_then(|index| index.as_i64()).map(|index| BridgeAction::SelectTab(index as i32)),
+            "new_tab" => {
+                let view = value
+                    .get("view")
+                    .and_then(|view| view.as_i64())
+                    .or_else(|| value.get("index").and_then(|index| index.as_i64()))? as i32;
+                let url = value
+                    .get("url")
+                    .and_then(|url| url.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                Some(BridgeAction::NewTab(view, url))
+            }
+            "close_tab" => {
+                let view = value
+                    .get("view")
+                    .and_then(|view| view.as_i64())
+                    .or_else(|| value.get("index").and_then(|index| index.as_i64()))? as i32;
+                Some(BridgeAction::CloseTab(view))
+            }
+            "select_tab" => value
+                .get("view")
+                .and_then(|view| view.as_i64())
+                .or_else(|| value.get("index").and_then(|index| index.as_i64()))
+                .map(|index| BridgeAction::SelectTab(index as i32)),
             "load_tab" => {
                 let index = value.get("index").and_then(|index| index.as_i64())? as i32;
                 let url = value.get("url").and_then(|url| url.as_str())?.to_string();
@@ -627,6 +668,26 @@ wrap_display_handler! {
                 }
                 Some(BridgeAction::Home(target_id)) => {
                     spawn_navigation(target_id, crate::settings::load().home);
+                }
+                Some(BridgeAction::NewTab(view, url)) => {
+                    let id = {
+                        let inner = self.inner.lock().expect("Failed to lock inner");
+                        inner.content_browser_id(view.max(0) as usize)
+                    };
+                    if let Some(id) = id {
+                        let url = if url.trim().is_empty() {
+                            internal_page_url(NEWTAB_HTML)
+                        } else {
+                            url
+                        };
+                        post_page(id, url);
+                    }
+                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.switch_tab(view);
+                }
+                Some(BridgeAction::CloseTab(view)) => {
+                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.hide_tab(view);
                 }
                 Some(BridgeAction::SelectTab(index)) => {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
