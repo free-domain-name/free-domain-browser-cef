@@ -182,7 +182,7 @@ wrap_browser_process_handler! {
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());
                 let mut chrome_client = self.default_client();
-                let mut chrome_delegate = SimpleBrowserViewDelegate::new(runtime_style, 64);
+                let mut chrome_delegate = SimpleBrowserViewDelegate::new(runtime_style, 96);
                 let chrome_view = browser_view_create(
                     chrome_client.as_mut(),
                     Some(&chrome_url),
