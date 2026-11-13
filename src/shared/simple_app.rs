@@ -33,9 +33,6 @@ wrap_window_delegate! {
             let chrome_view = self.chrome_view.borrow();
             let content_views = self.content_views.borrow();
             let mut chrome = chrome_view.as_ref().map(View::from);
-            if let Some(chrome) = chrome.as_mut() {
-                window.add_child_view(Some(chrome));
-            }
             if let Some(browser) = chrome_view.as_ref().and_then(|view| view.browser()) {
                 if let Some(handler) = SimpleHandler::instance() {
                     handler
@@ -48,6 +45,13 @@ wrap_window_delegate! {
                 let mut content = View::from(content);
                 window.add_child_view(Some(&mut content));
                 content.set_visible(if index == 0 { 1 } else { 0 });
+            }
+            // Add the chrome last so it is above the content views. On Linux the
+            // content BrowserView's native child can cover the whole window even
+            // when its bounds start below the chrome; keeping chrome on top
+            // preserves the tab strip and address bar.
+            if let Some(chrome) = chrome.as_mut() {
+                window.add_child_view(Some(chrome));
             }
 
             // Use explicit bounds rather than a box layout. With a box layout the
