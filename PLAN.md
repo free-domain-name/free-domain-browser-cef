@@ -94,16 +94,16 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   and the iroh transport.
 - [ ] Two-client test.
 
-## Phase 7 — packaging and release
+## Phase 7 — packaging and release (partial)
 
-- [ ] Bundle `assets/`, locales, `cef.pak`, `icudtl.dat`.
+- [x] `scripts/package-release.sh` builds an unsigned release `.app` zip.
+- [x] Release build path for app + helper (`--release`).
+- [ ] Bundle locales/`cef.pak`/`icudtl.dat` explicitly (framework provides them).
 - [ ] Code-sign app + helpers with a stable identity. Ad-hoc debug rebuilds
   invalidate Keychain "Always Allow"; debug currently passes
   `--use-mock-keychain` to avoid repeated "Chromium Safe Storage" prompts.
 - [ ] Sandbox entitlements.
-- [ ] Release profile with sandbox enabled (debug currently `no_sandbox`).
-- [ ] `cargo run` remains a debug-only convenience.
-- [ ] CI: Linux core tests, macOS bundle build, hidden smoke.
+- [ ] CI smoke.
 
 ## Phase 8 — final QA
 

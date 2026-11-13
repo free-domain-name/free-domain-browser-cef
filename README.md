@@ -45,6 +45,12 @@ Build the bundle without launching:
 cargo run --bin bundle -- --build-only
 ```
 
+Package an unsigned release `.app` zip:
+
+```sh
+./scripts/package-release.sh
+```
+
 The raw `free-domain-browser-cef` binary cannot load ICU outside the `.app`;
 always launch through `cargo run`/the bundle.
 

@@ -16,25 +16,34 @@ fn main() -> anyhow::Result<()> {
     // Build the app and helper in a separate target directory. Calling cargo
     // again in the normal target directory would deadlock the `cargo run` that
     // launched this binary.
+    let release = std::env::args().any(|arg| arg == "--release");
+    let bootstrap_dir = if release {
+        "target/bootstrap/release"
+    } else {
+        "target/bootstrap/debug"
+    };
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    let status = std::process::Command::new(cargo)
-        .args([
-            "build",
-            "--bin",
-            "free-domain-browser-cef",
-            "--bin",
-            "free_domain_browser_cef_helper",
-            "--target-dir",
-            "target/bootstrap",
-        ])
-        .status()?;
+    let mut build = std::process::Command::new(cargo);
+    build.args([
+        "build",
+        "--bin",
+        "free-domain-browser-cef",
+        "--bin",
+        "free_domain_browser_cef_helper",
+        "--target-dir",
+        "target/bootstrap",
+    ]);
+    if release {
+        build.arg("--release");
+    }
+    let status = build.status()?;
     if !status.success() {
         anyhow::bail!("failed to build CEF binaries");
     }
 
     let app = bundle(
         Path::new("target/bundle"),
-        Path::new("target/bootstrap/debug"),
+        Path::new(bootstrap_dir),
         "free-domain-browser-cef",
         "free_domain_browser_cef_helper",
         None,
