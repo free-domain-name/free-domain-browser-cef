@@ -645,7 +645,9 @@ wrap_load_handler! {
 }
 
 wrap_resource_request_handler! {
-    struct SimpleHandlerResourceRequestHandler {}
+    struct SimpleHandlerResourceRequestHandler {
+        initiator: Option<String>,
+    }
 
     impl ResourceRequestHandler {
         fn on_before_resource_load(
@@ -655,15 +657,32 @@ wrap_resource_request_handler! {
             request: Option<&mut Request>,
             _callback: Option<&mut Callback>,
         ) -> ReturnValue {
-            if !crate::settings::load().dnt {
-                return ReturnValue::CONTINUE;
-            }
+            let settings = crate::settings::load();
             if let Some(request) = request {
-                let name = CefString::from("DNT");
-                let value = CefString::from("1");
-                request.set_header_by_name(Some(&name), Some(&value), 1);
-                let name = CefString::from("Sec-GPC");
-                request.set_header_by_name(Some(&name), Some(&value), 1);
+                if settings.dnt {
+                    let name = CefString::from("DNT");
+                    let value = CefString::from("1");
+                    request.set_header_by_name(Some(&name), Some(&value), 1);
+                    let name = CefString::from("Sec-GPC");
+                    request.set_header_by_name(Some(&name), Some(&value), 1);
+                }
+                if settings.cookies {
+                    let initiator_host = self
+                        .initiator
+                        .as_deref()
+                        .and_then(|value| url::Url::parse(value).ok())
+                        .and_then(|value| value.host_str().map(str::to_string));
+                    let request_host = url::Url::parse(&CefString::from(&request.url()).to_string())
+                        .ok()
+                        .and_then(|value| value.host_str().map(str::to_string));
+                    if let (Some(initiator), Some(target)) = (initiator_host, request_host) {
+                        if initiator != target {
+                            let name = CefString::from("Cookie");
+                            let empty = CefString::from("");
+                            request.set_header_by_name(Some(&name), Some(&empty), 1);
+                        }
+                    }
+                }
             }
             ReturnValue::CONTINUE
         }
@@ -695,11 +714,14 @@ wrap_request_handler! {
             _request: Option<&mut Request>,
             _is_navigation: i32,
             _is_download: i32,
-            _request_initiator: Option<&CefString>,
+            request_initiator: Option<&CefString>,
             _disable_default_handling: Option<&mut i32>,
         ) -> Option<ResourceRequestHandler> {
-            if crate::settings::load().dnt {
-                Some(SimpleHandlerResourceRequestHandler::new())
+            let settings = crate::settings::load();
+            if settings.dnt || settings.cookies {
+                Some(SimpleHandlerResourceRequestHandler::new(
+                    request_initiator.map(CefString::to_string),
+                ))
             } else {
                 None
             }
@@ -708,6 +730,12 @@ wrap_request_handler! {
 }
 
 fn spawn_navigation(target_id: i32, target: String) {
+    // `fdn://name/path` is a convenience alias. The resolver below owns the
+    // registry/public decision, so strip the scheme and treat the rest as input.
+    let target = target
+        .strip_prefix("fdn://")
+        .map(str::to_string)
+        .unwrap_or(target);
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
