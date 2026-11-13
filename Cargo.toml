@@ -1,3 +1,6 @@
+[workspace]
+members = ["core"]
+
 [package]
 name = "free-domain-browser-cef"
 version = "0.1.0"

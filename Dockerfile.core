@@ -1,0 +1,5 @@
+FROM rust:1.90-bookworm
+WORKDIR /app
+COPY core/Cargo.toml core/Cargo.lock ./
+COPY core/src ./src
+RUN cargo test --locked
