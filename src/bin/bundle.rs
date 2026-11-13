@@ -27,9 +27,35 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     let executable = app.join("Contents/MacOS/free-domain-browser-cef");
-    let status = std::process::Command::new(&executable)
-        .args(args)
-        .status()?;
+    let mut command = std::process::Command::new(&executable);
+    command.args(args);
+
+    // Put the CEF app in its own process group so Ctrl-C can take down the
+    // browser and its helper processes together. CEF's message loop ignores
+    // SIGINT, so the child must be terminated explicitly.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            command.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+
+    let mut child = command.spawn()?;
+    let child_pid = child.id() as i32;
+    ctrlc::set_handler(move || {
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-child_pid, libc::SIGTERM);
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            libc::kill(-child_pid, libc::SIGKILL);
+        }
+        std::process::exit(130);
+    })?;
+    let status = child.wait()?;
     std::process::exit(status.code().unwrap_or(1));
 }
 
