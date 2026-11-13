@@ -62,13 +62,15 @@ Build without launching:
 cargo run --bin bundle -- --build-only
 ```
 
-Package an unsigned release `.app` zip (macOS):
+Package an ad-hoc-signed release `.app` zip (macOS). The bundle step signs the
+app, its helpers, and the embedded framework so macOS will launch it locally;
+distribution still needs a Developer ID signature:
 
 ```sh
 ./scripts/package-release.sh
 ```
 
-Sign the release `.app` with a Developer ID identity (macOS). The bundled CEF
+Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
 helpers need hardened-runtime JIT/library entitlements, so the script signs
 helpers first, then the framework, then the app:
 

@@ -107,13 +107,13 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 
 ## Phase 7 — packaging and release (partial)
 
-- [x] `scripts/package-release.sh` builds an unsigned release `.app` zip;
-  verified release bundle + 145 MB zip.
+- [x] `scripts/package-release.sh` builds an ad-hoc-signed release `.app` zip;
+  verified launch + 147 MB zip.
 - [x] Release build path for app + helper (`--release`).
 - [x] Bundle locales/`cef.pak`/`icudtl.dat` (provided by the CEF framework; verified in the app bundle).
-- [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`. Ad-hoc debug rebuilds
-  invalidate Keychain "Always Allow"; debug currently passes
-  `--use-mock-keychain` to avoid repeated "Chromium Safe Storage" prompts.
+- [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`.
+  Debug/release bundles are ad-hoc signed after assembly so macOS does not kill
+  them with an invalid signature.
 - [x] Hardened-runtime sandbox entitlements (`assets/entitlements.mac.plist`).
 - [x] CI smoke workflow (`.github/workflows/ci.yml`).
 
@@ -122,9 +122,11 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] `cargo test -p fdn-core` (host run; Docker/Podman script remains available).
 - [x] `cargo test --bin free-domain-browser-cef`.
 - [x] Hidden CEF smoke; no leaked processes.
-- [ ] YouTube/Yahoo + `frame-ancestors` site: page loads, chrome never covered.
-- [ ] Tabs independent and settings persisted (verified); chat needs an external relay test.
-- [ ] Release `.app` opens from Finder (build/package works; signed Finder launch needs a certificate).
+- [x] YouTube/Yahoo navigation, dynamic tabs, and settings persistence verified
+  through the hidden CEF harness.
+- [x] Ad-hoc-signed release bundle launches hidden and serves DevTools.
+- [ ] Chat needs an external relay two-client test.
+- [ ] Developer ID signing/notarization for Finder distribution.
 
 ## Suggested order
 

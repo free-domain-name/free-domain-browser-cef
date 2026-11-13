@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build an unsigned release .app and zip it. Code signing is a separate step.
+# Build an ad-hoc-signed release .app and zip it. Developer ID signing is separate.
 set -eu
 cd "$(dirname "$0")/.."
 cargo run --release --bin bundle -- --build-only --release

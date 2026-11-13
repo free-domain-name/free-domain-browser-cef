@@ -260,6 +260,7 @@ wrap_browser_process_handler! {
             } else {
                 url.as_str()
             };
+            let initial_page_url = url.to_string();
             let url = CefString::from(url);
 
             // Views is enabled by default (add `--use-native` to disable).
@@ -270,7 +271,10 @@ wrap_browser_process_handler! {
             if use_views {
                 // A fixed chrome bar, then Yahoo in a separate BrowserView
                 // below it. CEF Views clips both views to their bounds.
-                let chrome_html = include_str!("../../assets/chrome.html");
+                let initial_page_json = serde_json::to_string(&initial_page_url)
+                    .unwrap_or_else(|_| "\"\"".to_string());
+                let chrome_html = include_str!("../../assets/chrome.html")
+                    .replace("__FDB_INITIAL_URL__", &initial_page_json);
 
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());
