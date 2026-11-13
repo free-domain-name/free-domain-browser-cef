@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p fdn-core
+
+  macos-smoke:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - name: Cache CEF binary
+        uses: actions/cache@v4
+        with:
+          path: cef-binary
+          key: cef-156.0.26-macos-arm64-v1
+      - run: cargo test --bin free-domain-browser-cef
+      - name: Hidden CEF smoke
+        env:
+          FDB_SMOKE_EXPECT: github.com
+        run: ./scripts/smoke-hidden.sh
+      - name: Upload CEF log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cef-smoke-log
+          path: ${{ runner.temp }}/free-domain-browser-cef-smoke.log

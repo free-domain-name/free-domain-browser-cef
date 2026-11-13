@@ -9,6 +9,8 @@ pub struct Settings {
     pub home: String,
     pub cookies: bool,
     pub dnt: bool,
+    pub compact_tabs: bool,
+    pub show_status: bool,
 }
 
 impl Default for Settings {
@@ -17,6 +19,8 @@ impl Default for Settings {
             home: "https://yahoo.com/".to_string(),
             cookies: true,
             dnt: false,
+            compact_tabs: false,
+            show_status: true,
         }
     }
 }
@@ -41,6 +45,9 @@ pub fn config_dir() -> PathBuf {
 }
 
 pub fn default_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("FDB_SETTINGS_PATH") {
+        return PathBuf::from(path);
+    }
     if let Some(home) = std::env::var_os("HOME") {
         return PathBuf::from(home)
             .join("Library/Application Support/Free Domain Browser CEF/settings.json");
@@ -93,6 +100,8 @@ mod tests {
             home: "https://example.com/".into(),
             cookies: false,
             dnt: true,
+            compact_tabs: true,
+            show_status: false,
         };
         save_to(&path, &settings).unwrap();
         assert_eq!(load_from(&path), settings);

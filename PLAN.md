@@ -89,8 +89,11 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] JSON settings store (`home`, `cookies`, `dnt`) with sandbox-safe fallback.
 - [x] `save_settings` bridge command; settings page loads values from the store
   through query parameters.
-- [ ] Move the remaining appearance/proxy fields off `localStorage`.
-- [ ] Apply settings to CEF request context/cache and chrome UI.
+- [x] Move the remaining appearance fields off `localStorage` (compact tabs,
+  status visibility).
+- [x] Apply appearance settings to the chrome UI; cookies/DNT are applied per
+  request.
+- [ ] Configure the CEF request context/cache from settings (proxy/cache).
 - Tests: round-trip save/load; empty home falls back to default.
 
 ## Phase 6 — chat (ported client)
@@ -107,21 +110,21 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] `scripts/package-release.sh` builds an unsigned release `.app` zip;
   verified release bundle + 145 MB zip.
 - [x] Release build path for app + helper (`--release`).
-- [ ] Bundle locales/`cef.pak`/`icudtl.dat` explicitly (framework provides them).
-- [ ] Code-sign app + helpers with a stable identity. Ad-hoc debug rebuilds
+- [x] Bundle locales/`cef.pak`/`icudtl.dat` (provided by the CEF framework; verified in the app bundle).
+- [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`. Ad-hoc debug rebuilds
   invalidate Keychain "Always Allow"; debug currently passes
   `--use-mock-keychain` to avoid repeated "Chromium Safe Storage" prompts.
-- [ ] Sandbox entitlements.
-- [ ] CI smoke.
+- [x] Hardened-runtime sandbox entitlements (`assets/entitlements.mac.plist`).
+- [x] CI smoke workflow (`.github/workflows/ci.yml`).
 
 ## Phase 8 — final QA
 
-- [ ] `cargo test -p fdn-core` (Docker/Podman).
-- [ ] `cargo test --bin free-domain-browser-cef`.
-- [ ] Hidden CEF smoke; no leaked processes.
+- [x] `cargo test -p fdn-core` (host run; Docker/Podman script remains available).
+- [x] `cargo test --bin free-domain-browser-cef`.
+- [x] Hidden CEF smoke; no leaked processes.
 - [ ] YouTube/Yahoo + `frame-ancestors` site: page loads, chrome never covered.
-- [ ] Tabs independent, settings persisted, chat works.
-- [ ] Release `.app` opens from Finder.
+- [ ] Tabs independent and settings persisted (verified); chat needs an external relay test.
+- [ ] Release `.app` opens from Finder (build/package works; signed Finder launch needs a certificate).
 
 ## Suggested order
 

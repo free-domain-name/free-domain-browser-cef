@@ -1,4 +1,4 @@
-<html><head><meta charset="utf-8"><title>Free Domain Browser</title></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
+<html><head><meta charset="utf-8"><title>Free Domain Browser</title><style>body.compact #tabs{height:26px}body.compact #tabs button{padding:2px 5px;font-size:11px}</style></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
 <div id="tabs" style="height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;box-sizing:border-box;background:#171b24"></div>
 <div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
 <b style="font-size:13px">Free Domain Browser</b>
@@ -14,7 +14,7 @@
 <div id="status" style="display:none;position:fixed;left:0;bottom:0;right:0;height:20px;line-height:20px;padding:0 12px;background:#111722;color:#aebbd0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
 <script>
 var tabs=[{uid:0,url:'',label:'New Tab'}];
-var active=0;var lastClosed=null;var nextUid=1;
+var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;
 function current(){return tabs[active]}
 function tabForUid(uid){for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid)return tabs[i]}return null}
 function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -62,7 +62,8 @@ function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
-window.fdbStatus=function(text){var el=document.getElementById('status');if(!el)return;el.textContent=text||'';el.style.display=text?'block':'none'};
+window.fdbStatus=function(text){var el=document.getElementById('status');if(!el)return;if(!showStatus){el.style.display='none';return}el.textContent=text||'';el.style.display=text?'block':'none'};
+window.fdbSettings=function(s){showStatus=!!s.show_status;document.body.classList.toggle('compact',!!s.compact_tabs);var el=document.getElementById('status');if(!showStatus&&el)el.style.display='none'};
 window.fdbLoad=function(loading,back,forward,uid){var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.style.cursor=loading?'progress':'default'}};
 window.fdbUpdate=function(url,title,uid){var t=tabForUid(uid);if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(uid===current().uid)render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});

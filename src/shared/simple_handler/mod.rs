@@ -93,6 +93,11 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
         .append_pair("home", &settings.home)
         .append_pair("cookies", if settings.cookies { "1" } else { "0" })
         .append_pair("dnt", if settings.dnt { "1" } else { "0" })
+        .append_pair(
+            "compact_tabs",
+            if settings.compact_tabs { "1" } else { "0" },
+        )
+        .append_pair("show_status", if settings.show_status { "1" } else { "0" })
         .finish();
     format!("{base}?{query}")
 }
@@ -528,6 +533,25 @@ impl SimpleHandler {
         }
     }
 
+    fn on_load_end(
+        &mut self,
+        browser: Option<&mut Browser>,
+        _frame: Option<&mut Frame>,
+        _http_status_code: i32,
+    ) {
+        let Some(browser) = browser else { return; };
+        if self.chrome_browser_id != Some(browser.identifier()) {
+            return;
+        }
+        let settings = crate::settings::load();
+        let payload = serde_json::json!({
+            "compact_tabs": settings.compact_tabs,
+            "show_status": settings.show_status,
+        });
+        let script = format!("window.fdbSettings&&fdbSettings({payload})");
+        self.chrome_execute(0, &script);
+    }
+
     fn on_load_error(
         &mut self,
         _browser: Option<&mut Browser>,
@@ -881,6 +905,16 @@ wrap_load_handler! {
         ) {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_load_start(browser, frame, transition_type);
+        }
+
+        fn on_load_end(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            http_status_code: i32,
+        ) {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_load_end(browser, frame, http_status_code);
         }
 
         fn on_load_error(

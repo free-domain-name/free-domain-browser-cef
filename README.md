@@ -7,14 +7,14 @@ Current state: macOS CEF window with a fixed HTML chrome bar in a top
 `BrowserView` and the page in a second `BrowserView`. Yahoo loads top-level, so
 there is no `X-Frame-Options` block and the page cannot paint over the chrome.
 
-Implemented: tab strip with titles/closing/shortcuts, address-bar and title
+Implemented: dynamic tabs with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
-persistence in Rust, registry conflict/claim pages, and a local chat UI.
-Tabs now use two independent content BrowserViews (separate history); dynamic
-tab creation beyond two views is still pending. The chat page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and
-optionally `FDN_CHAT_RELAY_URL`) to enable the community relay, otherwise it
-reports “chat bootstrap is not configured”.
-Still pending: native registry scheme handler and a signed release bundle.
+persistence in Rust, registry conflict/claim pages with a per-session choice
+memory, `fdn://` link handling, retry error pages, and a local chat UI. The chat
+page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally
+`FDN_CHAT_RELAY_URL`) to enable the community relay, otherwise it reports
+“chat bootstrap is not configured”.
+Still pending: a signed/notarized release and two-machine chat validation.
 
 ## Requirements
 
@@ -66,6 +66,14 @@ Package an unsigned release `.app` zip (macOS):
 
 ```sh
 ./scripts/package-release.sh
+```
+
+Sign the release `.app` with a Developer ID identity (macOS). The bundled CEF
+helpers need hardened-runtime JIT/library entitlements, so the script signs
+helpers first, then the framework, then the app:
+
+```sh
+./scripts/sign-release.sh 'Developer ID Application: Example (TEAMID)'
 ```
 
 On macOS, always launch through `cargo run`/the bundle: the raw binary cannot
