@@ -2,3 +2,4 @@
 /cef-binary
 *.app
 .DS_Store
+target/docker-out/
