@@ -130,6 +130,36 @@ impl SimpleHandler {
         } else if self.is_alloy_style {
             platform_title_change(browser.as_mut(), title);
         }
+        if let Some(browser) = browser.as_ref() {
+            if self.chrome_browser_id != Some(browser.identifier()) {
+                let title = title.map(CefString::to_string).unwrap_or_default();
+                self.update_chrome(browser.identifier(), None, Some(&title));
+            }
+        }
+    }
+
+    fn update_chrome(&mut self, source_id: i32, url: Option<&str>, title: Option<&str>) {
+        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        if source_id == chrome_id {
+            return;
+        }
+        let mut chrome = self
+            .browser_list
+            .iter()
+            .find(|browser| browser.identifier() == chrome_id)
+            .cloned();
+        let Some(chrome) = chrome.as_mut() else { return; };
+        let Some(frame) = chrome.main_frame() else { return; };
+        let url = url.map(|value| serde_json::to_string(value).unwrap_or_default());
+        let title = title.map(|value| serde_json::to_string(value).unwrap_or_default());
+        let script = match (url, title) {
+            (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title})"),
+            (Some(url), None) => format!("window.fdbUpdate&&fdbUpdate({url},null)"),
+            (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title})"),
+            (None, None) => return,
+        };
+        let mut frame = frame;
+        frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
     }
 
     fn on_after_created(&mut self, browser: Option<&mut Browser>) {
@@ -395,6 +425,19 @@ wrap_display_handler! {
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_title_change(browser, title);
+        }
+
+        fn on_address_change(
+            &self,
+            browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            url: Option<&CefString>,
+        ) {
+            let (Some(browser), Some(url)) = (browser, url) else { return; };
+            let id = browser.identifier();
+            let url = url.to_string();
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.update_chrome(id, Some(&url), None);
         }
 
         fn on_console_message(

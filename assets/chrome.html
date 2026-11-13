@@ -1,41 +1,54 @@
-<html><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
+<html><head><meta charset="utf-8"></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
 <div id="tabs" style="height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;box-sizing:border-box;background:#171b24"></div>
 <div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
 <b style="font-size:13px">Free Domain Browser</b>
 <button onclick="send({cmd:'back'})" title="Back" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">◀</button>
 <button onclick="send({cmd:'forward'})" title="Forward" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">▶</button>
 <button onclick="send({cmd:'reload'})" title="Reload" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">↻</button>
+<span id="sec" title="Connection" style="font-size:12px">🔒</span>
 <input id="url" value="https://yahoo.com/" style="flex:1;background:#fff;color:#111;border:0;border-radius:8px;padding:7px 11px;font:inherit">
 <button onclick="chat()" title="Chat" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">💬</button>
 <button onclick="settings()" title="Settings" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">⚙</button>
 <button onclick="go()" style="background:#4f7cff;color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit">Go</button>
 </div>
 <script>
-var tabs=[{url:'https://yahoo.com/',label:'yahoo.com'},{url:'https://example.com/',label:'example.com'}];
+var tabs=[{url:'https://yahoo.com/',label:'Yahoo'},{url:'https://example.com/',label:'Example'}];
 var active=0;
+function current(){return tabs[active]}
+function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function render(){
   var box=document.getElementById('tabs');box.innerHTML='';
   tabs.forEach(function(t,i){
     var b=document.createElement('button');
-    b.textContent=t.label;b.title=t.url;
-    b.style.cssText='border:0;border-radius:6px 6px 0 0;padding:6px 12px;font:inherit;cursor:pointer;'+
+    b.style.cssText='border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;'+
       (i===active?'background:#1f2430;color:#fff':'background:#2a3040;color:#9aa4b8');
-    b.onclick=function(){active=i;render();document.getElementById('url').value=t.url;navigate(t.url)};
+    b.title=t.url;
+    var label=document.createElement('span');label.textContent=t.label||t.url;b.appendChild(label);
+    var close=document.createElement('span');close.textContent='×';close.title='Close tab';
+    close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
+    b.onclick=function(){active=i;render();navigate(t.url)};
     box.appendChild(b);
   });
   var plus=document.createElement('button');
   plus.textContent='+';plus.title='New tab';
   plus.style.cssText='border:0;border-radius:6px;padding:5px 9px;background:#2a3040;color:#fff;font:inherit;cursor:pointer';
-  plus.onclick=function(){tabs.push({url:'https://example.com/',label:'example.com'});active=tabs.length-1;render();document.getElementById('url').value=tabs[active].url;navigate(tabs[active].url)};
+  plus.onclick=function(){newTab('https://example.com/')};
   box.appendChild(plus);
-  document.getElementById('url').value=tabs[active].url;
+  document.getElementById('url').value=current().url||'';
 }
-function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return;}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
+function newTab(u){tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();navigate(u)}
+function closeTab(i){if(tabs.length<2)return;tabs.splice(i,1);if(active>=tabs.length)active=tabs.length-1;render();navigate(current().url)}
+function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
-function navigate(u){send({cmd:'navigate',url:u})}
+function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
+window.fdbUpdate=function(url,title){var t=current();if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
-render();
-</script>
+document.addEventListener('keydown',function(e){
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('https://example.com/')}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
+  if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();navigate(current().url)}
+});
+render();</script>
 </body></html>

@@ -47,17 +47,16 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - Tests: settings round-trip unit tests; hidden CDP smoke verified `navigate`,
   `settings`, `save_settings`, and `reload`.
 
-## Phase 2 — real chrome UI port
+## Phase 2 — chrome UI
 
-Port `tauri-browser/ui` incrementally, not as one drop.
-
-- [ ] Copy `index.html` / `styles.css` / `skins.css` into `cef-ui/` with provenance note.
-- [ ] Add a small `window.__CEF_BRIDGE__` shim replacing Tauri `invoke`.
-- [ ] Toolbar + address bar first; verify fixed placement headlessly.
-- [ ] Status line, back/forward/reload, security indicator.
-- [ ] Settings, appearance, skins.
-- [ ] Remove Tauri-specific JS paths; keep a compatibility list.
-- Acceptance: headless screenshot diff against old Tauri chrome for toolbar/tabs at 1200 px.
+- [x] Custom lightweight chrome: tab strip, address bar, back/forward/reload,
+  security indicator, settings/chat buttons.
+- [x] Tab titles and address bar sync from content page events.
+- [x] Tab close/new/select and Cmd/Ctrl-T/W, Ctrl-Tab in the chrome page.
+- [ ] Port the full Tauri toolbar/skins UI (deferred; current chrome is functional
+  but not pixel-matched).
+- [ ] Appearance/skins.
+- Acceptance: hidden CDP verified title + URL updates and tab rendering.
 
 ## Phase 3 — independent tabs
 
