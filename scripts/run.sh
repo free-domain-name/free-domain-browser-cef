@@ -19,12 +19,8 @@ if ! command -v cmake >/dev/null 2>&1 && [ -d /tmp/buildtools/cmake/data/bin ]; 
   export PATH
 fi
 
-cargo build --bin free-domain-browser-cef
-cargo run --bin bundle
-
-APP="$ROOT/target/bundle/free-domain-browser-cef.app"
 if [ "${1:-}" = "--hidden" ]; then
   shift
-  exec "$APP/Contents/MacOS/free-domain-browser-cef" --initial-show-state=hidden "$@"
+  exec cargo run -- --initial-show-state=hidden "$@"
 fi
-exec open -n "$APP" --args "$@"
+exec cargo run -- "$@"

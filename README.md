@@ -18,23 +18,31 @@ Tauri UI, per-tab browser views and the chat backend are still pending.
 
 ## Build and run
 
-CEF on macOS must run from an `.app` bundle. A raw `cargo run` binary cannot
-find the framework's ICU resources, so use the wrapper:
+CEF on macOS must run from an `.app` bundle. The default `cargo run` target is
+`bundle`: it builds the app bundle and then executes its binary in this terminal,
+so browser logs stream to the console.
 
 ```sh
 export CEF_PATH=/path/to/cef_binary_156.0.26_macosarm64
-./scripts/run.sh
+cargo run
 ```
 
-`./scripts/run.sh --hidden` starts the same bundle without showing a window.
-
-Manual equivalent:
+No window (for CI/screenshot work):
 
 ```sh
-export CEF_PATH=/path/to/cef_binary_156.0.26_macosarm64
-cargo run --bin bundle
-open target/bundle/free-domain-browser-cef.app
+cargo run -- --initial-show-state=hidden
 ```
+
+`./scripts/run.sh` sets up local CEF/CMake paths and forwards the same flags.
+
+Build the bundle without launching:
+
+```sh
+cargo run --bin bundle -- --build-only
+```
+
+The raw `free-domain-browser-cef` binary cannot load ICU outside the `.app`;
+always launch through `cargo run`/the bundle.
 
 The `cef-dll-sys` build error about a response body larger than 10 MB means
 `CEF_PATH` is unset and the build script tried to download the CEF index.

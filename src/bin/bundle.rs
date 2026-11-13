@@ -13,12 +13,24 @@ fn main() -> anyhow::Result<()> {
         "English",
         version,
     );
-    build_bundle(
+    let app = build_bundle(
         Path::new("target/bundle"),
         "free-domain-browser-cef",
         info,
     )?;
-    Ok(())
+
+    // `cargo run` should launch the app in this terminal (with logs), not just
+    // leave a bundle behind. CEF still needs to be launched from inside the
+    // .app, so execute the bundled binary directly.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--build-only") {
+        return Ok(());
+    }
+    let executable = app.join("Contents/MacOS/free-domain-browser-cef");
+    let status = std::process::Command::new(&executable)
+        .args(args)
+        .status()?;
+    std::process::exit(status.code().unwrap_or(1));
 }
 
 #[cfg(not(target_os = "macos"))]
