@@ -13,11 +13,10 @@
 </div>
 <div id="status" style="display:none;position:fixed;left:0;bottom:0;right:0;height:20px;line-height:20px;padding:0 12px;background:#111722;color:#aebbd0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
 <script>
-var tabs=[{view:0,url:'https://yahoo.com/',label:'Yahoo'},{view:1,url:'https://example.com/',label:'Example'}];
-var active=0;var lastClosed=null;
+var tabs=[{uid:0,url:'',label:'New Tab'}];
+var active=0;var lastClosed=null;var nextUid=1;
 function current(){return tabs[active]}
-function tabForView(view){for(var i=0;i<tabs.length;i++){if(tabs[i].view===view)return tabs[i]}return null}
-function nextFreeView(){for(var v=0;v<8;v++){var used=false;for(var i=0;i<tabs.length;i++){if(tabs[i].view===v){used=true;break}}if(!used)return v}return null}
+function tabForUid(uid){for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid)return tabs[i]}return null}
 function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function render(){
   var box=document.getElementById('tabs');box.innerHTML='';
@@ -29,7 +28,7 @@ function render(){
     var label=document.createElement('span');label.textContent=t.label||t.url;b.appendChild(label);
     var close=document.createElement('span');close.textContent='×';close.title='Close tab';
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
-    b.onclick=function(){active=i;render();send({cmd:'select_tab',view:t.view})};
+    b.onclick=function(){active=i;render();send({cmd:'select_tab',uid:t.uid})};
     box.appendChild(b);
   });
   var plus=document.createElement('button');
@@ -43,21 +42,20 @@ function render(){
   document.getElementById('forward').disabled=!t.canForward;
 }
 function newTab(u){
-  var view=nextFreeView();
-  if(view==null)return;
-  tabs.push({view:view,url:u||'',label:'New Tab'});active=tabs.length-1;render();
-  send({cmd:'new_tab',view:view,url:u||''});
+  var uid=nextUid++;
+  tabs.push({uid:uid,url:u||'',label:'New Tab'});active=tabs.length-1;render();
+  send({cmd:'new_tab',uid:uid,url:u||''});
 }
 function closeTab(i){
   if(tabs.length<2)return;
   var closing=tabs[i];
-  lastClosed={view:closing.view,url:closing.url,label:closing.label};
+  lastClosed={url:closing.url,label:closing.label};
   tabs.splice(i,1);
   if(i<active)active--;
   if(active>=tabs.length)active=tabs.length-1;
   render();
-  send({cmd:'close_tab',view:closing.view});
-  send({cmd:'select_tab',view:current().view});
+  send({cmd:'close_tab',uid:closing.uid});
+  send({cmd:'select_tab',uid:current().uid});
 }
 function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
@@ -65,23 +63,18 @@ function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
 window.fdbStatus=function(text){var el=document.getElementById('status');if(!el)return;el.textContent=text||'';el.style.display=text?'block':'none'};
-window.fdbLoad=function(loading,back,forward,view){var t=tabForView(view);if(!t)return;t.canBack=!!back;t.canForward=!!forward;if(view===current().view){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.style.cursor=loading?'progress':'default'}};
-window.fdbUpdate=function(url,title,view){var t=tabForView(view);if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(view===current().view)render()};
+window.fdbLoad=function(loading,back,forward,uid){var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.style.cursor=loading?'progress':'default'}};
+window.fdbUpdate=function(url,title,uid){var t=tabForUid(uid);if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(uid===current().uid)render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
 document.addEventListener('keydown',function(e){
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('')}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
-  if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();send({cmd:'select_tab',view:current().view})}
-  if((e.metaKey||e.ctrlKey)&&/^[1-8]$/.test(e.key)){e.preventDefault();var n=Math.min(parseInt(e.key,10)-1,tabs.length-1);active=n;render();send({cmd:'select_tab',view:current().view})}
+  if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})}
+  if((e.metaKey||e.ctrlKey)&&/^[1-9]$/.test(e.key)){e.preventDefault();var n=Math.min(parseInt(e.key,10)-1,tabs.length-1);active=n;render();send({cmd:'select_tab',uid:current().uid})}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='t'&&lastClosed){
-    e.preventDefault();
-    var view=tabForView(lastClosed.view)?nextFreeView():lastClosed.view;
-    if(view==null)return;
-    tabs.push({view:view,url:lastClosed.url,label:lastClosed.label||'New Tab'});active=tabs.length-1;
-    var restored=lastClosed;lastClosed=null;render();
-    send({cmd:'new_tab',view:view,url:restored.url||''});
+    e.preventDefault();var u=lastClosed.url;lastClosed=null;newTab(u||'');
   }
 });
 render();</script>

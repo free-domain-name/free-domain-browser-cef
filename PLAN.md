@@ -14,10 +14,10 @@ Status: prototype only. Goal is **not** finished.
 
 ## Current state
 
-- CEF 156 Alloy; fixed chrome (96 px) + up to eight page BrowserViews.
+- CEF 156 Alloy; fixed chrome (96 px) + one page BrowserView per tab, created on demand.
 - Yahoo loads top-level; address bar cannot be covered.
-- Each tab owns a stable BrowserView, so switching and closing preserve page
-  state/history. The pool is still capped at eight; dynamic add/remove is next.
+- Each tab owns a stable BrowserView, so switching preserves page state/history;
+  tabs are created and destroyed dynamically with no fixed cap.
 - `fdn-core` resolves registry/public names; navigation post is on the CEF UI thread.
 - Settings and chat are internal `file://` pages; settings persist in `localStorage`.
 - Chat has UI only.
@@ -41,12 +41,12 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   `cefQuery` router can replace it later without changing command payloads).
 - [x] Commands: `navigate`, `open_settings`, `open_chat`, `save_settings`,
   `back`, `forward`, `reload`, `home`.
-- [ ] `new_tab`, `close_tab`, `select_tab` (blocked on Phase 3 tab model).
+- [x] `new_tab`, `close_tab`, `select_tab` with uid-based routing.
 - [x] Keep `on_before_browse` only as a fallback for old links.
-- [x] Ignore bridge traffic from page frames (only the chrome browser id is
-  accepted).
+- [x] Ignore bridge traffic from page frames (chrome browser id or chrome page
+  URL is required).
 - Tests: settings round-trip unit tests; hidden CDP smoke verified `navigate`,
-  `settings`, `save_settings`, and `reload`.
+  `settings`, `save_settings`, `reload`, and the `newTab`/`closeTab` UI path.
 
 ## Phase 2 — chrome UI
 
@@ -60,17 +60,20 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [ ] Appearance/skins.
 - Acceptance: hidden CDP verified title + URL updates and tab rendering.
 
-## Phase 3 — independent tabs (8-view pool)
+## Phase 3 — independent dynamic tabs
 
-- [x] Rust tab model: stable view slot + browser id, url/title in chrome.
-- [x] One content BrowserView per open tab (precreated pool of eight).
-- [x] Chrome IPC for new/close/select; active view state.
-- [x] Preserve page state/history when switching; close only hides the selected view.
+- [x] Rust tab model: uid + browser id, url/title in chrome.
+- [x] One content BrowserView per open tab, created on demand.
+- [x] Chrome IPC for new/close/select; active uid state.
+- [x] Preserve page state/history when switching; close removes the view and
+  releases the browser.
 - [x] New-tab page and tab titles from `on_title_change`.
-- [x] Keyboard shortcuts (Cmd/Ctrl-T/W, Ctrl-Tab, Cmd/Ctrl-1..8).
-- [ ] Replace the precreated eight-view pool with dynamic create/destroy so tab
+- [x] Keyboard shortcuts (Cmd/Ctrl-T/W, Ctrl-Tab, Cmd/Ctrl-1..9).
+- [x] Replace the precreated eight-view pool with dynamic create/destroy so tab
   count is unbounded.
-- Tests: hidden CEF smoke verifies DevTools targets and chrome stays fixed.
+- Tests: hidden CEF smoke verifies DevTools targets; CDP exercises the real
+  `newTab`/`closeTab` UI path and confirms the target appears/disappears and
+  chrome stays fixed.
 
 ## Phase 4 — registry navigation (partial)
 

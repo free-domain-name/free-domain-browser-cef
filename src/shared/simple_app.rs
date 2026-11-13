@@ -41,6 +41,11 @@ wrap_window_delegate! {
                         .mark_chrome_browser(browser.identifier());
                 }
             }
+            if let Some(handler) = SimpleHandler::instance() {
+                let mut handler = handler.lock().expect("Failed to lock handler");
+                handler.register_initial_tabs(&content_views);
+                handler.set_window(window.clone());
+            }
             for (index, content) in content_views.iter().enumerate() {
                 let mut content = View::from(content);
                 window.add_child_view(Some(&mut content));
@@ -81,6 +86,12 @@ wrap_window_delegate! {
             let Some(bounds) = new_bounds else { return; };
             let mut chrome = self.chrome_view.borrow().as_ref().map(View::from);
             self.apply_bounds(chrome.as_mut(), bounds);
+            if let Some(handler) = SimpleHandler::instance() {
+                handler
+                    .lock()
+                    .expect("Failed to lock handler")
+                    .resize_tabs(bounds);
+            }
         }
 
         fn can_close(&self, _window: Option<&mut Window>) -> i32 {
@@ -177,6 +188,27 @@ wrap_browser_view_delegate! {
     }
 }
 
+/// Create a content BrowserView for a new tab. The caller must not hold the
+/// handler mutex: `browser_view_create` synchronously invokes lifecycle
+/// callbacks that lock it.
+pub fn create_content_view(
+    inner: std::sync::Arc<std::sync::Mutex<SimpleHandler>>,
+    url: &str,
+) -> Option<BrowserView> {
+    let mut client = SimpleHandlerClient::new(inner);
+    let settings = BrowserSettings::default();
+    let url = CefString::from(url);
+    let mut delegate = SimpleBrowserViewDelegate::new(RuntimeStyle::ALLOY, 0);
+    browser_view_create(
+        Some(&mut client),
+        Some(&url),
+        Some(&settings),
+        None,
+        None,
+        Some(&mut delegate),
+    )
+}
+
 wrap_app! {
     pub struct SimpleApp;
 
@@ -259,23 +291,6 @@ wrap_browser_process_handler! {
                     None,
                     Some(&mut delegate),
                 );
-                let mut extra_views = Vec::new();
-                for _ in 0..7 {
-                    let extra_url = CefString::from("https://example.com/");
-                    let mut extra_client = self.default_client();
-                    let mut extra_delegate = SimpleBrowserViewDelegate::new(runtime_style, 0);
-                    if let Some(view) = browser_view_create(
-                        extra_client.as_mut(),
-                        Some(&extra_url),
-                        Some(&settings),
-                        None,
-                        None,
-                        Some(&mut extra_delegate),
-                    ) {
-                        extra_views.push(view);
-                    }
-                }
-
                 // Optionally configure the initial show state.
                 let initial_show_state = CefString::from(
                     &command_line.switch_value(Some(&CefString::from("initial-show-state"))),
@@ -291,7 +306,7 @@ wrap_browser_process_handler! {
                 };
 
                 // Create the Window. It will show itself after creation.
-                let content_views: Vec<BrowserView> = browser_view.into_iter().chain(extra_views).collect();
+                let content_views: Vec<BrowserView> = browser_view.into_iter().collect();
                 let mut delegate = SimpleWindowDelegate::new(
                     RefCell::new(chrome_view),
                     RefCell::new(content_views),

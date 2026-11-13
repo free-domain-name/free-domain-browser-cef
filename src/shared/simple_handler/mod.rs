@@ -1,4 +1,5 @@
 use cef::*;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 pub fn get_data_uri(data: &[u8], mime_type: &str) -> String {
@@ -30,10 +31,9 @@ enum BridgeAction {
     SaveSettings(crate::settings::Settings),
     BrowserCommand(i32, BrowserCommandKind),
     Home(i32),
-    NewTab(i32, String),
-    CloseTab(i32),
-    SelectTab(i32),
-    LoadTab(i32, String),
+    NewTab(u64, String),
+    CloseTab(u64),
+    SelectTab(u64),
     Quit,
 }
 
@@ -44,11 +44,23 @@ enum BrowserCommandKind {
     Reload,
 }
 
+struct Tab {
+    uid: u64,
+    browser_id: i32,
+    view: BrowserView,
+}
+
+const CHROME_HEIGHT: i32 = 96;
+
 pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
     chrome_browser_id: Option<i32>,
-    active_tab: usize,
+    tabs: Vec<Tab>,
+    pending_uids: VecDeque<u64>,
+    pending_views: Vec<(u64, BrowserView)>,
+    active_uid: Option<u64>,
+    window: Option<Window>,
     is_closing: bool,
     weak_self: Weak<Mutex<Self>>,
 }
@@ -158,7 +170,11 @@ impl SimpleHandler {
                 is_alloy_style,
                 browser_list: Vec::new(),
                 chrome_browser_id: None,
-                active_tab: 0,
+                tabs: Vec::new(),
+                pending_uids: VecDeque::new(),
+                pending_views: Vec::new(),
+                active_uid: None,
+                window: None,
                 is_closing: false,
                 weak_self: weak.clone(),
             })
@@ -192,6 +208,7 @@ impl SimpleHandler {
         if url.is_some_and(|value| value.starts_with("file://") || value.starts_with("data:")) {
             return;
         }
+        let Some(uid) = self.tab_uid(source_id) else { return; };
         let mut chrome = self
             .browser_list
             .iter()
@@ -199,18 +216,12 @@ impl SimpleHandler {
             .cloned();
         let Some(chrome) = chrome.as_mut() else { return; };
         let Some(frame) = chrome.main_frame() else { return; };
-        let tab_index = self
-            .browser_list
-            .iter()
-            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
-            .position(|browser| browser.identifier() == source_id);
-        let Some(tab_index) = tab_index else { return; };
         let url = url.map(|value| serde_json::to_string(value).unwrap_or_default());
         let title = title.map(|value| serde_json::to_string(value).unwrap_or_default());
         let script = match (url, title) {
-            (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title},{tab_index})"),
-            (Some(url), None) => format!("window.fdbUpdate&&fdbUpdate({url},null,{tab_index})"),
-            (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title},{tab_index})"),
+            (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title},{uid})"),
+            (Some(url), None) => format!("window.fdbUpdate&&fdbUpdate({url},null,{uid})"),
+            (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title},{uid})"),
             (None, None) => return,
         };
         let mut frame = frame;
@@ -231,17 +242,94 @@ impl SimpleHandler {
         frame.execute_java_script(Some(&CefString::from(script)), None, 0);
     }
 
-    fn content_index(&self, source_id: i32) -> Option<usize> {
-        self.browser_list
+    fn tab(&self, uid: u64) -> Option<&Tab> {
+        self.tabs.iter().find(|tab| tab.uid == uid)
+    }
+
+    fn tab_uid(&self, browser_id: i32) -> Option<u64> {
+        self.tabs
             .iter()
-            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
-            .position(|browser| browser.identifier() == source_id)
+            .find(|tab| tab.browser_id == browser_id)
+            .map(|tab| tab.uid)
+    }
+
+    pub fn register_initial_tabs(&mut self, views: &[BrowserView]) {
+        for (uid, view) in views.iter().enumerate() {
+            self.register_tab(uid as u64, view.clone());
+        }
+        if self.active_uid.is_none() {
+            self.active_uid = self.tabs.first().map(|tab| tab.uid);
+        }
+    }
+
+    pub fn register_tab(&mut self, uid: u64, view: BrowserView) {
+        if self.tabs.iter().any(|tab| tab.uid == uid) {
+            return;
+        }
+        let Some(browser) = view.browser() else { return; };
+        self.tabs.push(Tab {
+            uid,
+            browser_id: browser.identifier(),
+            view,
+        });
+    }
+
+    pub fn set_window(&mut self, window: Window) {
+        self.window = Some(window);
+    }
+
+    fn tab_bounds(window: &Window) -> Rect {
+        let bounds = window.bounds();
+        Rect {
+            x: 0,
+            y: CHROME_HEIGHT.min(bounds.height.max(1)),
+            width: bounds.width.max(1),
+            height: (bounds.height - CHROME_HEIGHT).max(1),
+        }
+    }
+
+    pub fn resize_tabs(&mut self, _bounds: &Rect) {
+        let Some(window) = self.window.clone() else { return; };
+        let bounds = Self::tab_bounds(&window);
+        for tab in &self.tabs {
+            let mut view = View::from(&tab.view);
+            view.set_bounds(Some(&bounds));
+        }
+    }
+
+    fn switch_uid(&mut self, uid: u64) {
+        if self.tab(uid).is_none() {
+            return;
+        }
+        self.active_uid = Some(uid);
+        for tab in &self.tabs {
+            let mut view = View::from(&tab.view);
+            view.set_visible(i32::from(tab.uid == uid));
+        }
+    }
+
+    fn active_browser_id(&self) -> Option<i32> {
+        let uid = self.active_uid?;
+        self.tab(uid).map(|tab| tab.browser_id)
+    }
+
+    fn take_tab(&mut self, uid: u64) -> Option<(BrowserView, Option<Browser>)> {
+        let index = self.tabs.iter().position(|tab| tab.uid == uid)?;
+        let tab = self.tabs.remove(index);
+        if self.active_uid == Some(uid) {
+            self.active_uid = self
+                .tabs
+                .get(index.min(self.tabs.len().saturating_sub(1)))
+                .map(|tab| tab.uid);
+        }
+        let browser = tab.view.browser();
+        Some((tab.view, browser))
     }
 
     fn on_status_message(&mut self, browser: Option<&mut Browser>, value: Option<&CefString>) {
         let Some(browser) = browser else { return; };
         let source_id = browser.identifier();
-        if self.content_index(source_id).is_none() { return; }
+        if self.tab_uid(source_id).is_none() { return; }
         let text = value.map(CefString::to_string).unwrap_or_default();
         let script = format!(
             "window.fdbStatus&&fdbStatus({})",
@@ -259,13 +347,13 @@ impl SimpleHandler {
     ) {
         let Some(browser) = browser else { return; };
         let source_id = browser.identifier();
-        let Some(index) = self.content_index(source_id) else { return; };
+        let Some(uid) = self.tab_uid(source_id) else { return; };
         let script = format!(
             "window.fdbLoad&&fdbLoad({},{},{},{})",
             if is_loading { 1 } else { 0 },
             if can_go_back { 1 } else { 0 },
             if can_go_forward { 1 } else { 0 },
-            index
+            uid
         );
         self.chrome_execute(source_id, &script);
     }
@@ -285,14 +373,28 @@ impl SimpleHandler {
             }
         );
 
-        // The chrome view is created first; remember it so page views cannot
-        // drive chrome-only synthetic navigation.
-        if self.chrome_browser_id.is_none() {
+        // CEF may create the content browsers before the chrome browser. Use the
+        // page URL to identify the chrome view instead of creation order.
+        let mut browser = browser;
+        if Self::is_chrome_frame(&mut browser) {
             self.chrome_browser_id = Some(browser.identifier());
+            self.browser_list.push(browser);
+            return;
         }
 
-        // Add to the list of existing browsers.
-        self.browser_list.push(browser);
+        self.browser_list.push(browser.clone());
+
+        if let Some(uid) = self.pending_uids.front().copied() {
+            if let Some(position) = self.pending_views.iter().position(|(pending, _)| *pending == uid) {
+                let (_, view) = self.pending_views.remove(position);
+                self.pending_uids.pop_front();
+                self.register_tab(uid, view);
+                self.switch_uid(uid);
+            } else {
+                    }
+            return;
+        }
+
     }
 
     fn do_close(&mut self, _browser: Option<&mut Browser>) -> bool {
@@ -316,17 +418,52 @@ impl SimpleHandler {
 
         // Remove from the list of existing browsers.
         let mut browser = browser.cloned().expect("Browser is None");
+        let browser_id = browser.identifier();
         if let Some(index) = self
             .browser_list
             .iter()
-            .position(move |elem| elem.is_same(Some(&mut browser)) != 0)
+            .position(|elem| elem.is_same(Some(&mut browser)) != 0)
         {
             self.browser_list.remove(index);
+        }
+        if self.tabs.iter().any(|tab| tab.browser_id == browser_id) {
+            self.tabs.retain(|tab| tab.browser_id != browser_id);
+            if self
+                .active_uid
+                .is_some_and(|uid| self.tab(uid).is_none())
+            {
+                self.active_uid = self.tabs.last().map(|tab| tab.uid);
+            }
         }
 
         if self.browser_list.is_empty() {
             // All browser windows have closed. Quit the application message loop.
             quit_message_loop();
+        }
+    }
+
+    fn on_load_start(
+        &mut self,
+        browser: Option<&mut Browser>,
+        frame: Option<&mut Frame>,
+        _transition_type: TransitionType,
+    ) {
+        let (Some(browser), Some(frame)) = (browser, frame) else { return; };
+        let source_id = browser.identifier();
+        let url = CefString::from(&frame.url()).to_string();
+        if url.starts_with("data:text/html") {
+            self.chrome_browser_id = Some(source_id);
+            return;
+        }
+        if self.tab_uid(source_id).is_some() || self.tabs.len() >= 2 {
+            return;
+        }
+        if let Some(view) = browser_view_get_for_browser(Some(browser)) {
+            let uid = self.tabs.len() as u64;
+            self.register_tab(uid, view);
+            if self.active_uid.is_none() {
+                self.active_uid = Some(uid);
+            }
         }
     }
 
@@ -415,71 +552,22 @@ impl SimpleHandler {
         1
     }
 
-    fn content_browser_id(&self, index: usize) -> Option<i32> {
-        let chrome = self.chrome_browser_id?;
-        self.browser_list
-            .iter()
-            .filter(|browser| browser.identifier() != chrome)
-            .nth(index)
-            .map(|browser| browser.identifier())
+    fn is_chrome_frame(browser: &mut Browser) -> bool {
+        browser
+            .main_frame()
+            .map(|frame| {
+                CefString::from(&frame.url())
+                    .to_string()
+                    .starts_with("data:text/html")
+            })
+            .unwrap_or(false)
     }
-
-    fn active_browser_id(&self) -> Option<i32> {
-        let chrome = self.chrome_browser_id?;
-        self.browser_list
-            .iter()
-            .filter(|browser| browser.identifier() != chrome)
-            .nth(self.active_tab)
-            .map(|browser| browser.identifier())
-    }
-
-    fn switch_tab(&mut self, index: i32) {
-        if index < 0 { return; }
-        let content_count = self
-            .browser_list
-            .iter()
-            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
-            .count();
-        if index as usize >= content_count { return; }
-        self.active_tab = index as usize;
-        let chrome_id = self.chrome_browser_id;
-        let mut views = Vec::new();
-        for browser in &self.browser_list {
-            let mut browser = browser.clone();
-            if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
-                views.push((Some(browser.identifier()) == chrome_id, view));
-            }
-        }
-        for (index, (is_chrome, view)) in views.iter().enumerate() {
-            let mut child = View::from(view);
-            child.set_visible(if *is_chrome || index == self.active_tab + 1 { 1 } else { 0 });
-        }
-    }
-
-    fn hide_tab(&mut self, view: i32) {
-        if view < 0 {
-            return;
-        }
-        let Some(id) = self.content_browser_id(view as usize) else { return; };
-        let mut browser = self
-            .browser_list
-            .iter()
-            .find(|browser| browser.identifier() == id)
-            .cloned();
-        let Some(browser) = browser.as_mut() else { return; };
-        if let Some(browser_view) = browser_view_get_for_browser(Some(browser)) {
-            let mut view = View::from(&browser_view);
-            view.set_visible(0);
-        }
-    }
-
-
 
     /// Parse a chrome command without executing it. The caller must drop the
     /// handler lock before loading a page, because CEF re-enters navigation
     /// handlers synchronously.
     fn bridge_action(&mut self, browser: &mut Browser, message: &str) -> Option<BridgeAction> {
-        if self.chrome_browser_id != Some(browser.identifier()) {
+        if self.chrome_browser_id != Some(browser.identifier()) && !Self::is_chrome_frame(browser) {
             return None;
         }
         let payload = message.strip_prefix("fdb:")?;
@@ -503,34 +591,32 @@ impl SimpleHandler {
             }
             "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
             "new_tab" => {
-                let view = value
-                    .get("view")
-                    .and_then(|view| view.as_i64())
-                    .or_else(|| value.get("index").and_then(|index| index.as_i64()))? as i32;
+                let uid = value
+                    .get("uid")
+                    .and_then(|uid| uid.as_u64())
+                    .or_else(|| value.get("view").and_then(|uid| uid.as_u64()))
+                    .or_else(|| value.get("index").and_then(|uid| uid.as_u64()))?;
                 let url = value
                     .get("url")
                     .and_then(|url| url.as_str())
                     .unwrap_or_default()
                     .to_string();
-                Some(BridgeAction::NewTab(view, url))
+                Some(BridgeAction::NewTab(uid, url))
             }
             "close_tab" => {
-                let view = value
-                    .get("view")
-                    .and_then(|view| view.as_i64())
-                    .or_else(|| value.get("index").and_then(|index| index.as_i64()))? as i32;
-                Some(BridgeAction::CloseTab(view))
+                let uid = value
+                    .get("uid")
+                    .and_then(|uid| uid.as_u64())
+                    .or_else(|| value.get("view").and_then(|uid| uid.as_u64()))
+                    .or_else(|| value.get("index").and_then(|uid| uid.as_u64()))?;
+                Some(BridgeAction::CloseTab(uid))
             }
             "select_tab" => value
-                .get("view")
-                .and_then(|view| view.as_i64())
-                .or_else(|| value.get("index").and_then(|index| index.as_i64()))
-                .map(|index| BridgeAction::SelectTab(index as i32)),
-            "load_tab" => {
-                let index = value.get("index").and_then(|index| index.as_i64())? as i32;
-                let url = value.get("url").and_then(|url| url.as_str())?.to_string();
-                Some(BridgeAction::LoadTab(index, url))
-            }
+                .get("uid")
+                .and_then(|uid| uid.as_u64())
+                .or_else(|| value.get("view").and_then(|uid| uid.as_u64()))
+                .or_else(|| value.get("index").and_then(|uid| uid.as_u64()))
+                .map(BridgeAction::SelectTab),
             "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
@@ -669,38 +755,20 @@ wrap_display_handler! {
                 Some(BridgeAction::Home(target_id)) => {
                     spawn_navigation(target_id, crate::settings::load().home);
                 }
-                Some(BridgeAction::NewTab(view, url)) => {
-                    let id = {
-                        let inner = self.inner.lock().expect("Failed to lock inner");
-                        inner.content_browser_id(view.max(0) as usize)
+                Some(BridgeAction::NewTab(uid, url)) => {
+                    let url = if url.trim().is_empty() {
+                        internal_page_url(NEWTAB_HTML)
+                    } else {
+                        url
                     };
-                    if let Some(id) = id {
-                        let url = if url.trim().is_empty() {
-                            internal_page_url(NEWTAB_HTML)
-                        } else {
-                            url
-                        };
-                        post_page(id, url);
-                    }
-                    let mut inner = self.inner.lock().expect("Failed to lock inner");
-                    inner.switch_tab(view);
+                    open_tab(self.inner.clone(), uid, url);
                 }
-                Some(BridgeAction::CloseTab(view)) => {
-                    let mut inner = self.inner.lock().expect("Failed to lock inner");
-                    inner.hide_tab(view);
+                Some(BridgeAction::CloseTab(uid)) => {
+                    close_tab(self.inner.clone(), uid);
                 }
-                Some(BridgeAction::SelectTab(index)) => {
+                Some(BridgeAction::SelectTab(uid)) => {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
-                    inner.switch_tab(index);
-                }
-                Some(BridgeAction::LoadTab(index, url)) => {
-                    let id = {
-                        let inner = self.inner.lock().expect("Failed to lock inner");
-                        inner.content_browser_id(index.max(0) as usize)
-                    };
-                    if let Some(id) = id {
-                        spawn_navigation(id, url);
-                    }
+                    inner.switch_uid(uid);
                 }
                 Some(BridgeAction::Quit) => {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
@@ -751,6 +819,16 @@ wrap_load_handler! {
         ) {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_loading_state_change(browser, is_loading != 0, can_go_back != 0, can_go_forward != 0);
+        }
+
+        fn on_load_start(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            transition_type: TransitionType,
+        ) {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_load_start(browser, frame, transition_type);
         }
 
         fn on_load_error(
@@ -901,6 +979,72 @@ fn handle_chat_command(browser_id: i32, message: &str) {
         let mut task = ChatResponse::new(browser_id, script);
         post_task(ThreadId::UI, Some(&mut task));
     });
+}
+
+fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
+    {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        if handler.tab(uid).is_some() {
+            handler.switch_uid(uid);
+            return;
+        }
+    }
+
+    // Never hold the handler lock across view creation: CEF invokes
+    // `on_after_created`, which locks the same mutex. Queue the uid first so
+    // the lifecycle callback can associate the browser with this tab.
+    {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        handler.pending_uids.push_back(uid);
+    }
+    let Some(view) = crate::shared::simple_app::create_content_view(inner.clone(), &url) else {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        handler.pending_uids.retain(|pending| *pending != uid);
+        return;
+    };
+    let window = {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        handler.pending_views.push((uid, view.clone()));
+        handler.window.clone()
+    };
+    if let Some(window) = window {
+        // Parent the view before its browser exists. CEF creates the browser
+        // once the view is in the view hierarchy, then calls `on_after_created`.
+        let mut child = View::from(&view);
+        window.add_child_view_at(Some(&mut child), 0);
+        let bounds = SimpleHandler::tab_bounds(&window);
+        child.set_bounds(Some(&bounds));
+        child.set_visible(0);
+    }
+    let mut handler = inner.lock().expect("Failed to lock inner");
+    if handler.tab(uid).is_none() {
+        handler.register_tab(uid, view);
+    }
+    handler.pending_views.retain(|(pending, _)| *pending != uid);
+    handler.pending_uids.retain(|pending| *pending != uid);
+    if handler.tab(uid).is_some() {
+        handler.switch_uid(uid);
+    }
+}
+
+fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
+    let (removed, window) = {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        let removed = handler.take_tab(uid);
+        (removed, handler.window.clone())
+    };
+    let Some((view, browser)) = removed else {
+        return;
+    };
+    let _ = browser;
+    if let Some(window) = window {
+        let mut view = View::from(&view);
+        window.remove_child_view(Some(&mut view));
+    }
+    let mut handler = inner.lock().expect("Failed to lock inner");
+    if let Some(uid) = handler.active_uid {
+        handler.switch_uid(uid);
+    }
 }
 
 fn spawn_navigation(target_id: i32, target: String) {
