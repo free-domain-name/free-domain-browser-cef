@@ -338,6 +338,11 @@ impl SimpleHandler {
     ) {
         debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
+        let failed = failed_url.map(CefString::to_string).unwrap_or_default();
+        let text = error_text.map(CefString::to_string).unwrap_or_default();
+        let code = sys::cef_errorcode_t::from(error_code);
+        eprintln!("[cef] load error {}: {text} ({failed})", code as i32);
+
         // Allow Chrome to show the error page.
         if !self.is_alloy_style {
             return;

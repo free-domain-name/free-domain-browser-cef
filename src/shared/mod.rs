@@ -87,6 +87,11 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
         remote_debugging_port: if cfg!(debug_assertions) { 9222 } else { 0 },
         ..Default::default()
     };
+    if cfg!(debug_assertions) {
+        let log_path = std::path::Path::new(&cache_root).join("cef.log");
+        settings.log_file = CefString::from(log_path.to_string_lossy().as_ref());
+        settings.log_severity = LogSeverity::INFO;
+    }
 
     // On Linux the CEF binary distribution is not discovered relative to the
     // Rust binary; point Chromium at the resources shipped with CEF_PATH.
@@ -103,6 +108,12 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
             CefString::from(resources.to_string_lossy().as_ref());
         settings.locales_dir_path =
             CefString::from(root.join("locales").to_string_lossy().as_ref());
+        eprintln!(
+            "[cef] runtime={} resources={} locales={}",
+            root.display(),
+            resources.display(),
+            root.join("locales").display()
+        );
     }
 
     assert_eq!(
