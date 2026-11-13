@@ -165,7 +165,7 @@ define_class!(
             if let Some(handler) = SimpleHandler::instance() {
                 let mut handler = handler.lock().expect("Failed to lock SimpleHandler");
                 if !handler.is_closing() {
-                    handler.close_all_browsers(false);
+                    handler.close_all_browsers(true);
                 }
             }
         }

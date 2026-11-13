@@ -37,6 +37,7 @@ enum BridgeAction {
     Home(i32),
     SelectTab(i32),
     LoadTab(i32, String),
+    Quit,
 }
 
 #[derive(Clone, Copy)]
@@ -501,6 +502,7 @@ impl SimpleHandler {
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
             "home" => Some(BridgeAction::Home(target_id)),
+            "quit" => Some(BridgeAction::Quit),
             _ => None,
         }
     }
@@ -534,21 +536,12 @@ impl SimpleHandler {
 
     pub fn close_all_browsers(&mut self, force_close: bool) {
         let thread_id = ThreadId::UI;
-        if currently_on(thread_id) == 0 {
-            // Execute on the UI thread.
-            let this = self
-                .weak_self
-                .upgrade()
-                .expect("Weak reference to SimpleHandler is None");
-            let mut task = CloseAllBrowsers::new(this, force_close);
-            post_task(thread_id, Some(&mut task));
-            return;
-        }
-
-        for browser in self.browser_list.iter() {
-            let browser_host = browser.host().expect("BrowserHost is None");
-            browser_host.close_browser(force_close.into());
-        }
+        let this = self
+            .weak_self
+            .upgrade()
+            .expect("Weak reference to SimpleHandler is None");
+        let mut task = CloseAllBrowsers::new(this, force_close);
+        post_task(thread_id, Some(&mut task));
     }
 
     pub fn is_closing(&self) -> bool {
@@ -655,6 +648,10 @@ wrap_display_handler! {
                     if let Some(id) = id {
                         spawn_navigation(id, url);
                     }
+                }
+                Some(BridgeAction::Quit) => {
+                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.close_all_browsers(true);
                 }
                 None => {}
             }
@@ -860,6 +857,16 @@ fn spawn_navigation(target_id: i32, target: String) {
         .strip_prefix("fdn://")
         .map(str::to_string)
         .unwrap_or(target);
+    // Normal web URLs must not wait on registry + public-DNS probes. Only
+    // free-namespace names (or bare input) need the resolver.
+    if let Ok(parsed) = url::Url::parse(&target) {
+        if matches!(parsed.scheme(), "http" | "https")
+            && parsed.host_str().is_some_and(|host| host != "fdn" && !host.ends_with(".fdn"))
+        {
+            post_page(target_id, target);
+            return;
+        }
+    }
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -1017,8 +1024,18 @@ wrap_task! {
         fn execute(&self) {
             debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
-            let mut inner = self.inner.lock().expect("Failed to lock inner");
-            inner.close_all_browsers(self.force_close);
+            // Snapshot the browsers and release the handler lock before asking
+            // CEF to close them: close_browser re-enters the life-span handler.
+            let browsers = {
+                let mut inner = self.inner.lock().expect("Failed to lock inner");
+                inner.is_closing = true;
+                inner.browser_list.clone()
+            };
+            for mut browser in browsers {
+                if let Some(host) = browser.host() {
+                    host.close_browser(self.force_close.into());
+                }
+            }
         }
     }
 }
