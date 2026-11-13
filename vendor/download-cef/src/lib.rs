@@ -284,42 +284,53 @@ impl CefVersion {
             println!("Using archive url: {cef_url}");
         }
 
-        let mut file = File::create(&download_file)?;
-
-        let resp = ureq::get(&cef_url).call()?;
-        let expected = resp
-            .headers()
-            .get("Content-Length")
-            .ok_or(Error::MissingContentLength)?;
-        let expected = expected.to_str()?;
-        let expected = expected
-            .parse::<u64>()
-            .map_err(|_| Error::InvalidContentLength(expected.to_owned()))?;
-
-        let downloaded = if show_progress && io::stdout().is_terminal() {
-            const DOWNLOAD_TEMPLATE: &str = "{msg} {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})";
-
-            let bar = indicatif::ProgressBar::new(expected);
-            bar.set_style(
-                indicatif::ProgressStyle::with_template(DOWNLOAD_TEMPLATE)
-                    .expect("invalid template")
-                    .progress_chars("##-"),
-            );
-            bar.set_message("Downloading");
-            std::io::copy(
-                &mut bar.wrap_read(resp.into_body().into_reader()),
-                &mut file,
-            )
+        // Large CDN downloads occasionally end with "Peer disconnected" from
+        // ureq. Prefer curl, which can retry and resume the partial archive.
+        if let Some(expected) = try_curl_download(&cef_url, &download_file, show_progress)? {
+            let size = fs_err::metadata(&download_file)?.len();
+            if size != expected {
+                return Err(Error::UnexpectedFileSize {
+                    downloaded: size,
+                    expected,
+                });
+            }
         } else {
-            let mut reader = resp.into_body().into_reader();
-            std::io::copy(&mut reader, &mut file)
-        }?;
+            let mut file = File::create(&download_file)?;
+            let resp = ureq::get(&cef_url).call()?;
+            let expected = resp
+                .headers()
+                .get("Content-Length")
+                .ok_or(Error::MissingContentLength)?;
+            let expected = expected.to_str()?;
+            let expected = expected
+                .parse::<u64>()
+                .map_err(|_| Error::InvalidContentLength(expected.to_owned()))?;
 
-        if downloaded != expected {
-            return Err(Error::UnexpectedFileSize {
-                downloaded,
-                expected,
-            });
+            let downloaded = if show_progress && io::stdout().is_terminal() {
+                const DOWNLOAD_TEMPLATE: &str = "{msg} {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})";
+
+                let bar = indicatif::ProgressBar::new(expected);
+                bar.set_style(
+                    indicatif::ProgressStyle::with_template(DOWNLOAD_TEMPLATE)
+                        .expect("invalid template")
+                        .progress_chars("##-"),
+                );
+                bar.set_message("Downloading");
+                std::io::copy(
+                    &mut bar.wrap_read(resp.into_body().into_reader()),
+                    &mut file,
+                )
+            } else {
+                let mut reader = resp.into_body().into_reader();
+                std::io::copy(&mut reader, &mut file)
+            }?;
+
+            if downloaded != expected {
+                return Err(Error::UnexpectedFileSize {
+                    downloaded,
+                    expected,
+                });
+            }
         }
 
         if show_progress {
@@ -433,6 +444,66 @@ impl TryFrom<&Path> for CefFile {
             sha1,
         })
     }
+}
+
+/// Use the platform curl binary for a resumable download. Returns the expected
+/// size when curl is available and succeeded, or `None` to fall back to ureq.
+fn try_curl_download(url: &str, path: &Path, show_progress: bool) -> Result<Option<u64>> {
+    use std::process::Command;
+
+    let available = Command::new("curl")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !available {
+        return Ok(None);
+    }
+
+    if show_progress {
+        println!("Downloading with curl (retry/resume enabled)...");
+    }
+    let mut last_status = None;
+    for attempt in 0..6 {
+        let mut command = Command::new("curl");
+        command.args([
+            "--fail",
+            "--location",
+            "--retry",
+            "4",
+            "--retry-delay",
+            "2",
+            "--retry-all-errors",
+            "--connect-timeout",
+            "20",
+            "--silent",
+            "--show-error",
+        ]);
+        if path.exists() {
+            command.args(["--continue-at", "-"]);
+        }
+        command.arg("--output").arg(path).arg(url);
+        let status = command.status()?;
+        if status.success() {
+            let size = fs_err::metadata(path)?.len();
+            return Ok(Some(size));
+        }
+        last_status = Some(status);
+        if show_progress {
+            println!("curl attempt {} failed; resuming...", attempt + 1);
+        }
+        thread::sleep(Duration::from_secs(2 + attempt));
+    }
+    if show_progress {
+        println!(
+            "curl failed after retries ({}); falling back to ureq",
+            last_status.map(|status| status.to_string()).unwrap_or_default()
+        );
+    }
+    Ok(None)
+
 }
 
 pub fn download_target_archive<P>(
