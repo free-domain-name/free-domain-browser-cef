@@ -3,6 +3,9 @@ use std::cell::RefCell;
 
 use super::simple_handler::*;
 
+/// Height of the fixed HTML chrome bar, in DIP.
+const CHROME_HEIGHT: i32 = 96;
+
 wrap_window_delegate! {
     struct SimpleWindowDelegate {
         chrome_view: RefCell<Option<BrowserView>>,
@@ -31,7 +34,6 @@ wrap_window_delegate! {
             let content_views = self.content_views.borrow();
             let mut chrome = chrome_view.as_ref().map(View::from);
             if let Some(chrome) = chrome.as_mut() {
-                // chrome view has no explicit minimum-size API; fixed content bounds are used below.
                 window.add_child_view(Some(chrome));
             }
             if let Some(browser) = chrome_view.as_ref().and_then(|view| view.browser()) {
@@ -47,24 +49,27 @@ wrap_window_delegate! {
                 window.add_child_view(Some(&mut content));
                 content.set_visible(if index == 0 { 1 } else { 0 });
             }
-            let settings = BoxLayoutSettings { horizontal: 0, ..Default::default() };
-            if let Some(layout) = window.set_to_box_layout(Some(&settings)) {
-                if let Some(chrome) = chrome.as_mut() { layout.set_flex_for_view(Some(chrome), 0); }
-                for (index, content) in content_views.iter().enumerate() {
-                    let mut content = View::from(content);
-                    layout.set_flex_for_view(Some(&mut content), if index == 0 { 1 } else { 0 });
-                }
-            }
-            window.layout();
 
-            if self.initial_show_state != ShowState::HIDDEN {
-                window.show();
-            }
+            // Use explicit bounds rather than a box layout. With a box layout the
+            // content BrowserView could keep its preferred height of 0 on Linux
+            // (the chrome was visible while the page view had no drawable area).
+            let bounds = window.bounds();
+            self.apply_bounds(chrome.as_mut(), &bounds);
         }
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
             *self.chrome_view.borrow_mut() = None;
             self.content_views.borrow_mut().clear();
+        }
+
+        fn on_window_bounds_changed(
+            &self,
+            _window: Option<&mut Window>,
+            new_bounds: Option<&Rect>,
+        ) {
+            let Some(bounds) = new_bounds else { return; };
+            let mut chrome = self.chrome_view.borrow().as_ref().map(View::from);
+            self.apply_bounds(chrome.as_mut(), bounds);
         }
 
         fn can_close(&self, _window: Option<&mut Window>) -> i32 {
@@ -90,6 +95,31 @@ wrap_window_delegate! {
         // CEF hides the macOS traffic lights by default for Views windows.
         fn with_standard_window_buttons(&self, _window: Option<&mut Window>) -> i32 {
             1
+        }
+    }
+}
+
+impl SimpleWindowDelegate {
+    fn apply_bounds(&self, chrome: Option<&mut View>, window_bounds: &Rect) {
+        let width = window_bounds.width.max(1);
+        let height = window_bounds.height.max(1);
+        if let Some(chrome) = chrome {
+            chrome.set_bounds(Some(&Rect {
+                x: 0,
+                y: 0,
+                width,
+                height: CHROME_HEIGHT.min(height),
+            }));
+        }
+        let content_bounds = Rect {
+            x: 0,
+            y: CHROME_HEIGHT.min(height),
+            width,
+            height: (height - CHROME_HEIGHT).max(1),
+        };
+        for content in self.content_views.borrow().iter() {
+            let mut content = View::from(content);
+            content.set_bounds(Some(&content_bounds));
         }
     }
 }

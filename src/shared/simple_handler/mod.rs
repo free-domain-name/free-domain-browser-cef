@@ -448,18 +448,10 @@ impl SimpleHandler {
                 views.push((Some(browser.identifier()) == chrome_id, view));
             }
         }
-        let Some(window) = views.first().and_then(|(_, view)| view.window()) else { return; };
-        let mut window = window;
-        let settings = BoxLayoutSettings { horizontal: 0, ..Default::default() };
-        if let Some(layout) = window.set_to_box_layout(Some(&settings)) {
-            for (index, (is_chrome, view)) in views.iter().enumerate() {
-                let mut child = View::from(view);
-                let flex = if *is_chrome { 0 } else if index == self.active_tab + 1 { 1 } else { 0 };
-                layout.set_flex_for_view(Some(&mut child), flex);
-                child.set_visible(if *is_chrome || index == self.active_tab + 1 { 1 } else { 0 });
-            }
+        for (index, (is_chrome, view)) in views.iter().enumerate() {
+            let mut child = View::from(view);
+            child.set_visible(if *is_chrome || index == self.active_tab + 1 { 1 } else { 0 });
         }
-        window.layout();
     }
 
 
