@@ -19,6 +19,7 @@ fn looks_like_cef(dir: &std::path::Path) -> bool {
 /// `<version>/<platform>/`. Return the directory that actually owns libcef.
 fn resolve_cef_runtime_path() -> Option<std::path::PathBuf> {
     let root = resolve_cef_path()?;
+    let root = root.canonicalize().unwrap_or(root);
     if looks_like_cef(&root) {
         return Some(root);
     }
