@@ -13,7 +13,7 @@ cleanup() {
   pkill -f 'free_domain_browser_cef_helper' 2>/dev/null || true
 }
 trap cleanup EXIT
-for _ in $(seq 1 120); do
+for _ in $(seq 1 300); do
   if curl -sf --max-time 1 "http://127.0.0.1:$PORT/json/version" >/dev/null 2>&1; then
     echo "CEF DevTools ready on $PORT"
     curl -s --max-time 3 "http://127.0.0.1:$PORT/json" |

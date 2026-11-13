@@ -87,14 +87,14 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [ ] Apply settings to CEF request context/cache and chrome UI.
 - Tests: round-trip save/load; empty home falls back to default.
 
-## Phase 6 — chat (UI only)
+## Phase 6 — chat (ported client)
 
 - [x] Functional local chat UI: rooms, send, per-room localStorage history.
 - [x] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
   and the iroh transport into `src/chat` with a UI-free event sink.
 - [x] Chat page uses `fdbchat:` commands (`snapshot`, `confirm_age`, `enable`,
   `send`, `nickname`, ignore) and polls snapshots.
-- [ ] Two-client test with `FDN_CHAT_LOBBY_ID` + relay.
+- [ ] Two-client test with `FDN_CHAT_LOBBY_ID` + relay (external deployment).
 
 ## Phase 7 — packaging and release (partial)
 
