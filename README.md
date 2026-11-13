@@ -10,8 +10,9 @@ there is no `X-Frame-Options` block and the page cannot paint over the chrome.
 Implemented: tab strip with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages, and a local chat UI.
-Still pending: independent browser views per tab, the iroh chat backend, native
-registry scheme handler, and a signed release bundle.
+Tabs now use two independent content BrowserViews (separate history); dynamic
+tab creation beyond two views is still pending. Still pending: iroh chat
+backend, native registry scheme handler, and a signed release bundle.
 
 ## Requirements
 

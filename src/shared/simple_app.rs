@@ -6,7 +6,7 @@ use super::simple_handler::*;
 wrap_window_delegate! {
     struct SimpleWindowDelegate {
         chrome_view: RefCell<Option<BrowserView>>,
-        content_view: RefCell<Option<BrowserView>>,
+        content_views: RefCell<Vec<BrowserView>>,
         runtime_style: RuntimeStyle,
         initial_show_state: ShowState,
     }
@@ -28,9 +28,8 @@ wrap_window_delegate! {
             // page cannot paint over the chrome.
             let Some(window) = window else { return; };
             let chrome_view = self.chrome_view.borrow();
-            let content_view = self.content_view.borrow();
+            let content_views = self.content_views.borrow();
             let mut chrome = chrome_view.as_ref().map(View::from);
-            let mut content = content_view.as_ref().map(View::from);
             if let Some(chrome) = chrome.as_mut() {
                 // chrome view has no explicit minimum-size API; fixed content bounds are used below.
                 window.add_child_view(Some(chrome));
@@ -43,13 +42,18 @@ wrap_window_delegate! {
                         .mark_chrome_browser(browser.identifier());
                 }
             }
-            if let Some(content) = content.as_mut() {
-                window.add_child_view(Some(content));
+            for (index, content) in content_views.iter().enumerate() {
+                let mut content = View::from(content);
+                window.add_child_view(Some(&mut content));
+                content.set_visible(if index == 0 { 1 } else { 0 });
             }
             let settings = BoxLayoutSettings { horizontal: 0, ..Default::default() };
             if let Some(layout) = window.set_to_box_layout(Some(&settings)) {
                 if let Some(chrome) = chrome.as_mut() { layout.set_flex_for_view(Some(chrome), 0); }
-                if let Some(content) = content.as_mut() { layout.set_flex_for_view(Some(content), 1); }
+                for (index, content) in content_views.iter().enumerate() {
+                    let mut content = View::from(content);
+                    layout.set_flex_for_view(Some(&mut content), if index == 0 { 1 } else { 0 });
+                }
             }
             window.layout();
 
@@ -60,13 +64,13 @@ wrap_window_delegate! {
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
             *self.chrome_view.borrow_mut() = None;
-            *self.content_view.borrow_mut() = None;
+            self.content_views.borrow_mut().clear();
         }
 
         fn can_close(&self, _window: Option<&mut Window>) -> i32 {
             // Allow the window to close if the browser says it's OK.
-            let content_view = self.content_view.borrow();
-            let browser_view = content_view.as_ref().expect("BrowserView is None");
+            let content_view = self.content_views.borrow();
+            let browser_view = content_view.first().expect("BrowserView is None");
             if let Some(browser) = browser_view.browser() {
                 let browser_host = browser.host().expect("BrowserHost is None");
                 browser_host.try_close_browser()
@@ -116,7 +120,7 @@ wrap_browser_view_delegate! {
             // creation.
             let mut window_delegate = SimpleWindowDelegate::new(
                 RefCell::new(None),
-                RefCell::new(popup_browser_view.cloned()),
+                RefCell::new(popup_browser_view.cloned().into_iter().collect()),
                 self.runtime_style,
                 ShowState::NORMAL,
             );
@@ -214,6 +218,17 @@ wrap_browser_process_handler! {
                     None,
                     Some(&mut delegate),
                 );
+                let second_url = CefString::from("https://example.com/");
+                let mut second_client = self.default_client();
+                let mut second_delegate = SimpleBrowserViewDelegate::new(runtime_style, 0);
+                let second_view = browser_view_create(
+                    second_client.as_mut(),
+                    Some(&second_url),
+                    Some(&settings),
+                    None,
+                    None,
+                    Some(&mut second_delegate),
+                );
 
                 // Optionally configure the initial show state.
                 let initial_show_state = CefString::from(
@@ -230,9 +245,10 @@ wrap_browser_process_handler! {
                 };
 
                 // Create the Window. It will show itself after creation.
+                let content_views: Vec<BrowserView> = [browser_view, second_view].into_iter().flatten().collect();
                 let mut delegate = SimpleWindowDelegate::new(
                     RefCell::new(chrome_view),
-                    RefCell::new(browser_view),
+                    RefCell::new(content_views),
                     runtime_style,
                     initial_show_state,
                 );

@@ -26,7 +26,7 @@ function render(){
     var label=document.createElement('span');label.textContent=t.label||t.url;b.appendChild(label);
     var close=document.createElement('span');close.textContent='×';close.title='Close tab';
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
-    b.onclick=function(){active=i;render();navigate(t.url)};
+    b.onclick=function(){active=i;render();send({cmd:'select_tab',index:i})};
     box.appendChild(b);
   });
   var plus=document.createElement('button');
@@ -36,14 +36,14 @@ function render(){
   box.appendChild(plus);
   document.getElementById('url').value=current().url||'';
 }
-function newTab(u){tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'new_tab'})}}
-function closeTab(i){if(tabs.length<2)return;tabs.splice(i,1);if(active>=tabs.length)active=tabs.length-1;render();navigate(current().url)}
+function newTab(u){if(tabs.length>=2){tabs[active]={url:u||'',label:'New Tab'};render();if(u)navigate(u);else send({cmd:'new_tab'});return}tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'new_tab'})}}
+function closeTab(i){if(tabs.length<2)return;tabs.splice(i,1);if(active>=tabs.length)active=tabs.length-1;render();send({cmd:'select_tab',index:active})}
 function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
-window.fdbUpdate=function(url,title){var t=current();if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}render()};
+window.fdbUpdate=function(url,title,index){if(index==null)index=active;var t=tabs[index];if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(index===active)render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
 document.addEventListener('keydown',function(e){
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('')}

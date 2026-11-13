@@ -35,6 +35,7 @@ enum BridgeAction {
     SaveSettings(crate::settings::Settings),
     BrowserCommand(i32, BrowserCommandKind),
     Home(i32),
+    SelectTab(i32),
 }
 
 #[derive(Clone, Copy)]
@@ -48,6 +49,7 @@ pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
     chrome_browser_id: Option<i32>,
+    active_tab: usize,
     is_closing: bool,
     weak_self: Weak<Mutex<Self>>,
 }
@@ -157,6 +159,7 @@ impl SimpleHandler {
                 is_alloy_style,
                 browser_list: Vec::new(),
                 chrome_browser_id: None,
+                active_tab: 0,
                 is_closing: false,
                 weak_self: weak.clone(),
             })
@@ -197,12 +200,18 @@ impl SimpleHandler {
             .cloned();
         let Some(chrome) = chrome.as_mut() else { return; };
         let Some(frame) = chrome.main_frame() else { return; };
+        let tab_index = self
+            .browser_list
+            .iter()
+            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
+            .position(|browser| browser.identifier() == source_id);
+        let Some(tab_index) = tab_index else { return; };
         let url = url.map(|value| serde_json::to_string(value).unwrap_or_default());
         let title = title.map(|value| serde_json::to_string(value).unwrap_or_default());
         let script = match (url, title) {
-            (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title})"),
-            (Some(url), None) => format!("window.fdbUpdate&&fdbUpdate({url},null)"),
-            (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title})"),
+            (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title},{tab_index})"),
+            (Some(url), None) => format!("window.fdbUpdate&&fdbUpdate({url},null,{tab_index})"),
+            (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title},{tab_index})"),
             (None, None) => return,
         };
         let mut frame = frame;
@@ -333,7 +342,7 @@ impl SimpleHandler {
             }
             return 0;
         }
-        let Some(target_id) = self.other_browser_id(&mut current) else {
+        let Some(target_id) = self.active_browser_id() else {
             return 0;
         };
         if url == "https://fdb.invalid/settings" {
@@ -349,11 +358,44 @@ impl SimpleHandler {
         1
     }
 
-    fn other_browser_id(&mut self, current: &mut Browser) -> Option<i32> {
+    fn active_browser_id(&self) -> Option<i32> {
+        let chrome = self.chrome_browser_id?;
         self.browser_list
-            .iter_mut()
-            .find(|candidate| candidate.is_same(Some(current)) == 0)
+            .iter()
+            .filter(|browser| browser.identifier() != chrome)
+            .nth(self.active_tab)
             .map(|browser| browser.identifier())
+    }
+
+    fn switch_tab(&mut self, index: i32) {
+        if index < 0 { return; }
+        let content_count = self
+            .browser_list
+            .iter()
+            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
+            .count();
+        if index as usize >= content_count { return; }
+        self.active_tab = index as usize;
+        let chrome_id = self.chrome_browser_id;
+        let mut views = Vec::new();
+        for browser in &self.browser_list {
+            let mut browser = browser.clone();
+            if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
+                views.push((Some(browser.identifier()) == chrome_id, view));
+            }
+        }
+        let Some(window) = views.first().and_then(|(_, view)| view.window()) else { return; };
+        let mut window = window;
+        let settings = BoxLayoutSettings { horizontal: 0, ..Default::default() };
+        if let Some(layout) = window.set_to_box_layout(Some(&settings)) {
+            for (index, (is_chrome, view)) in views.iter().enumerate() {
+                let mut child = View::from(view);
+                let flex = if *is_chrome { 0 } else if index == self.active_tab + 1 { 1 } else { 0 };
+                layout.set_flex_for_view(Some(&mut child), flex);
+                child.set_visible(if *is_chrome || index == self.active_tab + 1 { 1 } else { 0 });
+            }
+        }
+        window.layout();
     }
 
 
@@ -367,7 +409,7 @@ impl SimpleHandler {
         }
         let payload = message.strip_prefix("fdb:")?;
         let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
-        let target_id = self.other_browser_id(browser)?;
+        let target_id = self.active_browser_id()?;
         match value.get("cmd").and_then(|cmd| cmd.as_str())? {
             "navigate" => {
                 let url = value.get("url")?.as_str()?.trim();
@@ -386,6 +428,7 @@ impl SimpleHandler {
             }
             "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
             "new_tab" => Some(BridgeAction::Page(target_id, internal_page_url(NEWTAB_HTML))),
+            "select_tab" => value.get("index").and_then(|index| index.as_i64()).map(|index| BridgeAction::SelectTab(index as i32)),
             "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
@@ -522,6 +565,10 @@ wrap_display_handler! {
                 }
                 Some(BridgeAction::Home(target_id)) => {
                     spawn_navigation(target_id, crate::settings::load().home);
+                }
+                Some(BridgeAction::SelectTab(index)) => {
+                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.switch_tab(index);
                 }
                 None => {}
             }
