@@ -1,0 +1,5 @@
+# Cross-platform CEF cache. If this directory is empty, cef-dll-sys downloads
+# the pinned CEF build here (the vendored download-cef patch raises the CDN
+# index limit). Export CEF_PATH to use an existing distribution instead.
+[env]
+CEF_PATH = { value = "cef-binary", relative = true }

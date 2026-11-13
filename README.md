@@ -18,20 +18,36 @@ Still pending: native registry scheme handler and a signed release bundle.
 
 ## Requirements
 
-- macOS arm64 or x86_64 Linux
-- CEF binary distribution 156.0.26 (`CEF_PATH`)
-- CMake + Ninja on `PATH` (and the usual CEF Linux runtime libraries)
+- macOS, x86_64 Linux, or Windows
+- CMake + Ninja on `PATH`
+- platform toolchain: Xcode Command Line Tools (macOS), GCC/GTK3/NSS (Linux),
+  or Visual Studio C++ build tools (Windows)
+
+CEF itself is downloaded automatically. The first build fetches the pinned
+156.0.26 distribution into `./cef-binary` and caches it for later targets.
+To use an existing distribution instead:
+
+```sh
+CEF_PATH=/path/to/cef_binary_156.0.26_linux64 cargo run
+```
 
 ## Build and run
 
-CEF on macOS must run from an `.app` bundle. The default `cargo run` target is
-`bundle`: it builds the app bundle and then executes its binary in this terminal,
-so browser logs stream to the console.
+```sh
+cargo run
+```
+
+`cargo run` targets `bundle`. On macOS it builds and launches the `.app`
+(this is required for CEF's framework/ICU lookup); on Linux and Windows it
+builds `target/bootstrap/debug/` and launches the executable directly. Logs
+stream to the terminal. `./scripts/run.sh` does the same with Linux
+`LD_LIBRARY_PATH` setup, `scripts/run.ps1` is its PowerShell equivalent, and
+`./scripts/build.sh` builds without launching.
+
+No window (for CI/screenshot work; macOS only):
 
 ```sh
-# If CEF_PATH is not exported, the local `.cargo/config.toml` created by
-# scripts/setup-cargo-env.sh is used.
-cargo run
+cargo run -- --initial-show-state=hidden
 ```
 
 Hidden smoke test (launches, checks DevTools/targets, kills the app):
@@ -40,50 +56,19 @@ Hidden smoke test (launches, checks DevTools/targets, kills the app):
 ./scripts/smoke-hidden.sh
 ```
 
-No window (for CI/screenshot work):
-
-```sh
-cargo run -- --initial-show-state=hidden
-```
-
-`./scripts/run.sh` sets up local CEF/CMake paths and forwards the same flags.
-
-### Linux
-
-The CEF build script's automatic download currently fails with
-`response body is larger than request limit: 10485760`; download the
-distribution explicitly instead:
-
-```sh
-./scripts/fetch-cef-linux.sh          # writes ./cef-binary
-./scripts/run.sh                     # builds target/bootstrap and launches
-```
-
-If you already unpacked CEF yourself, point at it:
-
-```sh
-CEF_PATH=/opt/cef_binary_156.0.26_linux64 ./scripts/run.sh
-```
-
-On Linux `cargo run` uses the `bundle` launcher too, but there is no `.app`;
-it builds `target/bootstrap/debug/free-domain-browser-cef`, sets
-`LD_LIBRARY_PATH` to `CEF_PATH`, and launches it. Debug builds disable the
-Chromium sandbox so a non-setuid `chrome-sandbox` does not block startup.
-
-Build the bundle without launching:
+Build without launching:
 
 ```sh
 cargo run --bin bundle -- --build-only
 ```
 
-Package an unsigned release `.app` zip:
+Package an unsigned release `.app` zip (macOS):
 
 ```sh
 ./scripts/package-release.sh
 ```
 
-The raw `free-domain-browser-cef` binary cannot load ICU outside the `.app`;
-always launch through `cargo run`/the bundle.
+On macOS, always launch through `cargo run`/the bundle: the raw binary cannot
+load CEF's ICU outside the `.app`. On Linux/Windows the binary is self-contained
+once CEF runtime files have been copied next to it.
 
-The `cef-dll-sys` build error about a response body larger than 10 MB means
-`CEF_PATH` is unset and the build script tried to download the CEF index.

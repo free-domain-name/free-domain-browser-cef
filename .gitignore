@@ -4,5 +4,4 @@
 .DS_Store
 target/docker-out/
 
-.cargo/config.toml
 cef-binary

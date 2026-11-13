@@ -130,3 +130,11 @@ A signed macOS `.app` that launches Yahoo and frame-blocking sites, keeps the
 address bar fixed, supports independent tabs, resolves free-domain names through
 the registry with conflict/claim flows, persists settings, and runs the chat
 backend — with repeatable tests and screenshots produced without opening windows.
+
+
+## Developer setup
+
+CEF is provisioned by Cargo on all desktop platforms: `.cargo/config.toml`
+defaults `CEF_PATH` to `./cef-binary`, and the vendored `download-cef` patch
+raises the CDN index limit so a clean `cargo run` can download the pinned
+156.0.26 archive. Override `CEF_PATH` to use an existing distribution.

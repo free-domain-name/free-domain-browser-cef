@@ -57,3 +57,9 @@ path = "src/bin/bundle.rs"
 
 [dependencies.semver]
 version = "1"
+
+[patch.crates-io]
+# Patched only to raise the CDN index read limit from 10 MB to 64 MB.
+# CEF's index is currently larger than the default, which made a clean
+# `cargo build` fail before downloading anything.
+download-cef = { path = "vendor/download-cef" }

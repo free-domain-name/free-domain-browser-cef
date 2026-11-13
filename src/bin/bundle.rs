@@ -1,4 +1,13 @@
 //! Build and package the app bundle used by CEF on macOS.
+
+fn resolve_cef_path() -> Option<std::path::PathBuf> {
+    if let Some(value) = std::env::var_os("CEF_PATH") {
+        return Some(std::path::PathBuf::from(value));
+    }
+    let local = std::path::PathBuf::from("cef-binary");
+    local.exists().then_some(local)
+}
+
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
     use cef::build_util::mac::{bundle, BundleInfo};
@@ -22,8 +31,12 @@ fn main() -> anyhow::Result<()> {
     } else {
         "target/bootstrap/debug"
     };
+    let cef_path = resolve_cef_path();
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut build = std::process::Command::new(cargo);
+    if let Some(cef_path) = cef_path.as_ref() {
+        build.env("CEF_PATH", cef_path);
+    }
     build.args([
         "build",
         "--bin",
@@ -60,6 +73,9 @@ fn main() -> anyhow::Result<()> {
     let executable = app.join("Contents/MacOS/free-domain-browser-cef");
     let mut command = std::process::Command::new(&executable);
     command.args(args);
+    if let Some(cef_path) = resolve_cef_path() {
+        command.env("CEF_PATH", cef_path);
+    }
     // Debug builds are rebuilt with a new ad-hoc signature on every run, so
     // macOS never treats them as the same app for Keychain "Always Allow".
     // Use Chromium's mock keychain in development; release builds are signed
@@ -107,8 +123,12 @@ fn main() -> anyhow::Result<()> {
     } else {
         "target/bootstrap/debug"
     };
+    let cef_path = resolve_cef_path();
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut build = std::process::Command::new(cargo);
+    if let Some(cef_path) = cef_path.as_ref() {
+        build.env("CEF_PATH", cef_path);
+    }
     build.args([
         "build",
         "--bin",
@@ -170,7 +190,58 @@ fn main() -> anyhow::Result<()> {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(target_os = "windows")]
+fn main() -> anyhow::Result<()> {
+    use std::path::Path;
+
+    let release = std::env::args().any(|arg| arg == "--release");
+    let bootstrap_dir = if release {
+        "target/bootstrap/release"
+    } else {
+        "target/bootstrap/debug"
+    };
+    let cef_path = resolve_cef_path();
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let mut build = std::process::Command::new(cargo);
+    if let Some(cef_path) = cef_path.as_ref() {
+        build.env("CEF_PATH", cef_path);
+    }
+    build.args([
+        "build",
+        "--bin",
+        "free-domain-browser-cef",
+        "--bin",
+        "free_domain_browser_cef_helper",
+        "--target-dir",
+        "target/bootstrap",
+    ]);
+    if release {
+        build.arg("--release");
+    }
+    let status = build.status()?;
+    if !status.success() {
+        anyhow::bail!("failed to build CEF binaries");
+    }
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--build-only") {
+        return Ok(());
+    }
+
+    let executable = Path::new(bootstrap_dir).join("free-domain-browser-cef.exe");
+    if !executable.exists() {
+        anyhow::bail!("missing {}", executable.display());
+    }
+    let mut command = std::process::Command::new(&executable);
+    command.args(args);
+    if let Some(cef_path) = resolve_cef_path() {
+        command.env("CEF_PATH", cef_path);
+    }
+    let status = command.status()?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 fn main() {
-    eprintln!("The bundle helper currently targets macOS and Linux only.");
+    eprintln!("The bundle helper currently targets macOS, Linux, and Windows.");
 }
