@@ -33,6 +33,13 @@ impl Settings {
     }
 }
 
+pub fn config_dir() -> PathBuf {
+    default_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(std::env::temp_dir)
+}
+
 pub fn default_path() -> PathBuf {
     if let Some(home) = std::env::var_os("HOME") {
         return PathBuf::from(home)

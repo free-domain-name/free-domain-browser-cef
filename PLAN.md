@@ -90,9 +90,9 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 ## Phase 6 — chat (UI only)
 
 - [x] Functional local chat UI: rooms, send, per-room localStorage history.
-- [ ] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
-  and the iroh transport.
-- [ ] Two-client test.
+- [x] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
+  and the iroh transport into `src/chat` with a UI-free event sink.
+- [ ] Wire chat page commands/events to the service and test two clients.
 
 ## Phase 7 — packaging and release (partial)
 

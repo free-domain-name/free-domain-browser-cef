@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+pub mod chat;
 pub mod settings;
 pub mod shared;
 
