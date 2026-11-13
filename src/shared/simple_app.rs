@@ -219,7 +219,7 @@ wrap_browser_process_handler! {
                     Some(&mut delegate),
                 );
                 let mut extra_views = Vec::new();
-                for _ in 0..3 {
+                for _ in 0..7 {
                     let extra_url = CefString::from("https://example.com/");
                     let mut extra_client = self.default_client();
                     let mut extra_delegate = SimpleBrowserViewDelegate::new(runtime_style, 0);
