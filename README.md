@@ -32,6 +32,12 @@ so browser logs stream to the console.
 cargo run
 ```
 
+Hidden smoke test (launches, checks DevTools/targets, kills the app):
+
+```sh
+./scripts/smoke-hidden.sh
+```
+
 No window (for CI/screenshot work):
 
 ```sh
