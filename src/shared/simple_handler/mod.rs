@@ -22,11 +22,6 @@ mod linux;
 #[cfg(target_os = "linux")]
 use linux::*;
 
-#[cfg(not(target_os = "macos"))]
-fn platform_show_window(_browser: Option<&mut Browser>) {
-    todo!("Implement platform_show_window for non-macOS platforms");
-}
-
 static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock::new();
 
 enum BridgeAction {

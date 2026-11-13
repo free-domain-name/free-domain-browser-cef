@@ -8,6 +8,10 @@ edition = "2024"
 publish = false
 default-run = "bundle"
 
+[features]
+# CEF's Windows sandbox/bootstrap mode (not enabled by default).
+sandbox = []
+
 [[bin]]
 name = "free-domain-browser-cef"
 path = "src/main.rs"
