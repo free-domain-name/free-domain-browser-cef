@@ -38,6 +38,7 @@ pub struct SimpleHandler {
 }
 
 const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
+const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
 fn navigation_target(url: &str) -> Option<String> {
@@ -56,6 +57,10 @@ impl SimpleHandler {
         SIMPLE_HANDLER_INSTANCE
             .get()
             .and_then(|weak| weak.upgrade())
+    }
+
+    pub fn mark_chrome_browser(&mut self, browser_id: i32) {
+        self.chrome_browser_id = Some(browser_id);
     }
 
     pub fn new(is_alloy_style: bool) -> Arc<Mutex<Self>> {
@@ -204,9 +209,13 @@ impl SimpleHandler {
         if self.chrome_browser_id != Some(current.identifier()) {
             return 0;
         }
-        let settings = url == "https://fdb.invalid/settings";
-        let target = if settings {
-            get_data_uri(SETTINGS_HTML.as_bytes(), "text/html")
+        let html = match url.as_str() {
+            "https://fdb.invalid/settings" => Some(SETTINGS_HTML),
+            "https://fdb.invalid/chat" => Some(CHAT_HTML),
+            _ => None,
+        };
+        let target = if let Some(html) = html {
+            get_data_uri(html.as_bytes(), "text/html")
         } else {
             let Some(target) = navigation_target(&url) else { return 0; };
             target

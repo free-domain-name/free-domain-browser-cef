@@ -1,0 +1,20 @@
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{margin:0;background:#0f131a;color:#e8edf7;font:14px -apple-system,system-ui;height:100vh;display:flex}
+aside{width:260px;background:#151b25;border-right:1px solid #263042;padding:20px 16px}
+aside h1{font-size:15px;margin:0 0 16px;color:#fff}
+.room{padding:9px 10px;border-radius:8px;color:#aeb9cc;cursor:pointer;margin-bottom:4px}
+.room.active{background:#22304a;color:#fff}
+main{flex:1;display:flex;flex-direction:column}
+header{padding:18px 24px;border-bottom:1px solid #263042;font-weight:600}
+.messages{flex:1;padding:24px;overflow:auto}
+.msg{max-width:70%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45}
+.msg.me{margin-left:auto;background:#2f4f9e}
+.meta{font-size:11px;color:#8d9ab1;margin-bottom:4px}
+footer{display:flex;gap:10px;padding:16px 24px;border-top:1px solid #263042}
+input{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit}
+button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit}
+.note{font-size:12px;color:#8d9ab1;padding:0 24px 10px}
+</style></head><body>
+<aside><h1>Free Domain Chat</h1><div class="room active"># general</div><div class="room"># registry</div><div class="room"># support</div></aside>
+<main><header># general</header><div class="messages"><div class="msg"><div class="meta">alice · 10:32</div>Registry lookup now resolves before the page loads.</div><div class="msg me"><div class="meta">you · 10:34</div>Nice. Tabs and settings are in the CEF shell too.</div></div><div class="note">CEF chat prototype — local UI only for now.</div><footer><input placeholder="Message #general"><button>Send</button></footer></main>
+</body></html>

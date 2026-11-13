@@ -35,6 +35,14 @@ wrap_window_delegate! {
                 // chrome view has no explicit minimum-size API; fixed content bounds are used below.
                 window.add_child_view(Some(chrome));
             }
+            if let Some(browser) = chrome_view.as_ref().and_then(|view| view.browser()) {
+                if let Some(handler) = SimpleHandler::instance() {
+                    handler
+                        .lock()
+                        .expect("Failed to lock handler")
+                        .mark_chrome_browser(browser.identifier());
+                }
+            }
             if let Some(content) = content.as_mut() {
                 window.add_child_view(Some(content));
             }

@@ -15,4 +15,10 @@ mkdir -p target/docker-out
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars \
   --window-size=1000,700 --screenshot=/out/settings.png file:///assets/settings.html
-echo "screenshots: $ROOT/target/docker-out/chrome.png $ROOT/target/docker-out/settings.png"
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  -v "$ROOT/target/docker-out:/out" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --window-size=1000,700 --screenshot=/out/chat.png file:///assets/chat.html
+echo "screenshots: $ROOT/target/docker-out/{chrome,settings,chat}.png"

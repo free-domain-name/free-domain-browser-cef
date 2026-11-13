@@ -3,6 +3,7 @@
 <div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
 <b style="font-size:13px">Free Domain Browser</b>
 <input id="url" value="https://yahoo.com/" style="flex:1;background:#fff;color:#111;border:0;border-radius:8px;padding:7px 11px;font:inherit">
+<button onclick="chat()" title="Chat" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">💬</button>
 <button onclick="settings()" title="Settings" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">⚙</button>
 <button onclick="go()" style="background:#4f7cff;color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit">Go</button>
 </div>
@@ -29,6 +30,7 @@ function render(){
 function go(){var u=document.getElementById('url').value.trim();if(!u)return;if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function navigate(u){location.href='https://fdb.invalid/navigate?url='+encodeURIComponent(u)}
 function settings(){location.href='https://fdb.invalid/settings'}
+function chat(){location.href='https://fdb.invalid/chat'}
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
 render();
 </script>
