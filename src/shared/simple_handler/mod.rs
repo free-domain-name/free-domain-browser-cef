@@ -40,6 +40,21 @@ pub struct SimpleHandler {
 const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
 const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
 
+/// Materialize an internal page on disk so it gets a real file:// origin and
+/// can use localStorage for settings.
+fn internal_page_url(html: &str) -> String {
+    let dir = std::env::temp_dir().join("free-domain-browser-cef-ui");
+    let _ = std::fs::create_dir_all(&dir);
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    html.hash(&mut hasher);
+    let path = dir.join(format!("{:x}.html", hasher.finish()));
+    let _ = std::fs::write(&path, html);
+    url::Url::from_file_path(&path)
+        .map(|url| url.to_string())
+        .unwrap_or_else(|_| get_data_uri(html.as_bytes(), "text/html"))
+}
+
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
 fn navigation_target(url: &str) -> Option<String> {
     let parsed = url::Url::parse(url).ok()?;
@@ -215,7 +230,7 @@ impl SimpleHandler {
             _ => None,
         };
         let target = if let Some(html) = html {
-            get_data_uri(html.as_bytes(), "text/html")
+            internal_page_url(html)
         } else {
             let Some(target) = navigation_target(&url) else { return 0; };
             target

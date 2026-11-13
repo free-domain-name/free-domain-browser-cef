@@ -18,10 +18,17 @@ input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
 <label>Show status messages <input type="checkbox" checked></label>
 </div>
 <div class="card"><h2>Navigation</h2>
-<label>Home page</label><input type="text" value="https://yahoo.com/">
+<label>Home page</label><input id="home" type="text" value="https://yahoo.com/">
 <div class="note">Registry names like <b>hello.fdn</b> resolve through the sharded GitHub registry before loading.</div>
 </div>
 <div class="card"><h2>Registry</h2><div class="note">Source <span class="pill">GitHub raw</span></div><div class="note">Negative lookup cache: 5 minutes.<br>Record TTL capped at 24 hours.</div></div>
-<div class="card"><h2>Privacy</h2><label>Block third-party cookies <input type="checkbox" checked></label><label>Send do-not-track <input type="checkbox"></label></div>
+<div class="card"><h2>Privacy</h2><label>Block third-party cookies <input id="cookies" type="checkbox" checked></label><label>Send do-not-track <input id="dnt" type="checkbox"></label></div>
 </div>
+<button id="save" style="margin-top:20px;background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18px;font:inherit;cursor:pointer">Save settings</button>
+<span id="status" style="margin-left:12px;color:#8d9ab1;font-size:12px"></span>
+<script>
+var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt')};
+try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;}catch(e){}
+document.getElementById('save').onclick=function(){try{localStorage.setItem('fdb-settings',JSON.stringify({home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked}));document.getElementById('status').textContent='Saved';}catch(e){document.getElementById('status').textContent='Storage unavailable';}};
+</script>
 </body></html>
