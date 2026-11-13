@@ -113,7 +113,9 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   verified launch + 147 MB zip.
 - [x] Release build path for app + helper (`--release`).
 - [x] Bundle locales/`cef.pak`/`icudtl.dat` (provided by the CEF framework; verified in the app bundle).
-- [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`.
+- [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`;
+  verified with `Developer ID Application: Ozkan Pakdil (TA5X5C9T57)`, and the
+  signed zip was rewritten. Notarization remains pending Apple credentials.
   Debug/release bundles are ad-hoc signed after assembly so macOS does not kill
   them with an invalid signature.
 - [x] Hardened-runtime sandbox entitlements (`assets/entitlements.mac.plist`).
@@ -128,7 +130,7 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   through the hidden CEF harness.
 - [x] Ad-hoc-signed release bundle launches hidden and serves DevTools.
 - [x] Chat two-client local validation (presence + bidirectional messages).
-- [ ] Production `fdn-chatd` lobby deployment / Developer ID signing for Finder distribution.
+- [ ] Production `fdn-chatd` lobby deployment and notarization credentials.
 
 ## Suggested order
 

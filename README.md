@@ -79,10 +79,18 @@ distribution still needs a Developer ID signature:
 
 Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
 helpers need hardened-runtime JIT/library entitlements, so the script signs
-helpers first, then the framework, then the app:
+helpers first, then the framework, then the app, and rewrites the zip:
 
 ```sh
 ./scripts/sign-release.sh 'Developer ID Application: Example (TEAMID)'
+```
+
+Notarization still requires Apple credentials and is not part of the script:
+
+```sh
+xcrun notarytool submit target/FreeDomainBrowser-CEF.zip \
+  --keychain-profile PROFILE --wait
+xcrun stapler staple target/bundle/free-domain-browser-cef.app
 ```
 
 On macOS, always launch through `cargo run`/the bundle: the raw binary cannot

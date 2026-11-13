@@ -35,4 +35,11 @@ fi
 
 sign "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
+
+# The package script writes an ad-hoc-signed zip before this step. Replace it
+# with the signed bundle so the downloadable artifact matches the signature.
+OUT="target/FreeDomainBrowser-CEF.zip"
+rm -f "$OUT"
+ditto -c -k --keepParent "$APP" "$OUT"
 echo "signed $APP"
+echo "wrote $OUT"
