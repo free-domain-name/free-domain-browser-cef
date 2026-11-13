@@ -677,8 +677,22 @@ impl SimpleHandler {
     /// Parse a chrome command without executing it. The caller must drop the
     /// handler lock before loading a page, because CEF re-enters navigation
     /// handlers synchronously.
+    /// The chrome document and the internal settings/chat pages are trusted UI.
+    /// Content pages never get to speak the `fdb:` bridge.
+    fn is_ui_frame(browser: &mut Browser) -> bool {
+        browser
+            .main_frame()
+            .map(|frame| {
+                let url = CefString::from(&frame.url()).to_string();
+                url.starts_with("data:text/html")
+                    || (url.starts_with("file://")
+                        && url.contains("/free-domain-browser-cef-ui/"))
+            })
+            .unwrap_or(false)
+    }
+
     fn bridge_action(&mut self, browser: &mut Browser, message: &str) -> Option<BridgeAction> {
-        if self.chrome_browser_id != Some(browser.identifier()) && !Self::is_chrome_frame(browser) {
+        if self.chrome_browser_id != Some(browser.identifier()) && !Self::is_ui_frame(browser) {
             return None;
         }
         let payload = message.strip_prefix("fdb:")?;
