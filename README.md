@@ -7,8 +7,11 @@ Current state: macOS CEF window with a fixed HTML chrome bar in a top
 `BrowserView` and the page in a second `BrowserView`. Yahoo loads top-level, so
 there is no `X-Frame-Options` block and the page cannot paint over the chrome.
 
-The chrome bar now has tabs, navigation, settings and a chat shell. The full
-Tauri UI, per-tab browser views and the chat backend are still pending.
+Implemented: tab strip with titles/closing/shortcuts, address-bar and title
+sync, back/forward/reload/home, security indicator, new-tab page, settings
+persistence in Rust, registry conflict/claim pages, and a local chat UI.
+Still pending: independent browser views per tab, the iroh chat backend, native
+registry scheme handler, and a signed release bundle.
 
 ## Requirements
 
@@ -23,7 +26,8 @@ CEF on macOS must run from an `.app` bundle. The default `cargo run` target is
 so browser logs stream to the console.
 
 ```sh
-export CEF_PATH=/path/to/cef_binary_156.0.26_macosarm64
+# If CEF_PATH is not exported, the local `.cargo/config.toml` created by
+# scripts/setup-cargo-env.sh is used.
 cargo run
 ```
 
