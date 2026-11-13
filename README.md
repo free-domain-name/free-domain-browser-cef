@@ -14,7 +14,11 @@ memory, `fdn://` link handling, retry error pages, and a local chat UI. The chat
 page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally
 `FDN_CHAT_RELAY_URL`) to enable the community relay, otherwise it reports
 “chat bootstrap is not configured”.
-Still pending: a signed/notarized release and two-machine chat validation.
+Still pending: a Developer ID-signed/notarized release and a production
+`fdn-chatd` lobby deployment. The chat transport/protocol has been validated
+locally with two browser instances and a headless gossip peer over the public
+relay; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to point at
+a deployed lobby.
 
 ## Requirements
 
@@ -55,6 +59,9 @@ Hidden smoke test (launches, checks DevTools/targets, kills the app):
 ```sh
 ./scripts/smoke-hidden.sh
 ```
+
+For parallel instances, give each process its own `FDB_CACHE_DIR`,
+`FDB_SETTINGS_PATH`, `FDN_CHAT_CONFIG_DIR` and `--remote-debugging-port`.
 
 Build without launching:
 

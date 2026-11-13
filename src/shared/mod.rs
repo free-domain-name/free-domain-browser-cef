@@ -75,7 +75,9 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
 
     let mut app = simple_app::SimpleApp::new();
 
-    let cache_root = std::env::temp_dir().join("free-domain-browser-cef");
+    let cache_root = std::env::var_os("FDB_CACHE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("free-domain-browser-cef"));
     let cache_root = cache_root.to_string_lossy().into_owned();
     let cache_path = format!("{cache_root}/cache");
     let mut settings = Settings {

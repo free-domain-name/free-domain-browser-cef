@@ -862,6 +862,11 @@ wrap_display_handler! {
                 return 0;
             };
             if message.starts_with("fdbchat:") {
+                // Chat commands can start networking and publish messages, so
+                // only the chrome and our internal file pages may send them.
+                if !SimpleHandler::is_ui_frame(&mut browser) {
+                    return 0;
+                }
                 handle_chat_command(browser.identifier(), &message);
                 return 1;
             }

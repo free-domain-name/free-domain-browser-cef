@@ -103,7 +103,9 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   and the iroh transport into `src/chat` with a UI-free event sink.
 - [x] Chat page uses `fdbchat:` commands (`snapshot`, `confirm_age`, `enable`,
   `send`, `nickname`, ignore) and polls snapshots.
-- [ ] Two-client test with `FDN_CHAT_LOBBY_ID` + relay (external deployment).
+- [x] Two-client test over the public relay with a headless gossip peer:
+  both clients saw presence and exchanged messages in each direction.
+  A production `fdn-chatd` lobby bootstrap is still an external deployment.
 
 ## Phase 7 — packaging and release (partial)
 
@@ -125,8 +127,8 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] YouTube/Yahoo navigation, dynamic tabs, and settings persistence verified
   through the hidden CEF harness.
 - [x] Ad-hoc-signed release bundle launches hidden and serves DevTools.
-- [ ] Chat needs an external relay two-client test.
-- [ ] Developer ID signing/notarization for Finder distribution.
+- [x] Chat two-client local validation (presence + bidirectional messages).
+- [ ] Production `fdn-chatd` lobby deployment / Developer ID signing for Finder distribution.
 
 ## Suggested order
 
