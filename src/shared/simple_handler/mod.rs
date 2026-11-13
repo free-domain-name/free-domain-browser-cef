@@ -36,6 +36,7 @@ enum BridgeAction {
     BrowserCommand(i32, BrowserCommandKind),
     Home(i32),
     SelectTab(i32),
+    LoadTab(i32, String),
 }
 
 #[derive(Clone, Copy)]
@@ -358,6 +359,15 @@ impl SimpleHandler {
         1
     }
 
+    fn content_browser_id(&self, index: usize) -> Option<i32> {
+        let chrome = self.chrome_browser_id?;
+        self.browser_list
+            .iter()
+            .filter(|browser| browser.identifier() != chrome)
+            .nth(index)
+            .map(|browser| browser.identifier())
+    }
+
     fn active_browser_id(&self) -> Option<i32> {
         let chrome = self.chrome_browser_id?;
         self.browser_list
@@ -429,6 +439,11 @@ impl SimpleHandler {
             "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
             "new_tab" => Some(BridgeAction::Page(target_id, internal_page_url(NEWTAB_HTML))),
             "select_tab" => value.get("index").and_then(|index| index.as_i64()).map(|index| BridgeAction::SelectTab(index as i32)),
+            "load_tab" => {
+                let index = value.get("index").and_then(|index| index.as_i64())? as i32;
+                let url = value.get("url").and_then(|url| url.as_str())?.to_string();
+                Some(BridgeAction::LoadTab(index, url))
+            }
             "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
@@ -569,6 +584,15 @@ wrap_display_handler! {
                 Some(BridgeAction::SelectTab(index)) => {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
                     inner.switch_tab(index);
+                }
+                Some(BridgeAction::LoadTab(index, url)) => {
+                    let id = {
+                        let inner = self.inner.lock().expect("Failed to lock inner");
+                        inner.content_browser_id(index.max(0) as usize)
+                    };
+                    if let Some(id) = id {
+                        spawn_navigation(id, url);
+                    }
                 }
                 None => {}
             }
