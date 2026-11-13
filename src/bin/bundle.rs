@@ -39,10 +39,37 @@ fn resolve_cef_runtime_path() -> Option<std::path::PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
+/// Ad-hoc sign the assembled bundle. Replacing the executable/framework during
+/// bundling invalidates the linker signature; without a fresh signature macOS
+/// kills the process with "Code Signature Invalid". A Developer ID signature can
+/// replace this later with `scripts/sign-release.sh`.
+fn adhoc_sign(app: &std::path::Path) -> anyhow::Result<()> {
+    let status = std::process::Command::new("codesign")
+        .args(["--force", "--deep", "--sign", "-"])
+        .arg(app)
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("codesign failed for {}", app.display());
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
     use cef::build_util::mac::{bundle, BundleInfo};
     use semver::Version;
     use std::path::Path;
+
+    // `cef::build_util::mac::bundle` asks `cef-dll-sys` for the distribution
+    // root through the process environment. `cargo run` does not guarantee that
+    // CEF_PATH is exported, so resolve the tracked default and export an
+    // absolute path before bundling.
+    if let Some(cef_path) = resolve_cef_runtime_path() {
+        let cef_path = cef_path.canonicalize().unwrap_or(cef_path);
+        unsafe {
+            std::env::set_var("CEF_PATH", &cef_path);
+        }
+    }
 
     let version = Version::parse(env!("CARGO_PKG_VERSION"))?;
     let info = BundleInfo::new(
@@ -92,6 +119,7 @@ fn main() -> anyhow::Result<()> {
         None,
         info,
     )?;
+    adhoc_sign(&app)?;
 
     // `cargo run` should launch the app in this terminal (with logs), not just
     // leave a bundle behind. CEF still needs to be launched from inside the
@@ -100,20 +128,19 @@ fn main() -> anyhow::Result<()> {
     if args.iter().any(|arg| arg == "--build-only") {
         return Ok(());
     }
-    let executable = app.join("Contents/MacOS/free-domain-browser-cef");
+    let executable = app
+        .join("Contents/MacOS/free-domain-browser-cef")
+        .canonicalize()?;
+    // CEF resolves its embedded framework relative to the working directory on
+    // macOS 15+. Launch from inside the .app so `cargo run` works from the repo.
     let mut command = std::process::Command::new(&executable);
+    if let Some(directory) = executable.parent() {
+        command.current_dir(directory);
+    }
     command.args(args);
     if let Some(cef_path) = resolve_cef_runtime_path() {
         command.env("CEF_PATH", cef_path);
     }
-    // Debug builds are rebuilt with a new ad-hoc signature on every run, so
-    // macOS never treats them as the same app for Keychain "Always Allow".
-    // Use Chromium's mock keychain in development; release builds are signed
-    // and keep real Keychain storage.
-    if cfg!(debug_assertions) {
-        command.arg("--use-mock-keychain");
-    }
-
     // Put the CEF app in its own process group so Ctrl-C can take down the
     // browser and its helper processes together. CEF's message loop ignores
     // SIGINT, so the child must be terminated explicitly.

@@ -84,7 +84,19 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
         no_sandbox: i32::from(cfg!(debug_assertions)),
         cache_path: CefString::from(cache_path.as_str()),
         root_cache_path: CefString::from(cache_root.as_str()),
-        remote_debugging_port: if cfg!(debug_assertions) { 9222 } else { 0 },
+        remote_debugging_port: {
+            let switch = CefString::from("remote-debugging-port");
+            if cmd_line.has_switch(Some(&switch)) != 0 {
+                CefString::from(&cmd_line.switch_value(Some(&switch)))
+                    .to_string()
+                    .parse()
+                    .unwrap_or(9222)
+            } else if cfg!(debug_assertions) {
+                9222
+            } else {
+                0
+            }
+        },
         ..Default::default()
     };
     if cfg!(debug_assertions) {
