@@ -11,8 +11,9 @@ Implemented: tab strip with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages, and a local chat UI.
 Tabs now use two independent content BrowserViews (separate history); dynamic
-tab creation beyond two views is still pending. Still pending: iroh chat
-backend, native registry scheme handler, and a signed release bundle.
+tab creation beyond two views is still pending. The chat page talks to the ported iroh service; without
+`FDN_CHAT_LOBBY_ID` it reports “chat bootstrap is not configured”.
+Still pending: native registry scheme handler and a signed release bundle.
 
 ## Requirements
 

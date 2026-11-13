@@ -34,6 +34,24 @@ use std::sync::Arc as StdArc;
 /// platform UI dependencies.
 pub type EventCallback = StdArc<dyn Fn(&str, String) + Send + Sync>;
 
+pub fn runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("chat runtime")
+    })
+}
+
+pub fn service() -> &'static StdArc<ChatService> {
+    static SERVICE: std::sync::OnceLock<StdArc<ChatService>> = std::sync::OnceLock::new();
+    SERVICE.get_or_init(|| {
+        StdArc::new(ChatService::new(AppHandle::new(StdArc::new(|_, _| {}))))
+    })
+}
+
 #[derive(Clone)]
 pub struct AppHandle {
     callback: EventCallback,
@@ -178,7 +196,16 @@ impl ChatService {
     pub fn new(app: AppHandle) -> Self {
         let config_dir = std::env::var_os("FDN_CHAT_CONFIG_DIR")
             .map(std::path::PathBuf::from)
-            .or_else(|| Some(crate::settings::config_dir()));
+            .or_else(|| {
+                let primary = crate::settings::config_dir();
+                let probe = primary.join(".chat-write-probe");
+                if std::fs::create_dir_all(&primary).is_ok() && std::fs::write(&probe, b"1").is_ok() {
+                    let _ = std::fs::remove_file(probe);
+                    Some(primary)
+                } else {
+                    Some(std::env::temp_dir().join("free-domain-browser-cef-chat"))
+                }
+            });
         let settings = SettingsStore::load(config_dir.as_deref());
         let bootstrap = BootstrapConfig::load(config_dir.as_deref());
         Self {

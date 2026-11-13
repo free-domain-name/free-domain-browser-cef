@@ -16,7 +16,7 @@ button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18p
 .note{font-size:12px;color:#8d9ab1;padding:0 24px 10px}
 </style><title>Free Domain Chat</title></head><body>
 <aside><h1>Free Domain Chat</h1><div class="room active" data-room="general"># general</div><div class="room" data-room="registry"># registry</div><div class="room" data-room="support"># support</div></aside>
-<main><header id="room"># general</header><div class="messages" id="messages"></div><div class="note">Local chat prototype — messages stay in this browser profile.</div><footer><input id="text" placeholder="Message #general"><button id="send">Send</button></footer></main>
+<main><header id="room"># general</header><div class="messages" id="messages"></div><div class="note" id="connection">Local chat prototype — connect to use the community relay.</div><footer><input id="text" placeholder="Message #general"><button id="connect">Connect</button><button id="send">Send</button></footer></main>
 <script>
 var room='general';
 function key(){return 'fdb-chat-'+room}
@@ -26,6 +26,37 @@ function render(){var box=document.getElementById('messages');box.innerHTML='';v
 function send(){var input=document.getElementById('text');var text=input.value.trim();if(!text)return;var list=load();list.push({text:text,me:true,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});save(list);input.value='';render()}
 document.getElementById('send').onclick=send;document.getElementById('text').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
 document.querySelectorAll('.room').forEach(function(el){el.onclick=function(){document.querySelectorAll('.room').forEach(function(x){x.classList.remove('active')});el.classList.add('active');room=el.dataset.room;document.getElementById('room').textContent='#'+room;document.getElementById('text').placeholder='Message #'+room;render()}});
+var backendEnabled=false;var pendingConnect=false;
+function backend(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
+function connect(){pendingConnect=true;backend({cmd:'confirm_age'})}
+function showConnection(text){var el=document.getElementById('connection');if(el)el.textContent=text}
+function renderBackend(s){
+  backendEnabled=!!s.enabled;
+  var box=document.getElementById('messages');box.innerHTML='';
+  (s.messages||[]).forEach(function(m){
+    var d=document.createElement('div');d.className='msg'+(m.mine?' me':'');
+    var meta=document.createElement('div');meta.className='meta';
+    meta.textContent=(m.nickname||m.sender)+' · '+new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    d.appendChild(meta);d.appendChild(document.createTextNode(m.text));box.appendChild(d);
+  });
+  if(!(s.messages||[]).length){box.innerHTML='<div class="note" style="padding:0">No messages yet.</div>'}
+  box.scrollTop=box.scrollHeight;
+  showConnection(s.error?('Chat backend: '+s.error):(s.enabled?('Connected · '+s.online+' online · '+s.room):'Chat backend not enabled'));
+}
+window.fdbChatResult=function(r){
+  if(!r||!r.ok){showConnection('Chat backend: '+(r&&r.error?r.error:'unavailable'));if(pendingConnect)pendingConnect=false;return}
+  var d=r.data;
+  if(d&&d.messages)renderBackend(d);
+  if(pendingConnect){pendingConnect=false;backend({cmd:'enable'})}
+};
+document.getElementById('connect').onclick=connect;
+document.getElementById('send').onclick=function(){
+  var input=document.getElementById('text');var text=input.value.trim();if(!text)return;
+  if(backendEnabled){backend({cmd:'send',text:text});input.value='';return}
+  send();
+};
+setInterval(function(){if(backendEnabled)backend({cmd:'snapshot'})},3000);
+backend({cmd:'snapshot'});
 render();
 </script>
 </body></html>

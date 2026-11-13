@@ -620,6 +620,10 @@ wrap_display_handler! {
             let (Some(mut browser), Some(message)) = (browser.cloned(), message.map(CefString::to_string)) else {
                 return 0;
             };
+            if message.starts_with("fdbchat:") {
+                handle_chat_command(browser.identifier(), &message);
+                return 1;
+            }
             if !message.starts_with("fdb:") {
                 return 0;
             }
@@ -798,6 +802,57 @@ wrap_request_handler! {
     }
 }
 
+fn handle_chat_command(browser_id: i32, message: &str) {
+    let Some(payload) = message.strip_prefix("fdbchat:") else { return; };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else { return; };
+    let Some(cmd) = value.get("cmd").and_then(|cmd| cmd.as_str()).map(str::to_string) else { return; };
+    let service = crate::chat::service().clone();
+    crate::chat::runtime().spawn(async move {
+        let result: Result<serde_json::Value, String> = match cmd.as_str() {
+            "snapshot" => Ok(serde_json::json!(service.snapshot().await)),
+            "enable" => service
+                .set_enabled("cef".into(), true)
+                .await
+                .map(|snapshot| serde_json::json!(snapshot))
+                .map_err(|error| error.to_string()),
+            "disable" => service
+                .set_enabled("cef".into(), false)
+                .await
+                .map(|snapshot| serde_json::json!(snapshot))
+                .map_err(|error| error.to_string()),
+            "send" => {
+                let text = value.get("text").and_then(|text| text.as_str()).unwrap_or_default().to_string();
+                service.send(text).await.map(|_| serde_json::Value::Null).map_err(|error| error.to_string())
+            }
+            "confirm_age" => service
+                .confirm_age()
+                .await
+                .map(|snapshot| serde_json::json!(snapshot))
+                .map_err(|error| error.to_string()),
+            "set_nickname" => {
+                let nickname = value.get("nickname").and_then(|nickname| nickname.as_str()).unwrap_or_default().to_string();
+                service.set_nickname(nickname).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+            }
+            "ignore" => {
+                let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
+                service.ignore(sender).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+            }
+            "unignore" => {
+                let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
+                service.unignore(sender).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+            }
+            _ => Err("unknown chat command".into()),
+        };
+        let payload = match result {
+            Ok(data) => serde_json::json!({ "ok": true, "data": data }),
+            Err(error) => serde_json::json!({ "ok": false, "error": error }),
+        };
+        let script = format!("window.fdbChatResult&&fdbChatResult({payload})");
+        let mut task = ChatResponse::new(browser_id, script);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
 fn spawn_navigation(target_id: i32, target: String) {
     // `fdn://name/path` is a convenience alias. The resolver below owns the
     // registry/public decision, so strip the scheme and treat the rest as input.
@@ -906,6 +961,32 @@ wrap_task! {
                     let mut frame = frame;
                     frame.load_url(Some(&CefString::from(self.url.as_str())));
                 }
+            }
+        }
+    }
+}
+
+wrap_task! {
+    struct ChatResponse {
+        browser_id: i32,
+        script: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let target = {
+                let Some(inner) = SimpleHandler::instance() else { return; };
+                let inner = inner.lock().expect("Failed to lock inner");
+                inner
+                    .browser_list
+                    .iter()
+                    .find(|browser| browser.identifier() == self.browser_id)
+                    .cloned()
+            };
+            let Some(mut target) = target else { return; };
+            if let Some(frame) = target.main_frame() {
+                let mut frame = frame;
+                frame.execute_java_script(Some(&CefString::from(self.script.as_str())), None, 0);
             }
         }
     }

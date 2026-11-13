@@ -92,7 +92,9 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Functional local chat UI: rooms, send, per-room localStorage history.
 - [x] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
   and the iroh transport into `src/chat` with a UI-free event sink.
-- [ ] Wire chat page commands/events to the service and test two clients.
+- [x] Chat page uses `fdbchat:` commands (`snapshot`, `confirm_age`, `enable`,
+  `send`, `nickname`, ignore) and polls snapshots.
+- [ ] Two-client test with `FDN_CHAT_LOBBY_ID` + relay.
 
 ## Phase 7 — packaging and release (partial)
 
