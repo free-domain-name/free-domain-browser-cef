@@ -19,6 +19,8 @@ path = "src/bin/helper.rs"
 helper_name = "free_domain_browser_cef_helper"
 
 [dependencies]
+fdn-core = { path = "core" }
+tokio = { version = "1", features = ["rt"] }
 url = "2"
 cef = { version = "156.4.0", default-features = false, features = ["build-util"] }
 

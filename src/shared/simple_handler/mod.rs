@@ -193,17 +193,42 @@ impl SimpleHandler {
         let Some(target) = navigation_target(&url) else { return 0; };
         let Some(current) = browser else { return 0; };
         let mut current = current.clone();
-        let next = self
+        let target_id = self
             .browser_list
             .iter_mut()
             .find(|candidate| candidate.is_same(Some(&mut current)) == 0)
-            .cloned();
-        if let Some(mut next) = next {
-            if let Some(frame) = next.main_frame() {
-                let mut frame = frame;
-                frame.load_url(Some(&CefString::from(target.as_str())));
-            }
-        }
+            .map(|browser| browser.identifier());
+        let Some(target_id) = target_id else { return 0; };
+
+        // Resolve registry/public names off the UI thread, then navigate the
+        // page view on the CEF UI thread.
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            let url = match runtime {
+                Ok(runtime) => runtime.block_on(async move {
+                    let cache = std::env::temp_dir().join("fdn-registry");
+                    let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
+                        return target;
+                    };
+                    let Ok(navigator) = fdn_core::Navigator::new() else {
+                        return target;
+                    };
+                    match navigator.resolve(&registry, &target).await {
+                        Ok(outcome) => outcome
+                            .registry_target
+                            .or(outcome.public_url)
+                            .or(outcome.url)
+                            .unwrap_or(target),
+                        Err(_) => target,
+                    }
+                }),
+                Err(_) => target,
+            };
+            let mut task = ResolveNavigation::new(target_id, url);
+            post_task(ThreadId::UI, Some(&mut task));
+        });
         1
     }
 
@@ -354,6 +379,31 @@ wrap_request_handler! {
         ) -> i32 {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_before_browse(browser, frame, request, user_gesture, is_redirect)
+        }
+    }
+}
+
+wrap_task! {
+    struct ResolveNavigation {
+        target_id: i32,
+        url: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let Some(inner) = SimpleHandler::instance() else { return; };
+            let mut inner = inner.lock().expect("Failed to lock inner");
+            let mut target = inner
+                .browser_list
+                .iter()
+                .find(|browser| browser.identifier() == self.target_id)
+                .cloned();
+            if let Some(target) = target.as_mut() {
+                if let Some(frame) = target.main_frame() {
+                    let mut frame = frame;
+                    frame.load_url(Some(&CefString::from(self.url.as_str())));
+                }
+            }
         }
     }
 }
