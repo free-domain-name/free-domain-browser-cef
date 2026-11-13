@@ -56,6 +56,7 @@ pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
     chrome_browser_id: Option<i32>,
+    chrome_view: Option<View>,
     tabs: Vec<Tab>,
     pending_uids: VecDeque<u64>,
     pending_views: Vec<(u64, BrowserView)>,
@@ -236,6 +237,7 @@ impl SimpleHandler {
                 is_alloy_style,
                 browser_list: Vec::new(),
                 chrome_browser_id: None,
+                chrome_view: None,
                 tabs: Vec::new(),
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
@@ -344,6 +346,10 @@ impl SimpleHandler {
         self.window = Some(window);
     }
 
+    pub fn set_chrome_view(&mut self, view: BrowserView) {
+        self.chrome_view = Some(View::from(&view));
+    }
+
     fn tab_bounds(window: &Window) -> Rect {
         let bounds = window.bounds();
         Rect {
@@ -450,17 +456,37 @@ impl SimpleHandler {
 
         self.browser_list.push(browser.clone());
 
+        // Identify the fixed chrome view by identity, not by URL or creation
+        // order: the URL is still empty during `on_after_created`.
+        if let (Some(chrome), Some(mut view)) = (
+            self.chrome_view.as_mut(),
+            browser_view_get_for_browser(Some(&mut browser)),
+        ) {
+            let mut candidate = View::from(&view);
+            if chrome.is_same(Some(&mut candidate)) != 0 {
+                self.chrome_browser_id = Some(browser.identifier());
+                return;
+            }
+        }
+
         if let Some(uid) = self.pending_uids.front().copied() {
             if let Some(position) = self.pending_views.iter().position(|(pending, _)| *pending == uid) {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
                 self.register_tab(uid, view);
                 self.switch_uid(uid);
-            } else {
-                    }
+            }
             return;
         }
 
+        // Initial tab. The browser may not exist while `on_window_created` runs,
+        // so register the first page browser as soon as CEF reports it.
+        if self.tabs.is_empty() {
+            if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
+                self.register_tab(0, view);
+                self.active_uid = Some(0);
+            }
+        }
     }
 
     fn do_close(&mut self, _browser: Option<&mut Browser>) -> bool {
@@ -519,9 +545,18 @@ impl SimpleHandler {
         let url = CefString::from(&frame.url()).to_string();
         if url.starts_with("data:text/html") {
             self.chrome_browser_id = Some(source_id);
+            // The chrome browser may have been registered as an initial tab
+            // before its URL was known. Remove it now; it is not a page tab.
+            let removed = self.tabs.iter().any(|tab| tab.browser_id == source_id);
+            if removed {
+                self.tabs.retain(|tab| tab.browser_id != source_id);
+                if self.active_uid.is_some_and(|uid| self.tab(uid).is_none()) {
+                    self.active_uid = self.tabs.first().map(|tab| tab.uid);
+                }
+            }
             return;
         }
-        if self.tab_uid(source_id).is_some() || self.tabs.len() >= 2 {
+        if self.tab_uid(source_id).is_some() || !self.tabs.is_empty() {
             return;
         }
         if let Some(view) = browser_view_get_for_browser(Some(browser)) {

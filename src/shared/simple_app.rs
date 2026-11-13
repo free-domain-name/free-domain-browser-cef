@@ -44,6 +44,9 @@ wrap_window_delegate! {
             if let Some(handler) = SimpleHandler::instance() {
                 let mut handler = handler.lock().expect("Failed to lock handler");
                 handler.register_initial_tabs(&content_views);
+                if let Some(chrome_view) = chrome_view.as_ref() {
+                    handler.set_chrome_view(chrome_view.clone());
+                }
                 handler.set_window(window.clone());
             }
             for (index, content) in content_views.iter().enumerate() {
