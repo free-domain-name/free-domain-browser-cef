@@ -29,6 +29,21 @@ fn platform_show_window(_browser: Option<&mut Browser>) {
 
 static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock::new();
 
+enum BridgeAction {
+    Navigate(i32, String),
+    Page(i32, String),
+    SaveSettings(crate::settings::Settings),
+    BrowserCommand(i32, BrowserCommandKind),
+    Home(i32),
+}
+
+#[derive(Clone, Copy)]
+enum BrowserCommandKind {
+    Back,
+    Forward,
+    Reload,
+}
+
 pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
@@ -53,6 +68,16 @@ fn internal_page_url(html: &str) -> String {
     url::Url::from_file_path(&path)
         .map(|url| url.to_string())
         .unwrap_or_else(|_| get_data_uri(html.as_bytes(), "text/html"))
+}
+
+fn settings_page_url(settings: &crate::settings::Settings) -> String {
+    let base = internal_page_url(SETTINGS_HTML);
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("home", &settings.home)
+        .append_pair("cookies", if settings.cookies { "1" } else { "0" })
+        .append_pair("dnt", if settings.dnt { "1" } else { "0" })
+        .finish();
+    format!("{base}?{query}")
 }
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
@@ -210,6 +235,8 @@ impl SimpleHandler {
     }
 
     /// Intercept the chrome bar's synthetic navigation and drive the page view.
+    /// Kept as a fallback for old links; the console bridge below is the
+    /// primary chrome -> page-view command path.
     fn on_before_browse(
         &mut self,
         browser: Option<&mut Browser>,
@@ -220,63 +247,68 @@ impl SimpleHandler {
     ) -> i32 {
         let Some(request) = request else { return 0; };
         let url = CefString::from(&request.url()).to_string();
-        let Some(current) = browser else { return 0; };
+        let Some(mut current) = browser else { return 0; };
         if self.chrome_browser_id != Some(current.identifier()) {
             return 0;
         }
-        let html = match url.as_str() {
-            "https://fdb.invalid/settings" => Some(SETTINGS_HTML),
-            "https://fdb.invalid/chat" => Some(CHAT_HTML),
-            _ => None,
+        let Some(target_id) = self.other_browser_id(&mut current) else {
+            return 0;
         };
-        let target = if let Some(html) = html {
-            internal_page_url(html)
-        } else {
-            let Some(target) = navigation_target(&url) else { return 0; };
-            target
-        };
-        let mut current = current.clone();
-        let target_id = self
-            .browser_list
-            .iter_mut()
-            .find(|candidate| candidate.is_same(Some(&mut current)) == 0)
-            .map(|browser| browser.identifier());
-        let Some(target_id) = target_id else { return 0; };
-
-        // Resolve registry/public names off the UI thread, then navigate the
-        // page view on the CEF UI thread.
-        std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build();
-            let url = if target.starts_with("data:") {
-                target.clone()
-            } else {
-                match runtime {
-                Ok(runtime) => runtime.block_on(async move {
-                    let cache = std::env::temp_dir().join("fdn-registry");
-                    let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
-                        return target;
-                    };
-                    let Ok(navigator) = fdn_core::Navigator::new() else {
-                        return target;
-                    };
-                    match navigator.resolve(&registry, &target).await {
-                        Ok(outcome) => outcome
-                            .registry_target
-                            .or(outcome.public_url)
-                            .or(outcome.url)
-                            .unwrap_or(target),
-                        Err(_) => target,
-                    }
-                }),
-                Err(_) => target,
-                }
-            };
-            let mut task = ResolveNavigation::new(target_id, url);
-            post_task(ThreadId::UI, Some(&mut task));
-        });
+        if url == "https://fdb.invalid/settings" {
+            post_page(target_id, internal_page_url(SETTINGS_HTML));
+            return 1;
+        }
+        if url == "https://fdb.invalid/chat" {
+            post_page(target_id, internal_page_url(CHAT_HTML));
+            return 1;
+        }
+        let Some(target) = navigation_target(&url) else { return 0; };
+        spawn_navigation(target_id, target);
         1
+    }
+
+    fn other_browser_id(&mut self, current: &mut Browser) -> Option<i32> {
+        self.browser_list
+            .iter_mut()
+            .find(|candidate| candidate.is_same(Some(current)) == 0)
+            .map(|browser| browser.identifier())
+    }
+
+
+
+    /// Parse a chrome command without executing it. The caller must drop the
+    /// handler lock before loading a page, because CEF re-enters navigation
+    /// handlers synchronously.
+    fn bridge_action(&mut self, browser: &mut Browser, message: &str) -> Option<BridgeAction> {
+        if self.chrome_browser_id != Some(browser.identifier()) {
+            return None;
+        }
+        let payload = message.strip_prefix("fdb:")?;
+        let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+        let target_id = self.other_browser_id(browser)?;
+        match value.get("cmd").and_then(|cmd| cmd.as_str())? {
+            "navigate" => {
+                let url = value.get("url")?.as_str()?.trim();
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(BridgeAction::Navigate(target_id, url.to_string()))
+                }
+            }
+            "settings" => Some(BridgeAction::Page(
+                target_id,
+                settings_page_url(&crate::settings::load()),
+            )),
+            "save_settings" => {
+                crate::settings::Settings::from_value(&value).map(BridgeAction::SaveSettings)
+            }
+            "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
+            "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
+            "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
+            "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
+            "home" => Some(BridgeAction::Home(target_id)),
+            _ => None,
+        }
     }
 
     pub fn show_main_window(&mut self) {
@@ -364,6 +396,41 @@ wrap_display_handler! {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_title_change(browser, title);
         }
+
+        fn on_console_message(
+            &self,
+            browser: Option<&mut Browser>,
+            _level: LogSeverity,
+            message: Option<&CefString>,
+            _source: Option<&CefString>,
+            _line: i32,
+        ) -> i32 {
+            let (Some(mut browser), Some(message)) = (browser.cloned(), message.map(CefString::to_string)) else {
+                return 0;
+            };
+            if !message.starts_with("fdb:") {
+                return 0;
+            }
+            let action = {
+                let mut inner = self.inner.lock().expect("Failed to lock inner");
+                inner.bridge_action(&mut browser, &message)
+            };
+            match action {
+                Some(BridgeAction::Navigate(target_id, url)) => spawn_navigation(target_id, url),
+                Some(BridgeAction::Page(target_id, url)) => post_page(target_id, url),
+                Some(BridgeAction::SaveSettings(settings)) => {
+                    let _ = crate::settings::save(&settings);
+                }
+                Some(BridgeAction::BrowserCommand(target_id, kind)) => {
+                    post_browser_command(target_id, kind);
+                }
+                Some(BridgeAction::Home(target_id)) => {
+                    spawn_navigation(target_id, crate::settings::load().home);
+                }
+                None => {}
+            }
+            1
+        }
     }
 }
 
@@ -430,6 +497,79 @@ wrap_request_handler! {
     }
 }
 
+fn spawn_navigation(target_id: i32, target: String) {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
+        let url = match runtime {
+            Ok(runtime) => runtime.block_on(async move {
+                let cache = std::env::temp_dir().join("fdn-registry");
+                let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
+                    return target;
+                };
+                let Ok(navigator) = fdn_core::Navigator::new() else {
+                    return target;
+                };
+                match navigator.resolve(&registry, &target).await {
+                    Ok(outcome) => outcome
+                        .registry_target
+                        .or(outcome.public_url)
+                        .or(outcome.url)
+                        .unwrap_or(target),
+                    Err(_) => target,
+                }
+            }),
+            Err(_) => target,
+        };
+        let mut task = ResolveNavigation::new(target_id, url);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+fn post_browser_command(target_id: i32, kind: BrowserCommandKind) {
+    std::thread::spawn(move || {
+        let mut task = RunBrowserCommand::new(target_id, kind);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+fn post_page(target_id: i32, url: String) {
+    // Always post from another thread: this function may be called while the
+    // handler mutex is held, and CEF can execute a posted task synchronously.
+    std::thread::spawn(move || {
+        let mut task = ResolveNavigation::new(target_id, url);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+wrap_task! {
+    struct RunBrowserCommand {
+        target_id: i32,
+        kind: BrowserCommandKind,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let target = {
+                let Some(inner) = SimpleHandler::instance() else { return; };
+                let inner = inner.lock().expect("Failed to lock inner");
+                inner
+                    .browser_list
+                    .iter()
+                    .find(|browser| browser.identifier() == self.target_id)
+                    .cloned()
+            };
+            let Some(mut target) = target else { return; };
+            match self.kind {
+                BrowserCommandKind::Back => target.go_back(),
+                BrowserCommandKind::Forward => target.go_forward(),
+                BrowserCommandKind::Reload => target.reload(),
+            }
+        }
+    }
+}
+
 wrap_task! {
     struct ResolveNavigation {
         target_id: i32,
@@ -438,14 +578,19 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
-            let Some(inner) = SimpleHandler::instance() else { return; };
-            let mut inner = inner.lock().expect("Failed to lock inner");
-            let mut target = inner
-                .browser_list
-                .iter()
-                .find(|browser| browser.identifier() == self.target_id)
-                .cloned();
-            if let Some(target) = target.as_mut() {
+            // Never hold the handler lock across load_url: CEF invokes
+            // on_before_browse synchronously for some schemes and that handler
+            // locks the same mutex.
+            let target = {
+                let Some(inner) = SimpleHandler::instance() else { return; };
+                let inner = inner.lock().expect("Failed to lock inner");
+                inner
+                    .browser_list
+                    .iter()
+                    .find(|browser| browser.identifier() == self.target_id)
+                    .cloned()
+            };
+            if let Some(mut target) = target {
                 if let Some(frame) = target.main_frame() {
                     let mut frame = frame;
                     frame.load_url(Some(&CefString::from(self.url.as_str())));

@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+pub mod settings;
 pub mod shared;
 
 #[cfg(target_os = "macos")]

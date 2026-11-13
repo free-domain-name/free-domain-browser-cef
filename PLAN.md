@@ -36,12 +36,16 @@ Status: prototype only. Goal is **not** finished.
 
 Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 
-- [ ] Add CEF message router (`window.cefQuery`) for chrome → browser commands.
-- [ ] Commands: `navigate`, `new_tab`, `close_tab`, `select_tab`, `open_settings`, `open_chat`, `save_settings`.
-- [ ] Return structured JSON results/errors.
-- [ ] Keep `on_before_browse` only as a fallback for old links.
-- [ ] Block page-frame traffic from calling chrome-only commands.
-- Tests: unit-test command decode; hidden smoke test sends a navigate command and checks the title.
+- [x] Browser command channel from chrome HTML (console-message transport; a
+  `cefQuery` router can replace it later without changing command payloads).
+- [x] Commands: `navigate`, `open_settings`, `open_chat`, `save_settings`,
+  `back`, `forward`, `reload`, `home`.
+- [ ] `new_tab`, `close_tab`, `select_tab` (blocked on Phase 3 tab model).
+- [x] Keep `on_before_browse` only as a fallback for old links.
+- [x] Ignore bridge traffic from page frames (only the chrome browser id is
+  accepted).
+- Tests: settings round-trip unit tests; hidden CDP smoke verified `navigate`,
+  `settings`, `save_settings`, and `reload`.
 
 ## Phase 2 — real chrome UI port
 
@@ -75,12 +79,14 @@ Port `tauri-browser/ui` incrementally, not as one drop.
 - [ ] Address-bar display uses the registry name, not the target URL.
 - Tests: `fdn-core` Linux tests plus mocked CEF scheme requests.
 
-## Phase 5 — settings in Rust
+## Phase 5 — settings in Rust (partial)
 
-- [ ] Replace `localStorage` with a JSON settings file managed by Rust.
-- [ ] IPC load/save; validate home page, appearance, proxy, privacy.
+- [x] JSON settings store (`home`, `cookies`, `dnt`) with sandbox-safe fallback.
+- [x] `save_settings` bridge command; settings page loads values from the store
+  through query parameters.
+- [ ] Move the remaining appearance/proxy fields off `localStorage`.
 - [ ] Apply settings to CEF request context/cache and chrome UI.
-- Tests: round-trip save/load; invalid input rejected.
+- Tests: round-trip save/load; empty home falls back to default.
 
 ## Phase 6 — chat backend
 

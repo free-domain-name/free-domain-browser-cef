@@ -29,6 +29,8 @@ input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
 <script>
 var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt')};
 try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;}catch(e){}
-document.getElementById('save').onclick=function(){try{localStorage.setItem('fdb-settings',JSON.stringify({home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked}));document.getElementById('status').textContent='Saved';}catch(e){document.getElementById('status').textContent='Storage unavailable';}};
+try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';}catch(e){}
+function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
+document.getElementById('save').onclick=function(){var data={cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked};send(data);document.getElementById('status').textContent='Saved';};
 </script>
 </body></html>
