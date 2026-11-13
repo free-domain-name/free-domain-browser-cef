@@ -19,6 +19,11 @@ for _ in $(seq 1 300); do
     curl -s --max-time 3 "http://127.0.0.1:$PORT/json" |
       python3 -c 'import json,sys; targets=json.load(sys.stdin); print(f"{len(targets)} targets"); [print(t.get("url","")[:80]) for t in targets]'
     if grep -q "DevTools listening" "$LOG"; then echo "log: DevTools listening"; else echo "missing DevTools log"; exit 1; fi
+    if ! kill -0 "$PID" 2>/dev/null; then
+      echo "browser exited early; last log:" >&2
+      tail -20 "$LOG" >&2
+      exit 1
+    fi
     if [ -n "${FDB_SMOKE_EXPECT:-}" ]; then
       curl -s --max-time 3 "http://127.0.0.1:$PORT/json" |
         python3 -c 'import json,sys; urls=[t.get("url","") for t in json.load(sys.stdin)]; sys.exit(0 if any("'"$FDB_SMOKE_EXPECT"'" in u for u in urls) else 1)' ||

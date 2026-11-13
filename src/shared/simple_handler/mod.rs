@@ -1,5 +1,5 @@
 use cef::*;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 pub fn get_data_uri(data: &[u8], mime_type: &str) -> String {
@@ -70,6 +70,7 @@ const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
 const CONFLICT_HTML: &str = include_str!("../../../assets/conflict.html");
 const CLAIM_HTML: &str = include_str!("../../../assets/claim.html");
 const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
+const ERROR_HTML: &str = include_str!("../../../assets/error.html");
 
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
@@ -96,11 +97,61 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
     format!("{base}?{query}")
 }
 
-fn choice_url(target: &str) -> String {
+fn choice_url(domain: &str, target: &str) -> String {
     let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("domain", domain)
         .append_pair("target", target)
         .finish();
     format!("https://fdb.invalid/choose?{query}")
+}
+
+fn navigation_key(input: &str) -> String {
+    let mut value = input.trim().to_ascii_lowercase();
+    if let Some(rest) = value.strip_prefix("fdn://") {
+        value = rest.to_string();
+    } else if let Ok(parsed) = url::Url::parse(&value) {
+        if matches!(parsed.scheme(), "http" | "https" | "fdn") {
+            if let Some(host) = parsed.host_str() {
+                value = host.to_string();
+            }
+        }
+    }
+    value
+        .trim_end_matches('/')
+        .trim_end_matches(".fdn")
+        .to_string()
+}
+
+fn remembered_choice(input: &str) -> Option<String> {
+    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    let choices = CHOICES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    let choices = choices.lock().ok()?;
+    choices.get(&navigation_key(input)).cloned()
+}
+
+fn remember_choice(domain: &str, target: &str) {
+    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    let choices = CHOICES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    if let Ok(mut choices) = choices.lock() {
+        choices.insert(navigation_key(domain), target.to_string());
+    }
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn error_page(failed_url: &str, error_text: &str, error_code: i32) -> String {
+    ERROR_HTML
+        .replace("{{url}}", &html_escape(failed_url))
+        .replace("{{error}}", &html_escape(error_text))
+        .replace("{{code}}", &error_code.to_string())
 }
 
 fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
@@ -108,8 +159,8 @@ fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
     let public = outcome.public_url.clone().unwrap_or_default();
     CONFLICT_HTML
         .replace("{{domain}}", &outcome.domain)
-        .replace("{{registry_choice}}", &choice_url(&target))
-        .replace("{{public_choice}}", &choice_url(&public))
+        .replace("{{registry_choice}}", &choice_url(&outcome.domain, &target))
+        .replace("{{public_choice}}", &choice_url(&outcome.domain, &public))
         .replace("{{target}}", &target)
 }
 
@@ -126,15 +177,25 @@ fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
         )
 }
 
-fn choice_target(url: &str) -> Option<String> {
+fn choice_target(url: &str) -> Option<(String, String)> {
     let parsed = url::Url::parse(url).ok()?;
     if parsed.host_str() != Some("fdb.invalid") || parsed.path() != "/choose" {
         return None;
     }
-    parsed
-        .query_pairs()
-        .find(|(key, _)| key == "target")
-        .map(|(_, value)| value.into_owned())
+    let mut domain = None;
+    let mut target = None;
+    for (key, value) in parsed.query_pairs() {
+        match key.as_ref() {
+            "domain" => domain = Some(value.into_owned()),
+            "target" => target = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    let target = target?;
+    if !matches!(url::Url::parse(&target).ok()?.scheme(), "http" | "https") {
+        return None;
+    }
+    Some((domain.unwrap_or_default(), target))
 }
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
@@ -494,22 +555,8 @@ impl SimpleHandler {
         }
         let error_code = error_code as i32;
 
-        let frame = frame.expect("Frame is None");
-
-        // Display a load error message using a data: URI.
-        let error_text = error_text.map(CefString::to_string).unwrap_or_default();
-        let failed_url = failed_url.map(CefString::to_string).unwrap_or_default();
-        let data = format!(
-            r#"
-            <html>
-                <body bgcolor="white">
-                    <h2>Failed to load URL {failed_url} with error {error_text} ({error_code}).</h2>
-                </body>
-            </html>
-            "#
-        );
-
-        let uri = get_data_uri(data.as_bytes(), "text/html");
+        let Some(frame) = frame else { return; };
+        let uri = internal_page_url(&error_page(&failed, &text, error_code));
         let uri = CefString::from(uri.as_str());
         frame.load_url(Some(&uri));
     }
@@ -530,8 +577,13 @@ impl SimpleHandler {
         let Some(mut current) = browser else { return 0; };
         let current_id = current.identifier();
         if self.chrome_browser_id != Some(current_id) {
-            if let Some(target) = choice_target(&url) {
+            if let Some((domain, target)) = choice_target(&url) {
+                remember_choice(&domain, &target);
                 post_page(current_id, target);
+                return 1;
+            }
+            if url.starts_with("fdn://") {
+                spawn_navigation(current_id, url);
                 return 1;
             }
             return 0;
@@ -1054,6 +1106,10 @@ fn spawn_navigation(target_id: i32, target: String) {
         .strip_prefix("fdn://")
         .map(str::to_string)
         .unwrap_or(target);
+    if let Some(choice) = remembered_choice(&target) {
+        post_page(target_id, choice);
+        return;
+    }
     // Normal web URLs must not wait on registry + public-DNS probes. Only
     // free-namespace names (or bare input) need the resolver.
     if let Ok(parsed) = url::Url::parse(&target) {
@@ -1239,7 +1295,7 @@ wrap_task! {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::navigation_target;
+    use super::{choice_target, error_page, navigation_key, navigation_target};
 
     #[test]
     fn accepts_chrome_navigation() {
@@ -1254,5 +1310,36 @@ mod navigation_tests {
         assert_eq!(navigation_target("https://yahoo.com/"), None);
         assert_eq!(navigation_target("https://fdb.invalid/other?url=x"), None);
         assert_eq!(navigation_target("not a url"), None);
+    }
+
+    #[test]
+    fn parses_conflict_choices() {
+        let choice = choice_target(
+            "https://fdb.invalid/choose?domain=foo&target=https%3A%2F%2Ffoo.example%2F",
+        );
+        assert_eq!(
+            choice,
+            Some(("foo".into(), "https://foo.example/".into()))
+        );
+        assert_eq!(
+            choice_target("https://fdb.invalid/choose?domain=foo&target=javascript%3Aalert(1)"),
+            None
+        );
+    }
+
+    #[test]
+    fn normalizes_free_name_keys() {
+        assert_eq!(navigation_key("fdn://Foo.fdn/"), "foo");
+        assert_eq!(navigation_key("https://foo.fdn/path"), "foo");
+        assert_eq!(navigation_key("FOO"), "foo");
+    }
+
+    #[test]
+    fn error_page_escapes_input() {
+        let page = error_page("https://example.com/?a=1&b=2", "<bad>", -105);
+        assert!(page.contains("a=1&amp;b=2"));
+        assert!(page.contains("&lt;bad&gt;"));
+        assert!(page.contains("-105"));
+        assert!(page.contains("Retry"));
     }
 }

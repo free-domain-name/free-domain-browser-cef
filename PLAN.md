@@ -30,8 +30,8 @@ Status: prototype only. Goal is **not** finished.
 - [x] Ctrl-C kills browser + helper process group.
 - [x] Hidden launch: `cargo run -- --initial-show-state=hidden`.
 - [x] Document `CEF_PATH` / CMake setup.
-- [ ] Add a hidden CEF smoke script that fails if the process exits early.
-- [ ] Capture browser `stderr` to a log file while hidden for CI diagnostics.
+- [x] Add a hidden CEF smoke script that fails if the process exits early.
+- [x] Capture browser `stderr` to a log file while hidden for CI diagnostics.
 
 ## Phase 1 — CEF IPC bridge
 
@@ -80,9 +80,9 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Conflict picker and unregistered claim pages.
 - [x] Conflict choice routes registry/public target.
 - [x] Address bar keeps the typed registry name on internal pages.
-- [ ] `fdn://` scheme handler / persistent free-domain address.
-- [ ] Remember registry/public choices per session.
-- [ ] Error pages with retry.
+- [x] `fdn://` link interception / persistent free-domain address in the address bar.
+- [x] Remember registry/public choices per session (in-process map).
+- [x] Error pages with retry.
 
 ## Phase 5 — settings in Rust (partial)
 
