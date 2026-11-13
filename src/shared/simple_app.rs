@@ -82,6 +82,11 @@ wrap_window_delegate! {
         fn window_runtime_style(&self) -> RuntimeStyle {
             self.runtime_style
         }
+
+        // CEF hides the macOS traffic lights by default for Views windows.
+        fn with_standard_window_buttons(&self, _window: Option<&mut Window>) -> i32 {
+            1
+        }
     }
 }
 
