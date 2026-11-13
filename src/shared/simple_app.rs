@@ -218,17 +218,22 @@ wrap_browser_process_handler! {
                     None,
                     Some(&mut delegate),
                 );
-                let second_url = CefString::from("https://example.com/");
-                let mut second_client = self.default_client();
-                let mut second_delegate = SimpleBrowserViewDelegate::new(runtime_style, 0);
-                let second_view = browser_view_create(
-                    second_client.as_mut(),
-                    Some(&second_url),
-                    Some(&settings),
-                    None,
-                    None,
-                    Some(&mut second_delegate),
-                );
+                let mut extra_views = Vec::new();
+                for _ in 0..3 {
+                    let extra_url = CefString::from("https://example.com/");
+                    let mut extra_client = self.default_client();
+                    let mut extra_delegate = SimpleBrowserViewDelegate::new(runtime_style, 0);
+                    if let Some(view) = browser_view_create(
+                        extra_client.as_mut(),
+                        Some(&extra_url),
+                        Some(&settings),
+                        None,
+                        None,
+                        Some(&mut extra_delegate),
+                    ) {
+                        extra_views.push(view);
+                    }
+                }
 
                 // Optionally configure the initial show state.
                 let initial_show_state = CefString::from(
@@ -245,7 +250,7 @@ wrap_browser_process_handler! {
                 };
 
                 // Create the Window. It will show itself after creation.
-                let content_views: Vec<BrowserView> = [browser_view, second_view].into_iter().flatten().collect();
+                let content_views: Vec<BrowserView> = browser_view.into_iter().chain(extra_views).collect();
                 let mut delegate = SimpleWindowDelegate::new(
                     RefCell::new(chrome_view),
                     RefCell::new(content_views),
