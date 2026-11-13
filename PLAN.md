@@ -99,7 +99,10 @@ Port `tauri-browser/ui` incrementally, not as one drop.
 ## Phase 7 — packaging and release
 
 - [ ] Bundle `assets/`, locales, `cef.pak`, `icudtl.dat`.
-- [ ] Code-sign app + helpers; sandbox entitlements.
+- [ ] Code-sign app + helpers with a stable identity. Ad-hoc debug rebuilds
+  invalidate Keychain "Always Allow"; debug currently passes
+  `--use-mock-keychain` to avoid repeated "Chromium Safe Storage" prompts.
+- [ ] Sandbox entitlements.
 - [ ] Release profile with sandbox enabled (debug currently `no_sandbox`).
 - [ ] `cargo run` remains a debug-only convenience.
 - [ ] CI: Linux core tests, macOS bundle build, hidden smoke.

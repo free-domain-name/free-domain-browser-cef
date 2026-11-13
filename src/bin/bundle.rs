@@ -51,6 +51,13 @@ fn main() -> anyhow::Result<()> {
     let executable = app.join("Contents/MacOS/free-domain-browser-cef");
     let mut command = std::process::Command::new(&executable);
     command.args(args);
+    // Debug builds are rebuilt with a new ad-hoc signature on every run, so
+    // macOS never treats them as the same app for Keychain "Always Allow".
+    // Use Chromium's mock keychain in development; release builds are signed
+    // and keep real Keychain storage.
+    if cfg!(debug_assertions) {
+        command.arg("--use-mock-keychain");
+    }
 
     // Put the CEF app in its own process group so Ctrl-C can take down the
     // browser and its helper processes together. CEF's message loop ignores
