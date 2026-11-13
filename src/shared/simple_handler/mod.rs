@@ -219,6 +219,59 @@ impl SimpleHandler {
         frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
     }
 
+    fn chrome_execute(&self, source_id: i32, script: &str) {
+        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        if source_id == chrome_id { return; }
+        let mut chrome = self
+            .browser_list
+            .iter()
+            .find(|browser| browser.identifier() == chrome_id)
+            .cloned();
+        let Some(chrome) = chrome.as_mut() else { return; };
+        let Some(frame) = chrome.main_frame() else { return; };
+        let mut frame = frame;
+        frame.execute_java_script(Some(&CefString::from(script)), None, 0);
+    }
+
+    fn content_index(&self, source_id: i32) -> Option<usize> {
+        self.browser_list
+            .iter()
+            .filter(|browser| Some(browser.identifier()) != self.chrome_browser_id)
+            .position(|browser| browser.identifier() == source_id)
+    }
+
+    fn on_status_message(&mut self, browser: Option<&mut Browser>, value: Option<&CefString>) {
+        let Some(browser) = browser else { return; };
+        let source_id = browser.identifier();
+        if self.content_index(source_id).is_none() { return; }
+        let text = value.map(CefString::to_string).unwrap_or_default();
+        let script = format!(
+            "window.fdbStatus&&fdbStatus({})",
+            serde_json::to_string(&text).unwrap_or_default()
+        );
+        self.chrome_execute(source_id, &script);
+    }
+
+    fn on_loading_state_change(
+        &mut self,
+        browser: Option<&mut Browser>,
+        is_loading: bool,
+        can_go_back: bool,
+        can_go_forward: bool,
+    ) {
+        let Some(browser) = browser else { return; };
+        let source_id = browser.identifier();
+        let Some(index) = self.content_index(source_id) else { return; };
+        let script = format!(
+            "window.fdbLoad&&fdbLoad({},{},{},{})",
+            if is_loading { 1 } else { 0 },
+            if can_go_back { 1 } else { 0 },
+            if can_go_forward { 1 } else { 0 },
+            index
+        );
+        self.chrome_execute(source_id, &script);
+    }
+
     fn on_after_created(&mut self, browser: Option<&mut Browser>) {
         debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
@@ -538,6 +591,11 @@ wrap_display_handler! {
             inner.on_title_change(browser, title);
         }
 
+        fn on_status_message(&self, browser: Option<&mut Browser>, value: Option<&CefString>) {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_status_message(browser, value);
+        }
+
         fn on_address_change(
             &self,
             browser: Option<&mut Browser>,
@@ -630,6 +688,17 @@ wrap_load_handler! {
     }
 
     impl LoadHandler {
+        fn on_loading_state_change(
+            &self,
+            browser: Option<&mut Browser>,
+            is_loading: i32,
+            can_go_back: i32,
+            can_go_forward: i32,
+        ) {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_loading_state_change(browser, is_loading != 0, can_go_back != 0, can_go_forward != 0);
+        }
+
         fn on_load_error(
             &self,
             browser: Option<&mut Browser>,

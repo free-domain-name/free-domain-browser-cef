@@ -2,15 +2,16 @@
 <div id="tabs" style="height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;box-sizing:border-box;background:#171b24"></div>
 <div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
 <b style="font-size:13px">Free Domain Browser</b>
-<button onclick="send({cmd:'back'})" title="Back" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">◀</button>
-<button onclick="send({cmd:'forward'})" title="Forward" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">▶</button>
-<button onclick="send({cmd:'reload'})" title="Reload" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">↻</button>
+<button id="back" onclick="send({cmd:'back'})" title="Back" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">◀</button>
+<button id="forward" onclick="send({cmd:'forward'})" title="Forward" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">▶</button>
+<button id="reload" onclick="send({cmd:'reload'})" title="Reload" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">↻</button>
 <span id="sec" title="Connection" style="font-size:12px">🔒</span>
 <input id="url" value="https://yahoo.com/" style="flex:1;background:#fff;color:#111;border:0;border-radius:8px;padding:7px 11px;font:inherit">
 <button onclick="chat()" title="Chat" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">💬</button>
 <button onclick="settings()" title="Settings" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">⚙</button>
 <button onclick="go()" style="background:#4f7cff;color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit">Go</button>
 </div>
+<div id="status" style="display:none;position:fixed;left:0;bottom:0;right:0;height:20px;line-height:20px;padding:0 12px;background:#111722;color:#aebbd0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
 <script>
 var tabs=[{url:'https://yahoo.com/',label:'Yahoo'},{url:'https://example.com/',label:'Example'}];
 var active=0;var lastClosed=null;
@@ -35,6 +36,9 @@ function render(){
   plus.onclick=function(){newTab('')};
   box.appendChild(plus);
   document.getElementById('url').value=current().url||'';
+  var t=current();
+  document.getElementById('back').disabled=!t.canBack;
+  document.getElementById('forward').disabled=!t.canForward;
 }
 function newTab(u){if(tabs.length>=8){tabs[active]={url:u||'',label:'New Tab'};render();if(u)navigate(u);else{send({cmd:'select_tab',index:active});send({cmd:'new_tab'})}return}tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'select_tab',index:active});send({cmd:'new_tab'})}}
 function closeTab(i){if(tabs.length<2)return;lastClosed=tabs[i];tabs.splice(i,1);if(i<active)active--;if(active>=tabs.length)active=tabs.length-1;render();tabs.forEach(function(t,j){if(t.url)send({cmd:'load_tab',index:j,url:t.url})});send({cmd:'select_tab',index:active})}
@@ -43,6 +47,8 @@ function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
+window.fdbStatus=function(text){var el=document.getElementById('status');if(!el)return;el.textContent=text||'';el.style.display=text?'block':'none'};
+window.fdbLoad=function(loading,back,forward,index){if(index==null)index=active;var t=tabs[index];if(!t)return;t.canBack=!!back;t.canForward=!!forward;if(index===active){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.style.cursor=loading?'progress':'default'}};
 window.fdbUpdate=function(url,title,index){if(index==null)index=active;var t=tabs[index];if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(index===active)render()};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
 document.addEventListener('keydown',function(e){
