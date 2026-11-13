@@ -54,6 +54,8 @@ pub struct SimpleHandler {
 
 const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
 const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
+const CONFLICT_HTML: &str = include_str!("../../../assets/conflict.html");
+const CLAIM_HTML: &str = include_str!("../../../assets/claim.html");
 
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
@@ -78,6 +80,47 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
         .append_pair("dnt", if settings.dnt { "1" } else { "0" })
         .finish();
     format!("{base}?{query}")
+}
+
+fn choice_url(target: &str) -> String {
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("target", target)
+        .finish();
+    format!("https://fdb.invalid/choose?{query}")
+}
+
+fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
+    let target = outcome.registry_target.clone().unwrap_or_default();
+    let public = outcome.public_url.clone().unwrap_or_default();
+    CONFLICT_HTML
+        .replace("{{domain}}", &outcome.domain)
+        .replace("{{registry_choice}}", &choice_url(&target))
+        .replace("{{public_choice}}", &choice_url(&public))
+        .replace("{{target}}", &target)
+}
+
+fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
+    CLAIM_HTML
+        .replace("{{domain}}", &outcome.domain)
+        .replace(
+            "{{message}}",
+            outcome.message.as_deref().unwrap_or("This name is not registered yet."),
+        )
+        .replace(
+            "{{public_url}}",
+            outcome.public_url.as_deref().unwrap_or("https://github.com/free-domain-name/registry"),
+        )
+}
+
+fn choice_target(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    if parsed.host_str() != Some("fdb.invalid") || parsed.path() != "/choose" {
+        return None;
+    }
+    parsed
+        .query_pairs()
+        .find(|(key, _)| key == "target")
+        .map(|(_, value)| value.into_owned())
 }
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
@@ -141,6 +184,9 @@ impl SimpleHandler {
     fn update_chrome(&mut self, source_id: i32, url: Option<&str>, title: Option<&str>) {
         let Some(chrome_id) = self.chrome_browser_id else { return; };
         if source_id == chrome_id {
+            return;
+        }
+        if url.is_some_and(|value| value.starts_with("file://") || value.starts_with("data:")) {
             return;
         }
         let mut chrome = self
@@ -278,7 +324,12 @@ impl SimpleHandler {
         let Some(request) = request else { return 0; };
         let url = CefString::from(&request.url()).to_string();
         let Some(mut current) = browser else { return 0; };
-        if self.chrome_browser_id != Some(current.identifier()) {
+        let current_id = current.identifier();
+        if self.chrome_browser_id != Some(current_id) {
+            if let Some(target) = choice_target(&url) {
+                post_page(current_id, target);
+                return 1;
+            }
             return 0;
         }
         let Some(target_id) = self.other_browser_id(&mut current) else {
@@ -555,11 +606,15 @@ fn spawn_navigation(target_id: i32, target: String) {
                     return target;
                 };
                 match navigator.resolve(&registry, &target).await {
-                    Ok(outcome) => outcome
-                        .registry_target
-                        .or(outcome.public_url)
-                        .or(outcome.url)
-                        .unwrap_or(target),
+                    Ok(outcome) => match outcome.kind {
+                        fdn_core::OutcomeKind::Conflict => internal_page_url(&conflict_page(&outcome)),
+                        fdn_core::OutcomeKind::Unregistered => internal_page_url(&claim_page(&outcome)),
+                        _ => outcome
+                            .registry_target
+                            .or(outcome.public_url)
+                            .or(outcome.url)
+                            .unwrap_or(target),
+                    },
                     Err(_) => target,
                 }
             }),

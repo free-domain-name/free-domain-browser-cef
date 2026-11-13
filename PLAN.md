@@ -68,15 +68,14 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [ ] Keyboard shortcuts (Cmd-T/W, Ctrl-Tab).
 - Tests: hidden CEF script creates 2 tabs, navigates different URLs, verifies both browsers exist and chrome stays fixed.
 
-## Phase 4 — complete registry navigation
+## Phase 4 — registry navigation (partial)
 
-- [ ] Implement CEF `fdn://` scheme handler or local proxy so registry names keep
-  their free-domain address instead of loading the record target directly.
-- [ ] Wire `NavigationOutcome`: conflict picker, unregistered claim page, public fallback.
+- [x] Conflict picker and unregistered claim pages.
+- [x] Conflict choice routes registry/public target.
+- [x] Address bar keeps the typed registry name on internal pages.
+- [ ] `fdn://` scheme handler / persistent free-domain address.
 - [ ] Remember registry/public choices per session.
-- [ ] Cache/negative TTL; error pages with retry.
-- [ ] Address-bar display uses the registry name, not the target URL.
-- Tests: `fdn-core` Linux tests plus mocked CEF scheme requests.
+- [ ] Error pages with retry.
 
 ## Phase 5 — settings in Rust (partial)
 
