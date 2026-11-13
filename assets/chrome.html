@@ -36,7 +36,7 @@ function render(){
   box.appendChild(plus);
   document.getElementById('url').value=current().url||'';
 }
-function newTab(u){if(tabs.length>=4){tabs[active]={url:u||'',label:'New Tab'};render();if(u)navigate(u);else send({cmd:'new_tab'});return}tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'new_tab'})}}
+function newTab(u){if(tabs.length>=4){tabs[active]={url:u||'',label:'New Tab'};render();if(u)navigate(u);else{send({cmd:'select_tab',index:active});send({cmd:'new_tab'})}return}tabs.push({url:u,label:'New Tab'});active=tabs.length-1;render();if(u){navigate(u)}else{send({cmd:'select_tab',index:active});send({cmd:'new_tab'})}}
 function closeTab(i){if(tabs.length<2)return;tabs.splice(i,1);if(i<active)active--;if(active>=tabs.length)active=tabs.length-1;render();tabs.forEach(function(t,j){if(t.url)send({cmd:'load_tab',index:j,url:t.url})});send({cmd:'select_tab',index:active})}
 function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
