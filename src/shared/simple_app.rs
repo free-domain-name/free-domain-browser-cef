@@ -177,7 +177,8 @@ wrap_browser_process_handler! {
             if use_views {
                 // A fixed chrome bar, then Yahoo in a separate BrowserView
                 // below it. CEF Views clips both views to their bounds.
-                let chrome_html = r#"<html><body style=\"margin:0;background:#1f2430;color:#fff;font:14px -apple-system,system-ui;\"><div style=\"height:64px;display:flex;align-items:center;gap:12px;padding:0 18px;box-sizing:border-box\"><b>Free Domain Browser</b><span style=\"opacity:.7\">CEF prototype</span><span style=\"flex:1;background:#fff;color:#111;border-radius:8px;padding:8px 12px\">https://yahoo.com/</span></div></body></html>"#;
+                let chrome_html = include_str!("../../assets/chrome.html");
+
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());
                 let mut chrome_client = self.default_client();

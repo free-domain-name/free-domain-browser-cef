@@ -36,6 +36,18 @@ pub struct SimpleHandler {
     weak_self: Weak<Mutex<Self>>,
 }
 
+/// Parse the synthetic URL used by the chrome bar to request page navigation.
+fn navigation_target(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    if parsed.host_str() != Some("fdb.invalid") || parsed.path() != "/navigate" {
+        return None;
+    }
+    parsed
+        .query_pairs()
+        .find(|(key, _)| key == "url")
+        .map(|(_, value)| value.into_owned())
+}
+
 impl SimpleHandler {
     pub fn instance() -> Option<Arc<Mutex<Self>>> {
         SIMPLE_HANDLER_INSTANCE
@@ -167,6 +179,34 @@ impl SimpleHandler {
         frame.load_url(Some(&uri));
     }
 
+    /// Intercept the chrome bar's synthetic navigation and drive the page view.
+    fn on_before_browse(
+        &mut self,
+        browser: Option<&mut Browser>,
+        _frame: Option<&mut Frame>,
+        request: Option<&mut Request>,
+        _user_gesture: i32,
+        _is_redirect: i32,
+    ) -> i32 {
+        let Some(request) = request else { return 0; };
+        let url = CefString::from(&request.url()).to_string();
+        let Some(target) = navigation_target(&url) else { return 0; };
+        let Some(current) = browser else { return 0; };
+        let mut current = current.clone();
+        let next = self
+            .browser_list
+            .iter_mut()
+            .find(|candidate| candidate.is_same(Some(&mut current)) == 0)
+            .cloned();
+        if let Some(mut next) = next {
+            if let Some(frame) = next.main_frame() {
+                let mut frame = frame;
+                frame.load_url(Some(&CefString::from(target.as_str())));
+            }
+        }
+        1
+    }
+
     pub fn show_main_window(&mut self) {
         let thread_id = ThreadId::UI;
         if currently_on(thread_id) == 0 {
@@ -235,6 +275,10 @@ wrap_client! {
         fn load_handler(&self) -> Option<LoadHandler> {
             Some(SimpleHandlerLoadHandler::new(self.inner.clone()))
         }
+
+        fn request_handler(&self) -> Option<RequestHandler> {
+            Some(SimpleHandlerRequestHandler::new(self.inner.clone()))
+        }
     }
 }
 
@@ -294,6 +338,26 @@ wrap_load_handler! {
     }
 }
 
+wrap_request_handler! {
+    struct SimpleHandlerRequestHandler {
+        inner: Arc<Mutex<SimpleHandler>>,
+    }
+
+    impl RequestHandler {
+        fn on_before_browse(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            user_gesture: i32,
+            is_redirect: i32,
+        ) -> i32 {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_before_browse(browser, frame, request, user_gesture, is_redirect)
+        }
+    }
+}
+
 wrap_task! {
     struct ShowMainWindow {
         inner: Arc<Mutex<SimpleHandler>>,
@@ -322,5 +386,25 @@ wrap_task! {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.close_all_browsers(self.force_close);
         }
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::navigation_target;
+
+    #[test]
+    fn accepts_chrome_navigation() {
+        assert_eq!(
+            navigation_target("https://fdb.invalid/navigate?url=https%3A%2F%2Fexample.com%2F").as_deref(),
+            Some("https://example.com/")
+        );
+    }
+
+    #[test]
+    fn rejects_other_urls() {
+        assert_eq!(navigation_target("https://yahoo.com/"), None);
+        assert_eq!(navigation_target("https://fdb.invalid/other?url=x"), None);
+        assert_eq!(navigation_target("not a url"), None);
     }
 }

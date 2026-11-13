@@ -61,6 +61,7 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
         no_sandbox: i32::from(cfg!(debug_assertions)),
         cache_path: CefString::from(cache_path.as_str()),
         root_cache_path: CefString::from(cache_root.as_str()),
+        remote_debugging_port: if cfg!(debug_assertions) { 9222 } else { 0 },
         ..Default::default()
     };
     assert_eq!(

@@ -16,6 +16,7 @@ path = "src/bin/helper.rs"
 helper_name = "free_domain_browser_cef_helper"
 
 [dependencies]
+url = "2"
 cef = { version = "156.4.0", default-features = false, features = ["build-util"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
