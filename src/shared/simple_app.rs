@@ -53,8 +53,15 @@ wrap_window_delegate! {
             // Use explicit bounds rather than a box layout. With a box layout the
             // content BrowserView could keep its preferred height of 0 on Linux
             // (the chrome was visible while the page view had no drawable area).
-            let bounds = window.bounds();
+            let mut bounds = window.bounds();
+            if bounds.width <= 1 || bounds.height <= 1 {
+                bounds = Rect { x: 0, y: 0, width: 1200, height: 820 };
+            }
             self.apply_bounds(chrome.as_mut(), &bounds);
+
+            if self.initial_show_state != ShowState::HIDDEN {
+                window.show();
+            }
         }
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
