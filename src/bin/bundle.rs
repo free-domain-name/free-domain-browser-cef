@@ -8,6 +8,36 @@ fn resolve_cef_path() -> Option<std::path::PathBuf> {
     local.exists().then_some(local)
 }
 
+fn looks_like_cef(dir: &std::path::Path) -> bool {
+    dir.join("libcef.so").is_file()
+        || dir.join("libcef.dll").is_file()
+        || dir.join("Chromium Embedded Framework.framework").is_dir()
+        || dir.join("libcef.dylib").is_file()
+}
+
+/// CEF_PATH may be a flat distribution root or the shared cache root containing
+/// `<version>/<platform>/`. Return the directory that actually owns libcef.
+fn resolve_cef_runtime_path() -> Option<std::path::PathBuf> {
+    let root = resolve_cef_path()?;
+    if looks_like_cef(&root) {
+        return Some(root);
+    }
+    for entry in std::fs::read_dir(&root).ok()?.flatten() {
+        let path = entry.path();
+        if looks_like_cef(&path) {
+            return Some(path);
+        }
+        if let Ok(children) = std::fs::read_dir(&path) {
+            for child in children.flatten() {
+                if looks_like_cef(&child.path()) {
+                    return Some(child.path());
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
     use cef::build_util::mac::{bundle, BundleInfo};
@@ -73,7 +103,7 @@ fn main() -> anyhow::Result<()> {
     let executable = app.join("Contents/MacOS/free-domain-browser-cef");
     let mut command = std::process::Command::new(&executable);
     command.args(args);
-    if let Some(cef_path) = resolve_cef_path() {
+    if let Some(cef_path) = resolve_cef_runtime_path() {
         command.env("CEF_PATH", cef_path);
     }
     // Debug builds are rebuilt with a new ad-hoc signature on every run, so
@@ -157,8 +187,14 @@ fn main() -> anyhow::Result<()> {
     }
     let mut command = std::process::Command::new(&executable);
     command.args(args);
-    if let Some(root) = std::env::var_os("CEF_PATH") {
-        let mut paths = vec![std::path::PathBuf::from(root)];
+    if let Some(cef_root) = resolve_cef_path() {
+        command.env("CEF_PATH", &cef_root);
+        let mut paths = Vec::new();
+        if let Some(runtime) = resolve_cef_runtime_path() {
+            command.env("CEF_PATH", &runtime);
+            paths.push(runtime);
+        }
+        paths.push(cef_root);
         if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
             paths.extend(std::env::split_paths(&existing));
         }
@@ -234,7 +270,7 @@ fn main() -> anyhow::Result<()> {
     }
     let mut command = std::process::Command::new(&executable);
     command.args(args);
-    if let Some(cef_path) = resolve_cef_path() {
+    if let Some(cef_path) = resolve_cef_runtime_path() {
         command.env("CEF_PATH", cef_path);
     }
     let status = command.status()?;

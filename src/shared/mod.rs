@@ -32,6 +32,29 @@ pub fn load_cef() -> Library {
     library
 }
 
+#[cfg(target_os = "linux")]
+fn linux_cef_runtime_dir() -> Option<std::path::PathBuf> {
+    let root = std::path::PathBuf::from(std::env::var_os("CEF_PATH")?);
+    let looks_like_cef = |dir: &std::path::Path| dir.join("libcef.so").is_file();
+    if looks_like_cef(&root) {
+        return Some(root);
+    }
+    for entry in std::fs::read_dir(&root).ok()?.flatten() {
+        let path = entry.path();
+        if looks_like_cef(&path) {
+            return Some(path);
+        }
+        if let Ok(children) = std::fs::read_dir(&path) {
+            for child in children.flatten() {
+                if looks_like_cef(&child.path()) {
+                    return Some(child.path());
+                }
+            }
+        }
+    }
+    None
+}
+
 #[allow(dead_code)]
 pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut u8) {
     let switch = CefString::from("type");
@@ -68,8 +91,7 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
     // On Linux the CEF binary distribution is not discovered relative to the
     // Rust binary; point Chromium at the resources shipped with CEF_PATH.
     #[cfg(target_os = "linux")]
-    if let Some(root) = std::env::var_os("CEF_PATH") {
-        let root = std::path::PathBuf::from(root);
+    if let Some(root) = linux_cef_runtime_dir() {
         settings.resources_dir_path = CefString::from(
             root.join("resources").to_string_lossy().as_ref(),
         );
