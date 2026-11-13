@@ -1,7 +1,7 @@
 //! Build and package the app bundle used by CEF on macOS.
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
-    use cef::build_util::mac::{build_bundle, BundleInfo};
+    use cef::build_util::mac::{bundle, BundleInfo};
     use semver::Version;
     use std::path::Path;
 
@@ -13,9 +13,31 @@ fn main() -> anyhow::Result<()> {
         "English",
         version,
     );
-    let app = build_bundle(
+    // Build the app and helper in a separate target directory. Calling cargo
+    // again in the normal target directory would deadlock the `cargo run` that
+    // launched this binary.
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = std::process::Command::new(cargo)
+        .args([
+            "build",
+            "--bin",
+            "free-domain-browser-cef",
+            "--bin",
+            "free_domain_browser_cef_helper",
+            "--target-dir",
+            "target/bootstrap",
+        ])
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("failed to build CEF binaries");
+    }
+
+    let app = bundle(
         Path::new("target/bundle"),
+        Path::new("target/bootstrap/debug"),
         "free-domain-browser-cef",
+        "free_domain_browser_cef_helper",
+        None,
         info,
     )?;
 
