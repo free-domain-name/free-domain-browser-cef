@@ -65,6 +65,7 @@ jobs:
             target/FreeDomainBrowser-CEF.zip
             target/FreeDomainBrowser-CEF.dmg
             target/FreeDomainBrowser-CEF-linux-*.tar.gz
+            target/FreeDomainBrowser-CEF-linux-*.deb
             target/FreeDomainBrowser-CEF-windows-x64.zip
 
   release:

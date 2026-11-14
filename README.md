@@ -83,13 +83,14 @@ when `hdiutil` is available:
 Portable Linux and Windows archives can be built on their native platforms:
 
 ```sh
-./scripts/package-linux.sh      # tar.gz with CEF runtime + .desktop entry
+./scripts/package-linux.sh      # tar.gz, plus .deb when dpkg-deb is available
 ./scripts/package-windows.ps1  # zip with CEF runtime
 ```
 
 Tagged `v*` pushes run `.github/workflows/release.yml`, which builds those
-portable archives on macOS, Linux, and Windows and attaches them to the GitHub
-release. These are ad-hoc/unsigned builds, not MSI/NSIS/AppImage/deb packages.
+portable archives and a Linux `.deb` on macOS, Linux, and Windows, and attaches
+them to the GitHub release. These are ad-hoc/unsigned builds, not MSI/NSIS/
+AppImage packages.
 
 Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
 helpers need hardened-runtime JIT/library entitlements, so the script signs

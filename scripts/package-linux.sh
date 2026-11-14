@@ -33,3 +33,47 @@ OUT="target/$NAME.tar.gz"
 rm -f "$OUT"
 tar -C "$ROOT" -czf "$OUT" "$NAME"
 echo "wrote $OUT"
+
+# Build a Debian package from the same portable tree when dpkg-deb is
+# available. This is the closest CEF equivalent to Tauri's .deb bundle.
+case "$ARCH" in
+  x86_64) DEBARCH=amd64 ;;
+  aarch64|arm64) DEBARCH=arm64 ;;
+  *) DEBARCH="$ARCH" ;;
+esac
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+PKG=free-domain-browser-cef
+DEBROOT="$ROOT/deb-$NAME"
+rm -rf "$DEBROOT"
+mkdir -p "$DEBROOT/DEBIAN" "$DEBROOT/usr/lib/$PKG" "$DEBROOT/usr/bin" \
+  "$DEBROOT/usr/share/applications" "$DEBROOT/usr/share/icons/hicolor/512x512/apps" \
+  "$DEBROOT/usr/share/doc/$PKG"
+cp -R "$STAGE"/. "$DEBROOT/usr/lib/$PKG/"
+install -m 644 assets/icon.png "$DEBROOT/usr/share/icons/hicolor/512x512/apps/$PKG.png"
+install -m 644 "$STAGE/free-domain-browser-cef.desktop" "$DEBROOT/usr/share/applications/$PKG.desktop"
+install -m 644 LICENSE "$DEBROOT/usr/share/doc/$PKG/copyright"
+cat > "$DEBROOT/usr/bin/$PKG" <<'WRAPPER'
+#!/bin/sh
+exec /usr/lib/free-domain-browser-cef/free-domain-browser-cef "$@"
+WRAPPER
+chmod 755 "$DEBROOT/usr/bin/$PKG"
+cat > "$DEBROOT/DEBIAN/control" <<CONTROL
+Package: $PKG
+Version: $VERSION
+Section: net
+Priority: optional
+Architecture: $DEBARCH
+Maintainer: Free Domain Browser contributors <noreply@free-domain-name.github.io>
+Depends: libgtk-3-0, libnss3, libgbm1, libasound2
+Description: Browse free domains with registry-first resolution
+ Free Domain Browser is a CEF-based desktop browser for the Free Domain Name
+ registry. It resolves registry names before falling back to public DNS.
+CONTROL
+if command -v dpkg-deb >/dev/null 2>&1; then
+  DEB="target/$NAME.deb"
+  rm -f "$DEB"
+  dpkg-deb --build "$DEBROOT" "$DEB" >/dev/null
+  echo "wrote $DEB"
+else
+  echo "dpkg-deb not found; Debian tree left at $DEBROOT" >&2
+fi

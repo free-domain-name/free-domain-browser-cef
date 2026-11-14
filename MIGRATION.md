@@ -83,12 +83,12 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | App icon / bundle metadata | full icon set + category/description/license | full icon set; macOS category/copyright/display/high-res/icon metadata; Windows icon+version resources; Linux desktop entry; bundled LICENSE | match |
 | Review window | dedicated window | dedicated top-level CEF window | match |
 | Mobile (Android/iOS) | supported | not supported by this CEF desktop prototype | not in scope |
-| Installers / release CI | DMG/MSI/NSIS/AppImage/deb | verified macOS `.app` zip + DMG, portable Linux tar.gz, portable Windows zip; tagged CI workflow builds all three | partial (portable archives, not MSI/NSIS/AppImage/deb) |
+| Installers / release CI | DMG/MSI/NSIS/AppImage/deb | verified macOS `.app` zip + DMG, portable Linux tar.gz + `.deb`, portable Windows zip; tagged CI workflow builds all three | partial (portable archives and Linux `.deb`; no MSI/NSIS/AppImage) |
 
 ## Remaining work
 
 - Windows executable resource metadata and Linux distribution packaging are
-  portable archives rather than MSI/NSIS/deb/AppImage installers.
+  portable archives and a Linux `.deb` rather than MSI/NSIS/AppImage installers.
 - Linux/Windows menus use the cross-platform overflow fallback; macOS gets the
   native app/Browser/Edit menu.
 - Mobile targets are outside the CEF desktop prototype; CEF is a desktop
