@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: desktop parity implemented; see `MIGRATION.md` for the remaining structural/release gaps.
+Status: desktop functionality is largely ported; three structural UI gaps and packaging/mobile work remain. See `MIGRATION.md`.
 
 ## Constraints
 
