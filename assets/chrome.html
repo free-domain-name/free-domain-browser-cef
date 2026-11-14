@@ -14,6 +14,8 @@
 #tabs button.active{background:var(--chrome);color:var(--text)}#tabs button:not(.active){background:var(--button);color:var(--muted)}
 #tabs button span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#tabs .close{opacity:.55;font-size:14px;line-height:1}#tabs .close:hover{opacity:1}
 #tabs .plus{border-radius:6px;padding:5px 9px;background:var(--button);color:var(--text)}
+#tabs .tab-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);flex:none}
+#tabs button[data-source=registry] .tab-dot{background:#2dd4bf}#tabs button[data-source=public] .tab-dot{background:#4f7cff}
 .toolbar{height:64px;display:flex;align-items:center;gap:8px;padding:0 12px}
 .brand{font-weight:650;font-size:13px;white-space:nowrap;margin-right:2px}
 .icon{border:0;border-radius:8px;background:var(--button);color:var(--text);padding:7px 10px;font:inherit;cursor:pointer;min-width:34px}
@@ -27,7 +29,8 @@
 #progress{display:none;position:fixed;top:32px;left:0;right:0;height:2px;background:var(--accent);transform-origin:0 50%;animation:fdb-progress 1.1s ease-in-out infinite;z-index:9}
 @keyframes fdb-progress{0%{transform:scaleX(.05)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
 body.loading #progress{display:block}
-#statusbar{height:20px;display:flex;align-items:center;gap:10px;padding:0 10px;background:var(--status);color:var(--muted);font-size:11px;overflow:hidden;white-space:nowrap}#status{flex:1;overflow:hidden;text-overflow:ellipsis}#mode{opacity:.6}#source{display:inline-flex;align-items:center;gap:5px;font-weight:600}#source .dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}#source[data-source=registry] .dot{background:#2dd4bf}#source[data-source=public] .dot{background:#4f7cff}#source[data-source=unavailable] .dot{background:#f59e0b}
+#statusBubble{position:fixed;left:8px;bottom:8px;z-index:30;max-width:62%;background:var(--chrome);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;box-shadow:0 6px 22px rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s ease}
+#statusBubble[hidden]{display:none}
 body.compact #tabs{height:26px}body.compact .toolbar{padding:0 8px;gap:5px}body.compact .icon{padding:6px 8px;min-width:30px}body.compact #url{padding:6px 9px}body.compact .go{padding:6px 11px}
 body.compact #progress{top:26px}body.compact #tabs button{padding:2px 6px;font-size:11px}
 body.loading #url{opacity:.85}
@@ -50,17 +53,15 @@ body.loading #url{opacity:.85}
   <button id="go" aria-label="Go" class="go" title="Go">Go</button>
 </div>
 <div id="progress"></div>
-<div id="statusbar"><span id="source" data-source="idle"><span class="dot"></span><span id="sourceText">Ready</span></span><span id="status" aria-live="polite">Ready</span><span id="mode">CEF</span></div>
+<div id="statusBubble" hidden></div>
 <script>
 window.__fdbInitialUrl=__FDB_INITIAL_URL__;
 var tabs=[{uid:0,url:window.__fdbInitialUrl||'',label:'New Tab'}];
-var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;var currentSettings={theme:'system',density:'comfortable',skin:'default',custom_css:''};
+var active=0;var lastClosed=null;var nextUid=1;var statusBubbleTimer=null;var currentSettings={theme:'system',density:'comfortable',skin:'default',custom_css:''};
 var REVIEW_INDEX_URL='https://raw.githubusercontent.com/free-domain-name/registry/main/reviews/index.json';
-var STUMBLE_URL='https://free-domain-name.github.io/tauri-browser/stumble.html';
 var reviewIndex=null;var reviewPromise=null;var reviewDomain=null;
 function current(){return tabs[active]}
-function setSource(url){var source='public',text='Public';if(/^fdn:/i.test(url||'')){source='registry';text='Registry'}else if(!/^https?:/i.test(url||'')){source='idle';text='Ready'}var el=document.getElementById('source');if(el){el.dataset.source=source;document.getElementById('sourceText').textContent=text}}
-function setStatusText(text){var el=document.getElementById('status');if(el)el.textContent=text||'Ready'}
+function sourceKind(url){var u=url||'';if(/^fdn:/i.test(u))return 'registry';return /^https?:/i.test(u)?'public':'idle'}
 function tabForUid(uid){for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid)return tabs[i]}return null}
 function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function isExternal(url){return /^(https?|fdn):\/\//i.test(url||'')}
@@ -76,6 +77,8 @@ function render(){
   tabs.forEach(function(t,i){
     var b=document.createElement('button');if(i===active)b.className='active';
     b.title=t.url;
+    b.dataset.source=sourceKind(t.url);
+    var dot=document.createElement('span');dot.className='tab-dot';b.appendChild(dot);
     var label=document.createElement('span');label.textContent=t.label||t.url||'New Tab';b.appendChild(label);
     var close=document.createElement('span');close.className='close';close.textContent='×';close.title='Close tab';
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
@@ -84,8 +87,10 @@ function render(){
     box.appendChild(b);
   });
   var plus=document.createElement('button');plus.className='plus';plus.textContent='+';plus.title='New tab (Cmd/Ctrl+T)';plus.onclick=function(){newTab('')};box.appendChild(plus);
-  document.getElementById('url').value=current().url||'';
-  setSource(current().url);setStatusText(current().url||'Ready');
+  // Never clobber text the user is typing (Tauri guards the same way while a
+  // page loads); the field still updates on the next render after blur.
+  var field=document.getElementById('url');
+  if(document.activeElement!==field)field.value=current().url||'';
   var t=current();
   document.getElementById('back').disabled=!t.canBack;
   document.getElementById('forward').disabled=!t.canForward;
@@ -172,28 +177,41 @@ window.fdbSettingsOpen=function(open){var b=document.getElementById('settings');
 window.fdbChatPanel=function(open){var b=document.getElementById('chat');if(b){b.classList.toggle('active',!!open);b.setAttribute('aria-expanded',open?'true':'false')}};
 window.fdbCycleTab=function(delta){if(!tabs.length)return;active=(active+(delta||1)+tabs.length)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})};
 window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active=index;render();send({cmd:'select_tab',uid:current().uid})};
+// Modern-browser behavior: no persistent status bar. Hover targets, engine
+// statuses and toasts land in a transient bottom-left bubble that hides
+// itself ~3 s after the last update (an empty message hides it immediately,
+// e.g. when the pointer leaves a link).
 window.fdbStatus=function(text){
-  if(!showStatus)return;
-  setStatusText(text||'Ready');
-  clearTimeout(window.__fdbStatusTimer);
-  if(text)window.__fdbStatusTimer=setTimeout(function(){setStatusText((current()&&current().url)||'Ready')},5000);
+  var el=document.getElementById('statusBubble');
+  if(!el)return;
+  text=String(text==null?'':text).trim();
+  if(!text){clearTimeout(statusBubbleTimer);el.hidden=true;return}
+  el.textContent=text;el.hidden=false;el.style.opacity='1';
+  clearTimeout(statusBubbleTimer);
+  statusBubbleTimer=setTimeout(function(){
+    el.style.opacity='0';
+    setTimeout(function(){el.hidden=true;el.style.opacity='1'},200);
+  },3000);
 };
 window.fdbSettings=function(s){
   currentSettings={theme:s.theme||'system',density:s.density||'comfortable',skin:s.skin||'default',custom_css:s.custom_css||''};
-  showStatus=!!s.show_status;
   document.body.classList.toggle('compact',s.density==='compact'||!!s.compact_tabs);
   applyTheme();
-  if(!showStatus){var el=document.getElementById('status');if(el)el.style.display='none'}
 };
 window.fdbLoad=function(loading,back,forward,uid){
   var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;
   if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.classList.toggle('loading',!!loading)}
 };
 window.fdbUpdate=function(url,title,uid){
-  var t=tabForUid(uid);if(!t)return;if(url)t.url=url;if(title)t.label=title;
+  var t=tabForUid(uid);if(!t)return;
+  if(typeof url==='string')t.url=url;else if(url)t.url=url;
+  if(title)t.label=title;
+  // The security indicator and visible state belong to the active tab:
+  // a background tab finishing its load must not flip the lock icon here.
+  if(uid!==current().uid)return;
   var sec=document.getElementById('sec');
   if(sec){sec.textContent=(url&&url.indexOf('https://')===0)?'🔒':(url&&url.indexOf('http://')===0)?'⚠':'📄'}
-  if(uid===current().uid){render();setSource(url);setStatusText(url||'Ready')}
+  render();
   syncReview();
 };
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});

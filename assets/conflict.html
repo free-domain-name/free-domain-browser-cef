@@ -9,5 +9,9 @@ code{color:#8fb3ff}</style><title>Choose a site</title></head><body><div class="
 <p>This name exists in both the Free Domain Registry and public DNS. Choose where to go.</p>
 <a href="{{registry_choice}}">Open registry site</a>
 <a class="secondary" href="{{public_choice}}">Open public website</a>
+<p style="margin:12px 8px 0 0"><a class="secondary" id="cancel" href="#" style="background:none;border:0;color:#9dbcff;padding:6px 0">Cancel — decide later</a></p>
 <p style="font-size:12px;margin-top:24px">Registry target: <code>{{target}}</code></p>
+<script>
+document.getElementById('cancel').onclick=function(e){e.preventDefault();console.log('fdb:'+JSON.stringify({cmd:'back'}))};
+</script>
 </div></body></html>

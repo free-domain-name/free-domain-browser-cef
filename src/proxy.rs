@@ -339,14 +339,16 @@ async fn fetch(
         .map_err(|_| "unsupported method".to_string())?;
     let mut builder = state.http.request(method, &upstream);
     builder = builder.header("Host", upstream_host);
-    let settings = crate::settings::load();
     for (name, value) in &request.headers {
         if skip_request_header(name) {
             continue;
         }
-        if name.eq_ignore_ascii_case("cookie") && !settings.cookies {
-            continue;
-        }
+        // Every request reaching this proxy is same-origin under
+        // `{domain}.fdn.localhost`, so `Cookie` always rides along. Third-party
+        // blocking is enforced once, on the CEF handler path
+        // (`on_before_resource_load`), keeping both paths consistent with the
+        // "Block third-party cookies" checkbox. (Previously the checkbox was
+        // read inverted here and dropped cookies exactly when blocking was off.)
         if name.eq_ignore_ascii_case("origin") || name.eq_ignore_ascii_case("referer") {
             let rewritten = rewrite_referrer(value, &target, domain, state.port);
             builder = builder.header(name, rewritten);
@@ -354,7 +356,7 @@ async fn fetch(
         }
         builder = builder.header(name, value);
     }
-    if settings.dnt {
+    if crate::settings::load().dnt {
         builder = builder.header("DNT", "1");
     }
     if !request.body.is_empty() {
@@ -544,6 +546,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::{
         display_url, normalize_path, proxy_domain, proxy_url_for_port, sanitize_cookie,
+        skip_request_header, skip_response_header,
     };
 
     #[test]
@@ -563,5 +566,15 @@ mod tests {
         assert_eq!(normalize_path(""), "/");
         assert_eq!(normalize_path("a"), "/a");
         assert_eq!(sanitize_cookie("a=1; Domain=x; Secure; Path=/"), "a=1; Path=/");
+    }
+
+    // Every proxy request is same-origin, so `Cookie` must survive the proxy
+    // path; third-party blocking lives only in the CEF request handler.
+    #[test]
+    fn cookies_are_never_stripped_by_the_proxy() {
+        assert!(!skip_request_header("cookie"));
+        assert!(!skip_response_header("set-cookie"));
+        // Sanitization still drops the domain/secure attributes.
+        assert_eq!(sanitize_cookie("a=1; domain=.example.com; Secure"), "a=1");
     }
 }

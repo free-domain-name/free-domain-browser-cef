@@ -19,7 +19,7 @@ Status: desktop functionality is ported, including settings/chat overlays, a reu
 - Each tab owns a stable BrowserView, so switching preserves page state/history;
   tabs are created and destroyed dynamically with no fixed cap.
 - `fdn-core` resolves registry/public names; navigation post is on the CEF UI thread.
-- Settings and chat are internal `file://` pages; settings persist in `localStorage`. Settings opens as a fixed overlay below the chrome and chat as a 420 px side panel.
+- Settings and chat are internal `file://` pages; settings persist in the Rust settings store (`config-dir/settings.json`) and hydrate through URL parameters. Settings opens as a fixed overlay below the chrome and chat as a 420 px side panel.
 - Chat has a working iroh backend, profile cards, ignore/clear controls, per-tab enablement and a compact side-panel drawer.
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
 - Reviews open in a reusable dedicated CEF top-level window; system/light/dark theme, all seven skins and compact density reach the chrome and internal pages.
@@ -91,16 +91,21 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] JSON settings store (`home`, `cookies`, `dnt`) with sandbox-safe fallback.
 - [x] `save_settings` bridge command; settings page loads values from the store
   through query parameters.
-- [x] Move the remaining appearance fields off `localStorage` (compact tabs,
-  status visibility).
+- [x] All fields live on the store: the appearance fields hydrate from query
+  parameters and save back through the bridge (completed in plan2; the
+  parallel `localStorage['fdb-settings']` copy is gone).
 - [x] Apply appearance settings to the chrome UI; cookies/DNT are applied per
   request.
-- [x] Settings drive the loopback proxy cookie/DNT/cache behavior.
+- [x] Settings drive the loopback proxy cookie/DNT behavior (cookie semantics
+  fixed in plan2: the proxy always forwards same-origin `Cookie`; third-party
+  blocking is enforced once in the CEF request handler. There is no proxy HTTP
+  cache; only the registry request cache is cleared).
 - Tests: round-trip save/load; empty home falls back to default.
 
 ## Phase 6 — chat (ported client)
 
-- [x] Functional local chat UI: rooms, send, per-room localStorage history.
+- [x] Functional local chat UI: rooms, send, session-only in-memory message
+  history (200-message ring, matching Tauri; no per-room localStorage history).
 - [x] Port `chat/{config,identity,protocol,policy,room,settings,transport}.rs`
   and the iroh transport into `src/chat` with a UI-free event sink.
 - [x] Chat page uses `fdbchat:` commands (`snapshot`, `confirm_age`, `enable`,

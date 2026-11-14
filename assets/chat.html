@@ -187,6 +187,17 @@ $('panelMenu').onclick=function(){document.body.classList.toggle('showAside')};
 $('panelMenuClose').onclick=function(){document.body.classList.remove('showAside')};
 $('panelClose').onclick=function(){if(state.enabled)send({cmd:'disable'});setTimeout(function(){send({cmd:'close_panel'})},80)};
 window.fdbPanelClose=function(){if(state.enabled)send({cmd:'disable'})};
+// Instant push from the handler (chat://state|message|presence|error); the
+// 3 s snapshot poll below stays only as a fallback.
+window.fdbChatEvent=function(ev){
+  var payload={};
+  if(typeof ev==='string'){try{payload=JSON.parse(ev||'{}')}catch(e){return}}else{payload=ev||{}}
+  if(payload.kind==='chat://error'&&payload.data){
+    var data={};try{data=JSON.parse(payload.data)}catch(e){}
+    if(data&&data.message)setConnection('Chat: '+data.message);
+  }
+  refresh();
+};
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('age').offsetParent&&$('profileView').hidden)$('panelClose').click()});
 window.fdbChatPanelOpen=function(){if(PANEL&&window.innerWidth<600){document.body.classList.remove('showAside')}};
 window.addEventListener('pagehide',function(){if(state.enabled)send({cmd:'disable'})});

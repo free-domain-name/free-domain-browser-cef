@@ -29,7 +29,6 @@ static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock:
 
 enum BridgeAction {
     Navigate(i32, String),
-    Page(i32, String),
     SaveSettings(crate::settings::Settings),
     BrowserCommand(i32, BrowserCommandKind),
     Home(i32),
@@ -42,7 +41,6 @@ enum BridgeAction {
     OpenSettings,
     CloseSettings,
     ToggleChatPanel,
-    CloseChatPanel,
     Review(String),
     About,
     FocusChrome,
@@ -62,7 +60,9 @@ struct Tab {
     view: BrowserView,
 }
 
-const CHROME_HEIGHT: i32 = 116;
+// Chrome page layout: tab strip (32) + toolbar (64). The status bar strip is
+// gone, so the content view starts right below the address bar.
+const CHROME_HEIGHT: i32 = 79;
 const CHAT_PANEL_WIDTH: i32 = 420;
 
 pub struct SimpleHandler {
@@ -139,7 +139,6 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
             if settings.compact_tabs { "1" } else { "0" },
         )
         .append_pair("density", &settings.density)
-        .append_pair("show_status", if settings.show_status { "1" } else { "0" })
         .append_pair("theme", &settings.theme)
         .append_pair("skin", &settings.skin)
         .append_pair("custom_css", &settings.custom_css)
@@ -444,7 +443,6 @@ impl SimpleHandler {
         let payload = serde_json::json!({
             "compact_tabs": settings.compact_tabs,
             "density": settings.density,
-            "show_status": settings.show_status,
             "theme": settings.theme,
             "skin": settings.skin,
             "custom_css": settings.custom_css,
@@ -691,6 +689,26 @@ impl SimpleHandler {
         self.hide_chat_panel();
     }
 
+    /// Every view currently presenting the chat page: the chat panel itself
+    /// plus any tab hosting chat.html. Chat event pushes fan out to all of
+    /// them so background chat tabs stay fresh too.
+    pub(crate) fn chat_page_browsers(&self) -> Vec<Browser> {
+        let mut browsers = Vec::new();
+        if let Some(view) = self.chat_panel.as_ref() {
+            if let Some(browser) = view.browser() {
+                browsers.push(browser);
+            }
+        }
+        for uid in &self.chat_tabs {
+            if let Some(tab) = self.tabs.iter().find(|tab| tab.uid == *uid) {
+                if let Some(browser) = tab.view.browser() {
+                    browsers.push(browser);
+                }
+            }
+        }
+        browsers
+    }
+
     fn chrome_state(&self) {
         self.chrome_execute(0, &format!("window.fdbSettingsOpen&&fdbSettingsOpen({})", self.settings_open));
         self.chrome_execute(0, &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open));
@@ -915,19 +933,25 @@ impl SimpleHandler {
         if self.chrome_browser_id == Some(browser.identifier()) {
             return 0;
         }
-        let Some(target_url) = target_url else { return 0; };
+        let Some(target_url) = target_url else { return 1; };
         let url = target_url.to_string();
-        if url.is_empty()
-            || !(url.starts_with("http://") || url.starts_with("https://") || url.starts_with("fdn://"))
-        {
-            return 0;
-        }
-        if let Some(instance) = SimpleHandler::instance() {
-            let payload = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".to_string());
-            let script = format!("window.fdbNewTabUrl&&fdbNewTabUrl({payload})");
-            if let Ok(inner) = instance.lock() {
-                inner.chrome_execute(0, &script);
+        if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("fdn://") {
+            if let Some(instance) = SimpleHandler::instance() {
+                let payload = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".to_string());
+                let script = format!("window.fdbNewTabUrl&&fdbNewTabUrl({payload})");
+                if let Ok(inner) = instance.lock() {
+                    inner.chrome_execute(0, &script);
+                }
             }
+            return 1;
+        }
+        // Tauri parity: every window.open is denied, never a new top-level
+        // window. http(s)/fdn targets become tabs above; everything else
+        // (about:blank, window.open(""), custom schemes) is simply blocked.
+        // `devtools://` still falls through to the per-popup-view handling so
+        // the debug workflow keeps working.
+        if url.starts_with("devtools://") {
+            return 0;
         }
         1
     }
@@ -1071,7 +1095,6 @@ impl SimpleHandler {
                 crate::settings::Settings::from_value(&value).map(BridgeAction::SaveSettings)
             }
             "chat" => Some(BridgeAction::ToggleChatPanel),
-            "close_chat_panel" => Some(BridgeAction::CloseChatPanel),
             "about" => Some(BridgeAction::About),
             "review" => {
                 let domain = value.get("domain")?.as_str()?.trim();
@@ -1360,7 +1383,6 @@ wrap_display_handler! {
             };
             match action {
                 Some(BridgeAction::Navigate(target_id, url)) => spawn_navigation(target_id, url),
-                Some(BridgeAction::Page(target_id, url)) => post_page(target_id, url),
                 Some(BridgeAction::OpenSettings) => open_settings_overlay(),
                 Some(BridgeAction::CloseSettings) => {
                     if let Some(instance) = SimpleHandler::instance() {
@@ -1380,11 +1402,6 @@ wrap_display_handler! {
                             ));
                     }
                 }
-                Some(BridgeAction::CloseChatPanel) => {
-                    if let Some(instance) = SimpleHandler::instance() {
-                        instance.lock().expect("Failed to lock handler").close_chat_panel();
-                    }
-                }
                 Some(BridgeAction::SaveSettings(settings)) => {
                     let _ = crate::settings::save(&settings);
                     if let Some(instance) = SimpleHandler::instance() {
@@ -1398,7 +1415,17 @@ wrap_display_handler! {
                     post_browser_command(target_id, kind);
                 }
                 Some(BridgeAction::Home(target_id)) => {
-                    spawn_navigation(target_id, crate::settings::load().home);
+                    // Tauri parity: the home button shows the new-tab/start
+                    // page. The `home` setting stays the startup URL only.
+                    // The empty-URL update clears the address bar for the tab
+                    // (the page itself is a file:// URL, which update_chrome
+                    // skips), so the chrome reflects a fresh back-to-start tab.
+                    post_page(target_id, internal_page_url(NEWTAB_HTML));
+                    if let Some(instance) = SimpleHandler::instance() {
+                        if let Ok(mut handler) = instance.lock() {
+                            handler.update_chrome(target_id, Some(""), None);
+                        }
+                    }
                 }
                 Some(BridgeAction::External(url)) => {
                     if let Err(error) = open_external(&url) {
@@ -1521,7 +1548,9 @@ wrap_keyboard_handler! {
             } else if command && (49..=57).contains(&key) {
                 // Handled below so the tab index can be interpolated.
                 None
-            } else if key == 116 {
+            } else if modifiers == 0 && key == 116 {
+                // Plain F5 only: with modifiers it belongs to the OS/macOS and
+                // must not trigger a reload.
                 Some("window.fdbReload&&fdbReload()")
             } else {
                 None
@@ -1819,7 +1848,24 @@ fn toggle_chat_panel() {
         .attach_chat_panel(view);
 }
 
+/// Bridge chat events from the async service into the CEF UI. The chat
+/// singleton starts with a no-op sink (it is created before the handler
+/// exists), so install the real one once, on the first chat command. Events
+/// arrive on the chat runtime threads; `CefPostTask` is safe from any thread.
+fn install_chat_sink() {
+    static INSTALLED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if INSTALLED.set(()).is_err() {
+        return;
+    }
+    let sink: crate::chat::EventCallback = Arc::new(|event: &str, body: String| {
+        let mut task = ChatEventTask::new(event.to_string(), body);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+    crate::chat::service().set_callback(sink);
+}
+
 fn handle_chat_command(browser_id: i32, message: &str) {
+    install_chat_sink();
     let Some(payload) = message.strip_prefix("fdbchat:") else { return; };
     let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else { return; };
     let Some(cmd) = value.get("cmd").and_then(|cmd| cmd.as_str()).map(str::to_string) else { return; };
@@ -1927,8 +1973,13 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
     if let Some(window) = window {
         // Parent the view before its browser exists. CEF creates the browser
         // once the view is in the view hierarchy, then calls `on_after_created`.
+        //
+        // Append, never insert at index 0: the window runs a vertical box
+        // layout where child order is layout order, so child 0 is the top
+        // slot owned by the chrome view. Inserting at 0 made every new tab
+        // take that slot and push the address bar below the page content.
         let mut child = View::from(&view);
-        window.add_child_view_at(Some(&mut child), 0);
+        window.add_child_view(Some(&mut child));
         // New tabs need the same flex as the initial tab. Without this the box
         // layout squeezes the chrome bar when a second tab is opened.
         if let Some(mut layout) = window.get_layout().and_then(|layout| layout.as_box_layout()) {
@@ -1978,6 +2029,12 @@ fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
     let mut handler = inner.lock().expect("Failed to lock inner");
     if let Some(uid) = handler.active_uid {
         handler.switch_uid(uid);
+    }
+    // Tauri parity: closing the last tab opens a fresh one instead of leaving
+    // an empty page area behind. The tab strip lives in the chrome, so the new
+    // tab must be created through the chrome's own JS hook.
+    if handler.tabs.is_empty() && !handler.is_closing {
+        handler.chrome_execute(0, "window.fdbNewTab&&fdbNewTab()");
     }
 }
 
@@ -2202,6 +2259,36 @@ wrap_task! {
             if let Some(frame) = target.main_frame() {
                 let mut frame = frame;
                 frame.execute_java_script(Some(&CefString::from(self.script.as_str())), None, 0);
+            }
+        }
+    }
+}
+
+wrap_task! {
+    struct ChatEventTask {
+        event: String,
+        body: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            // Pushes chat://state|message|presence|error into every view
+            // hosting the chat page as an immediate `fdbChatEvent` script; the
+            // page re-pulls a snapshot so the poll stays as a fallback only.
+            let Some(instance) = SimpleHandler::instance() else { return; };
+            let payload = serde_json::json!({ "kind": self.event, "data": self.body });
+            let Ok(payload) = serde_json::to_string(&payload) else {
+                return;
+            };
+            let script = format!("window.fdbChatEvent&&fdbChatEvent({payload})");
+            let browsers = {
+                let inner = instance.lock().expect("Failed to lock inner");
+                inner.chat_page_browsers()
+            };
+            for browser in browsers {
+                if let Some(frame) = browser.main_frame() {
+                    frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
+                }
             }
         }
     }

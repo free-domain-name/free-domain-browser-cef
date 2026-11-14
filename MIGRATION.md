@@ -65,11 +65,11 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Registry/public conflict | in-chrome modal | `conflict.html` chooser page | match (presentation differs) |
 | Unregistered claim flow | steps, shard path, JSON, copy, GitHub, async recheck | same in `claim.html` | match |
 | Community reviews | index counts + dedicated review window | index counts + dedicated review window | match |
-| Tabs / history | iframe tabs with JS history | native BrowserView per tab with CEF history | match |
-| Reopen tab / numeric tab keys | yes | yes | match |
+| Tabs / history | iframe tabs with JS history (native child-webview path is dormant — `content_mode()` hard-returns `"iframe"`, so CEF's native BrowserView port is the only live native implementation) | native BrowserView per tab with CEF history | match |
+| Reopen tab / numeric tab keys | — (Tauri has neither) | Cmd+Shift+T reopen, Cmd/Ctrl+1..9 keys | CEF ahead |
 | Shortcuts | native menu + chrome keys | chrome keys + content KeyboardHandler (`Cmd/Ctrl+[ ]`, `Alt+←/→`, `Ctrl+Tab`, `Cmd/Ctrl+1..9`) | match |
 | Start page | themed inline page, resolver-routed samples | themed `newtab.html`, resolver-routed samples | match |
-| Status/progress | statusbar pill + URL + mode, progress bar | 20 px statusbar (source + URL + mode) and progress bar | match |
+| Status/progress | statusbar pill + URL + mode, progress bar | transient bottom-left status bubble (hover target / engine status / toasts, auto-hides) and progress bar — persistent bar deliberately removed, modern-browser style | intentional divergence |
 | Theme | system/light/dark across chrome and pages | system/light/dark across chrome and internal pages | match |
 | Density | comfortable/compact across chrome | comfortable/compact chrome and compact internal-page spacing | match |
 | Built-in skins | seven skins across chrome/pages | seven chrome and internal-page palettes | match |

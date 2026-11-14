@@ -52,19 +52,46 @@ pub fn service() -> &'static StdArc<ChatService> {
     })
 }
 
-#[derive(Clone)]
 pub struct AppHandle {
-    callback: EventCallback,
+    callback: std::sync::RwLock<EventCallback>,
+}
+
+// The sink is swapped at runtime (CEF installs the bridge after startup), so
+// clone it from behind the read lock instead of deriving Clone.
+impl Clone for AppHandle {
+    fn clone(&self) -> Self {
+        let callback = self
+            .callback
+            .read()
+            .map(|slot| slot.clone())
+            .unwrap_or_else(|_| StdArc::new(|_, _| {}));
+        Self {
+            callback: std::sync::RwLock::new(callback),
+        }
+    }
 }
 
 impl AppHandle {
     pub fn new(callback: EventCallback) -> Self {
-        Self { callback }
+        Self {
+            callback: std::sync::RwLock::new(callback),
+        }
+    }
+
+    /// Swap the event sink after construction. The CEF browser installs the
+    /// bridge on first use because `SimpleHandler::instance()` does not exist
+    /// yet when the chat singleton is created; until then the default sink is
+    /// a no-op and the UI keeps its 3 s snapshot poll as a fallback.
+    pub fn set_callback(&self, callback: EventCallback) {
+        if let Ok(mut slot) = self.callback.write() {
+            *slot = callback;
+        }
     }
 
     fn emit<T: Serialize>(&self, event: &str, payload: T) -> Result<(), ()> {
         let body = serde_json::to_string(&payload).map_err(|_| ())?;
-        (self.callback)(event, body);
+        let sink = self.callback.read().map_err(|_| ())?;
+        (sink)(event, body);
         Ok(())
     }
 }
@@ -234,6 +261,11 @@ pub struct ChatService {
 }
 
 impl ChatService {
+    /// Swap the event sink after construction (used by the CEF handler).
+    pub fn set_callback(&self, callback: EventCallback) {
+        self.app.set_callback(callback);
+    }
+
     pub fn new(app: AppHandle) -> Self {
         let config_dir = std::env::var_os("FDN_CHAT_CONFIG_DIR")
             .map(std::path::PathBuf::from)
