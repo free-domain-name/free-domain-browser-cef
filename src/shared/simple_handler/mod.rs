@@ -1929,6 +1929,12 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
         // once the view is in the view hierarchy, then calls `on_after_created`.
         let mut child = View::from(&view);
         window.add_child_view_at(Some(&mut child), 0);
+        // New tabs need the same flex as the initial tab. Without this the box
+        // layout squeezes the chrome bar when a second tab is opened.
+        if let Some(mut layout) = window.get_layout().and_then(|layout| layout.as_box_layout()) {
+            layout.set_flex_for_view(Some(&mut child), 1);
+            window.layout();
+        }
         let bounds = SimpleHandler::tab_bounds(&window);
         child.set_bounds(Some(&bounds));
         child.set_visible(0);

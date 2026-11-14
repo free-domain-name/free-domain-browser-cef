@@ -57,22 +57,37 @@ wrap_window_delegate! {
                 }
                 handler.set_window(window.clone());
             }
+            // Add the chrome first so the vertical box layout places it above
+            // the page. The page is still clipped to its own bounds below it.
+            if let Some(chrome) = chrome.as_mut() {
+                window.add_child_view(Some(chrome));
+            }
             for (index, content) in content_views.iter().enumerate() {
                 let mut content = View::from(content);
                 window.add_child_view(Some(&mut content));
                 content.set_visible(if index == 0 { 1 } else { 0 });
             }
-            // Add the chrome last so it is above the content views. On Linux the
-            // content BrowserView's native child can cover the whole window even
-            // when its bounds start below the chrome; keeping chrome on top
-            // preserves the tab strip and address bar.
-            if let Some(chrome) = chrome.as_mut() {
-                window.add_child_view(Some(chrome));
+            // A vertical box layout gives both BrowserViews a real layout pass.
+            // Without it CEF can leave the chrome browser at the full window
+            // height, hiding the page behind an opaque toolbar view.
+            let settings = BoxLayoutSettings {
+                horizontal: 0,
+                default_flex: 0,
+                ..Default::default()
+            };
+            if let Some(mut layout) = window.set_to_box_layout(Some(&settings)) {
+                if let Some(first) = chrome.as_mut() {
+                    layout.set_flex_for_view(Some(first), 0);
+                }
+                for content in content_views.iter() {
+                    let mut content = View::from(content);
+                    layout.set_flex_for_view(Some(&mut content), 1);
+                }
+                window.layout();
             }
 
-            // Use explicit bounds rather than a box layout. With a box layout the
-            // content BrowserView could keep its preferred height of 0 on Linux
-            // (the chrome was visible while the page view had no drawable area).
+            // Keep explicit bounds as well: they give the page view a concrete
+            // drawable size before the first layout pass completes.
             let mut bounds = window.bounds();
             if bounds.width <= 1 || bounds.height <= 1 {
                 bounds = Rect { x: 0, y: 0, width: 1200, height: 820 };
@@ -288,7 +303,7 @@ wrap_browser_process_handler! {
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());
                 let mut chrome_client = self.default_client();
-                let mut chrome_delegate = SimpleBrowserViewDelegate::new(runtime_style, 96);
+                let mut chrome_delegate = SimpleBrowserViewDelegate::new(runtime_style, CHROME_HEIGHT);
                 let chrome_view = browser_view_create(
                     chrome_client.as_mut(),
                     Some(&chrome_url),
