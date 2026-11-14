@@ -1,10 +1,42 @@
-<html><head><meta charset="utf-8"><style>
-body{margin:0;background:#10151f;color:#e8edf7;font:15px -apple-system,system-ui;padding:64px}
-.card{max-width:680px;margin:auto;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:32px}
-h1{margin:0 0 8px;font-size:24px}p{color:#aebbd0;line-height:1.5}
-a{display:inline-block;margin:12px 8px 0 0;padding:10px 16px;border-radius:9px;text-decoration:none;background:#4f7cff;color:#fff}
-a.secondary{background:#2a3446;color:#dce6f7}</style><title>Unregistered domain</title></head><body><div class="card">
-<h1>{{domain}}</h1><p>{{message}}</p>
-<a href="https://github.com/free-domain-name/registry">Claim on GitHub</a>
-<a class="secondary" href="{{public_url}}">Try public website</a>
+<html><head><meta charset="utf-8"><title>Unregistered domain</title><style>
+*{box-sizing:border-box}body{margin:0;background:#10151f;color:#e8edf7;font:15px -apple-system,system-ui;padding:48px}
+.card{max-width:760px;margin:auto;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:32px}
+h1{margin:0 0 6px;font-size:26px;word-break:break-all}.badge{display:inline-block;background:#22304a;color:#9dbcff;border-radius:999px;padding:3px 10px;font-size:11px;vertical-align:middle;margin-left:8px}
+p{color:#aebbd0;line-height:1.55}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+button,a.button{display:inline-block;padding:10px 16px;border:0;border-radius:9px;text-decoration:none;background:#4f7cff;color:#fff;font:inherit;cursor:pointer}
+button.secondary,a.button.secondary{background:#2a3446;color:#dce6f7}button.link{background:none;color:#9dbcff;padding:6px 0}
+pre{background:#111722;border:1px solid #2b3548;border-radius:10px;padding:16px;color:#c8d4ea;overflow:auto;font-size:12px;line-height:1.5}
+code{color:#8fb3ff}.path{color:#c8d4ea;background:#111722;border:1px solid #2b3548;border-radius:8px;padding:8px 10px;font-size:12px;word-break:break-all}
+#status{color:#8d9ab1;font-size:12px;margin-left:8px}
+</style></head><body><div class="card">
+<h1>{{domain}}<span class="badge">{{badge}}</span></h1>
+<p>{{message}}</p>
+<p class="path">{{path}}</p>
+<pre id="json">{{json}}</pre>
+<div class="row">
+<button data-external="{{register_url}}">Register on GitHub</button>
+<button class="secondary" id="copy">Copy JSON</button>
+<button class="secondary" data-external="{{repo_url}}">Registry repo</button>
+<button class="link" id="recheck">Recheck</button>
+<span id="status"></span>
+</div>
+<p style="margin-top:22px"><a class="button secondary" href="{{public_url}}">Try public website</a></p>
+<script>
+function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
+document.querySelectorAll('[data-external]').forEach(function(el){el.onclick=function(){send({cmd:'external',url:el.getAttribute('data-external')})}});
+document.getElementById('copy').onclick=function(){
+  var text=document.getElementById('json').textContent;
+  function done(ok){document.getElementById('status').textContent=ok?'Copied':'Copy failed'}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true)}).catch(function(){done(false)})}
+  else{
+    var area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();
+    var ok=false;try{ok=document.execCommand('copy')}catch(e){}document.body.removeChild(area);done(ok);
+  }
+};
+document.getElementById('recheck').onclick=function(){
+  document.getElementById('status').textContent='Rechecking…';
+  send({cmd:'clear_cache'});
+  setTimeout(function(){location.href='fdn://' + {{domain_js}};},150);
+};
+</script>
 </div></body></html>

@@ -1,21 +1,26 @@
-<html><head><meta charset="utf-8"><style>
+<html><head><meta charset="utf-8"><title>Settings</title><style>
 *{box-sizing:border-box}body{margin:0;background:#141821;color:#e8edf7;font:14px -apple-system,system-ui;padding:32px 40px}
 h1{font-size:22px;margin:0 0 4px}p.sub{margin:0 0 28px;color:#93a0b8}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px}
 .card{background:#1d2430;border:1px solid #2b3548;border-radius:12px;padding:18px}
 .card h2{font-size:14px;margin:0 0 12px;color:#c8d4ea;text-transform:uppercase;letter-spacing:.06em}
 label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;color:#c6d0e2}
-input[type=text]{width:100%;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:9px 11px;font:inherit}
+input[type=text],select{width:100%;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:9px 11px;font:inherit}
 input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
+textarea{width:100%;min-height:120px;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:10px;font:12px ui-monospace,menlo,monospace;resize:vertical}
 .note{color:#8290a8;font-size:12px;line-height:1.5;margin-top:10px}
 .pill{display:inline-block;background:#22304a;color:#9dbcff;border-radius:999px;padding:3px 9px;font-size:11px}
-</style><title>Settings</title></head><body>
+.wide{grid-column:1/-1}
+button{background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18px;font:inherit;cursor:pointer}
+#status{color:#8d9ab1;font-size:12px;margin-left:12px}
+</style></head><body>
 <h1>Settings</h1><p class="sub">Free Domain Browser · CEF prototype</p>
 <div class="grid">
 <div class="card"><h2>Appearance</h2>
+<label>Theme <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
 <label>Compact tab strip <input id="compact_tabs" type="checkbox"></label>
 <label>Show status messages <input id="show_status" type="checkbox" checked></label>
-<div class="note">Applied to the chrome on the next chrome reload or settings save.</div>
+<div class="note">Theme and custom CSS apply immediately after saving.</div>
 </div>
 <div class="card"><h2>Navigation</h2>
 <label>Home page</label><input id="home" type="text" value="https://yahoo.com/">
@@ -23,14 +28,21 @@ input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
 </div>
 <div class="card"><h2>Registry</h2><div class="note">Source <span class="pill">GitHub raw</span></div><div class="note">Negative lookup cache: 5 minutes.<br>Record TTL capped at 24 hours.</div></div>
 <div class="card"><h2>Privacy</h2><label>Block third-party cookies <input id="cookies" type="checkbox" checked></label><label>Send do-not-track <input id="dnt" type="checkbox"></label></div>
+<div class="card wide"><h2>Custom chrome CSS</h2>
+<textarea id="custom_css" maxlength="24000" placeholder="/* optional: override chrome variables, e.g. :root{--accent:#ff6600} */"></textarea>
+<div class="note">Applied to the browser chrome only. Maximum 24,000 characters.</div>
 </div>
-<button id="save" style="margin-top:20px;background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18px;font:inherit;cursor:pointer">Save settings</button>
-<span id="status" style="margin-left:12px;color:#8d9ab1;font-size:12px"></span>
+</div>
+<button id="save" style="margin-top:20px">Save settings</button><span id="status"></span>
 <script>
-var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),compact_tabs:document.getElementById('compact_tabs'),show_status:document.getElementById('show_status')};
-try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;if(saved.compact_tabs!==undefined)fields.compact_tabs.checked=saved.compact_tabs;if(saved.show_status!==undefined)fields.show_status.checked=saved.show_status;}catch(e){}
-try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('compact_tabs'))fields.compact_tabs.checked=q.get('compact_tabs')==='1';if(q.has('show_status'))fields.show_status.checked=q.get('show_status')==='1';}catch(e){}
+var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),compact_tabs:document.getElementById('compact_tabs'),show_status:document.getElementById('show_status'),theme:document.getElementById('theme'),custom_css:document.getElementById('custom_css')};
+try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;if(saved.compact_tabs!==undefined)fields.compact_tabs.checked=saved.compact_tabs;if(saved.show_status!==undefined)fields.show_status.checked=saved.show_status;if(saved.theme)fields.theme.value=saved.theme;if(typeof saved.custom_css==='string')fields.custom_css.value=saved.custom_css;}catch(e){}
+try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('compact_tabs'))fields.compact_tabs.checked=q.get('compact_tabs')==='1';if(q.has('show_status'))fields.show_status.checked=q.get('show_status')==='1';if(q.has('theme'))fields.theme.value=q.get('theme');if(q.has('custom_css'))fields.custom_css.value=q.get('custom_css');}catch(e){}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
-document.getElementById('save').onclick=function(){var data={cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,show_status:fields.show_status.checked};send(data);document.getElementById('status').textContent='Saved';};
+document.getElementById('save').onclick=function(){
+  var data={cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,show_status:fields.show_status.checked,theme:fields.theme.value,custom_css:fields.custom_css.value};
+  try{localStorage.setItem('fdb-settings',JSON.stringify(data))}catch(e){}
+  send(data);document.getElementById('status').textContent='Saved';
+};
 </script>
 </body></html>

@@ -34,6 +34,10 @@ enum BridgeAction {
     NewTab(u64, String),
     CloseTab(u64),
     SelectTab(u64),
+    External(String),
+    ClearCache,
+    Recheck(i32, String),
+    FocusChrome,
     Quit,
 }
 
@@ -99,6 +103,8 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
             if settings.compact_tabs { "1" } else { "0" },
         )
         .append_pair("show_status", if settings.show_status { "1" } else { "0" })
+        .append_pair("theme", &settings.theme)
+        .append_pair("custom_css", &settings.custom_css)
         .finish();
     format!("{base}?{query}")
 }
@@ -171,15 +177,52 @@ fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
 }
 
 fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
+    let path = fdn_core::RegistryClient::shard_path(&outcome.domain);
+    let record = serde_json::json!({
+        "domain": outcome.domain,
+        "target_url": "http://203.0.113.10:8080",
+        "owner_github": "your-github-handle",
+        "ttl": 3600,
+    });
+    let json = serde_json::to_string_pretty(&record).unwrap_or_default() + "\n";
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("filename", &path)
+        .append_pair("value", &json)
+        .finish();
+    let register_url = format!(
+        "https://github.com/free-domain-name/registry/new/main?{query}"
+    );
+    let free_namespace = outcome.domain == "fdn" || outcome.domain.ends_with(".fdn");
+    let badge = if free_namespace { "Available" } else { "Unregistered" };
+    let domain_js = serde_json::to_string(&outcome.domain).unwrap_or_else(|_| "\"\"".into());
     CLAIM_HTML
-        .replace("{{domain}}", &outcome.domain)
+        .replace("{{domain}}", &html_escape(&outcome.domain))
+        .replace("{{domain_js}}", &domain_js)
+        .replace("{{badge}}", badge)
         .replace(
             "{{message}}",
-            outcome.message.as_deref().unwrap_or("This name is not registered yet."),
+            &html_escape(
+                outcome
+                    .message
+                    .as_deref()
+                    .unwrap_or("This name is not registered yet."),
+            ),
+        )
+        .replace("{{path}}", &html_escape(&path))
+        .replace("{{json}}", &html_escape(&json))
+        .replace("{{register_url}}", &html_escape(&register_url))
+        .replace(
+            "{{repo_url}}",
+            "https://github.com/free-domain-name/registry",
         )
         .replace(
             "{{public_url}}",
-            outcome.public_url.as_deref().unwrap_or("https://github.com/free-domain-name/registry"),
+            &html_escape(
+                outcome
+                    .public_url
+                    .as_deref()
+                    .unwrap_or("https://github.com/free-domain-name/registry"),
+            ),
         )
 }
 
@@ -296,11 +339,19 @@ impl SimpleHandler {
         frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
     }
 
+    fn chrome_toast(&self, text: &str) {
+        let message = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
+        let script = format!("window.fdbStatus&&fdbStatus({message})");
+        self.chrome_execute(0, &script);
+    }
+
     fn apply_settings(&self) {
         let settings = crate::settings::load();
         let payload = serde_json::json!({
             "compact_tabs": settings.compact_tabs,
             "show_status": settings.show_status,
+            "theme": settings.theme,
+            "custom_css": settings.custom_css,
         });
         let script = format!("window.fdbSettings&&fdbSettings({payload})");
         self.chrome_execute(0, &script);
@@ -318,6 +369,23 @@ impl SimpleHandler {
         let Some(frame) = chrome.main_frame() else { return; };
         let mut frame = frame;
         frame.execute_java_script(Some(&CefString::from(script)), None, 0);
+    }
+
+    fn chrome_focus(&self, script: &str) {
+        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        let mut chrome = self
+            .browser_list
+            .iter()
+            .find(|browser| browser.identifier() == chrome_id)
+            .cloned();
+        let Some(chrome) = chrome.as_mut() else { return; };
+        if let Some(host) = chrome.host() {
+            host.set_focus(1);
+        }
+        if let Some(frame) = chrome.main_frame() {
+            let mut frame = frame;
+            frame.execute_java_script(Some(&CefString::from(script)), None, 0);
+        }
     }
 
     fn tab(&self, uid: u64) -> Option<&Tab> {
@@ -750,6 +818,24 @@ impl SimpleHandler {
             "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
             "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
             "home" => Some(BridgeAction::Home(target_id)),
+            "external" => {
+                let url = value.get("url")?.as_str()?.trim();
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(BridgeAction::External(url.to_string()))
+                }
+            }
+            "clear_cache" => Some(BridgeAction::ClearCache),
+            "recheck" => {
+                let domain = value.get("domain")?.as_str()?.trim();
+                if domain.is_empty() {
+                    None
+                } else {
+                    Some(BridgeAction::Recheck(target_id, domain.to_string()))
+                }
+            }
+            "focus_chrome" => Some(BridgeAction::FocusChrome),
             "quit" => Some(BridgeAction::Quit),
             _ => None,
         }
@@ -817,6 +903,10 @@ wrap_client! {
 
         fn request_handler(&self) -> Option<RequestHandler> {
             Some(SimpleHandlerRequestHandler::new(self.inner.clone()))
+        }
+
+        fn keyboard_handler(&self) -> Option<KeyboardHandler> {
+            Some(SimpleHandlerKeyboardHandler::new(self.inner.clone()))
         }
     }
 }
@@ -895,6 +985,33 @@ wrap_display_handler! {
                 Some(BridgeAction::Home(target_id)) => {
                     spawn_navigation(target_id, crate::settings::load().home);
                 }
+                Some(BridgeAction::External(url)) => {
+                    if let Err(error) = open_external(&url) {
+                        if let Some(instance) = SimpleHandler::instance() {
+                            instance
+                                .lock()
+                                .expect("Failed to lock handler")
+                                .chrome_toast(&format!("Could not open browser: {error}"));
+                        }
+                    }
+                }
+                Some(BridgeAction::ClearCache) => {
+                    clear_registry_cache();
+                    if let Some(instance) = SimpleHandler::instance() {
+                        instance
+                            .lock()
+                            .expect("Failed to lock handler")
+                            .chrome_toast("Registry cache cleared");
+                    }
+                }
+                Some(BridgeAction::Recheck(target_id, domain)) => {
+                    clear_registry_cache();
+                    spawn_navigation(target_id, format!("fdn://{domain}"));
+                }
+                Some(BridgeAction::FocusChrome) => {
+                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.chrome_focus("window.fdbFocusUrl&&fdbFocusUrl()");
+                }
                 Some(BridgeAction::NewTab(uid, url)) => {
                     let url = if url.trim().is_empty() {
                         internal_page_url(NEWTAB_HTML)
@@ -915,6 +1032,95 @@ wrap_display_handler! {
                     inner.close_all_browsers(true);
                 }
                 None => {}
+            }
+            1
+        }
+    }
+}
+
+wrap_keyboard_handler! {
+    struct SimpleHandlerKeyboardHandler {
+        inner: Arc<Mutex<SimpleHandler>>,
+    }
+
+    impl KeyboardHandler {
+        fn on_pre_key_event(
+            &self,
+            browser: Option<&mut Browser>,
+            event: Option<&KeyEvent>,
+            _os_event: *mut u8,
+            _is_keyboard_shortcut: Option<&mut i32>,
+        ) -> i32 {
+            let (Some(browser), Some(event)) = (browser, event) else {
+                return 0;
+            };
+            if event.type_ == KeyEventType::KEYUP || event.type_ == KeyEventType::CHAR {
+                return 0;
+            }
+            let key = event.windows_key_code;
+            let modifiers = event.modifiers;
+            let command = modifiers & (4 | 128) != 0;
+            let alt = modifiers & 8 != 0;
+            let shift = modifiers & 2 != 0;
+
+            // The chrome runs its own keyboard handling and must keep it.
+            {
+                let inner = self.inner.lock().expect("Failed to lock inner");
+                if inner.chrome_browser_id == Some(browser.identifier()) {
+                    return 0;
+                }
+            }
+
+            let script = if command && key == b'T' as i32 {
+                Some(if shift {
+                    "window.fdbRestoreTab&&fdbRestoreTab()"
+                } else {
+                    "window.fdbNewTab&&fdbNewTab()"
+                })
+            } else if command && key == b'W' as i32 {
+                Some("window.fdbCloseActive&&fdbCloseActive()")
+            } else if command && key == b'L' as i32 {
+                // Focus the chrome view itself, not just the input element.
+                if let Some(instance) = SimpleHandler::instance() {
+                    if let Ok(inner) = instance.lock() {
+                        inner.chrome_focus("window.fdbFocusUrl&&fdbFocusUrl()");
+                    }
+                }
+                return 1;
+            } else if command && key == b'R' as i32 {
+                Some("window.fdbReload&&fdbReload()")
+            } else if command && key == 188 {
+                Some("window.fdbOpenSettings&&fdbOpenSettings()")
+            } else if alt && key == 37 {
+                Some("window.fdbBack&&fdbBack()")
+            } else if alt && key == 39 {
+                Some("window.fdbForward&&fdbForward()")
+            } else if modifiers & 4 != 0 && key == 9 {
+                Some(if shift {
+                    "window.fdbCycleTab&&fdbCycleTab(-1)"
+                } else {
+                    "window.fdbCycleTab&&fdbCycleTab(1)"
+                })
+            } else if command && (49..=57).contains(&key) {
+                // Handled below so the tab index can be interpolated.
+                None
+            } else if key == 116 {
+                Some("window.fdbReload&&fdbReload()")
+            } else {
+                None
+            };
+
+            let script = match script {
+                Some(script) => script.to_string(),
+                None if command && (49..=57).contains(&key) => {
+                    format!("window.fdbSelectTab&&fdbSelectTab({})", key - 49)
+                }
+                None => return 0,
+            };
+            if let Some(instance) = SimpleHandler::instance() {
+                if let Ok(inner) = instance.lock() {
+                    inner.chrome_execute(0, &script);
+                }
             }
             1
         }
@@ -1197,6 +1403,34 @@ fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
     }
 }
 
+fn clear_registry_cache() {
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("fdn-registry"));
+}
+
+/// Open an http(s) URL in the user's normal browser. Registry names and the
+/// synthetic internal URLs are deliberately rejected.
+fn open_external(raw: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(raw).map_err(|error| error.to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("external URLs must be http(s)".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", ""]);
+        command
+    };
+    command
+        .arg(parsed.as_str())
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
 fn spawn_navigation(target_id: i32, target: String) {
     // `fdn://name/path` is a convenience alias. The resolver below owns the
     // registry/public decision, so strip the scheme and treat the rest as input.
@@ -1393,7 +1627,7 @@ wrap_task! {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{choice_target, error_page, navigation_key, navigation_target};
+    use super::{choice_target, error_page, navigation_key, navigation_target, open_external};
 
     #[test]
     fn accepts_chrome_navigation() {
@@ -1423,6 +1657,13 @@ mod navigation_tests {
             choice_target("https://fdb.invalid/choose?domain=foo&target=javascript%3Aalert(1)"),
             None
         );
+    }
+
+    #[test]
+    fn external_open_is_limited_to_http_and_https() {
+        assert!(open_external("fdn://hello.fdn").is_err());
+        assert!(open_external("file:///tmp/secret").is_err());
+        assert!(open_external("javascript:alert(1)").is_err());
     }
 
     #[test]

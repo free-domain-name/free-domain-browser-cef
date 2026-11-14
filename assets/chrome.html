@@ -1,51 +1,88 @@
-<html><head><meta charset="utf-8"><title>Free Domain Browser</title><style>body.compact #tabs{height:26px}body.compact #tabs button{padding:2px 5px;font-size:11px}</style></head><body style="margin:0;background:#1f2430;color:#fff;font:13px -apple-system,system-ui;overflow:hidden">
-<div id="tabs" style="height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;box-sizing:border-box;background:#171b24"></div>
-<div style="height:64px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box">
-<b style="font-size:13px">Free Domain Browser</b>
-<button id="back" onclick="send({cmd:'back'})" title="Back" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">◀</button>
-<button id="forward" onclick="send({cmd:'forward'})" title="Forward" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">▶</button>
-<button id="reload" onclick="send({cmd:'reload'})" title="Reload" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 10px;font:inherit">↻</button>
-<span id="sec" title="Connection" style="font-size:12px">🔒</span>
-<input id="url" value="https://yahoo.com/" style="flex:1;background:#fff;color:#111;border:0;border-radius:8px;padding:7px 11px;font:inherit">
-<button onclick="chat()" title="Chat" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">💬</button>
-<button onclick="settings()" title="Settings" style="background:#2a3040;color:#fff;border:0;border-radius:8px;padding:7px 11px;font:inherit">⚙</button>
-<button onclick="go()" style="background:#4f7cff;color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit">Go</button>
+<html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Free Domain Browser</title><style>
+:root{--bg:#171b24;--chrome:#1f2430;--text:#fff;--muted:#9aa4b8;--button:#2a3040;--button-hover:#343c4e;--field:#fff;--field-text:#111;--accent:#4f7cff;--border:#334055;--status:#111722}
+:where(html[data-theme=light]){--bg:#eef1f6;--chrome:#f8f9fb;--text:#141821;--muted:#5d687c;--button:#e4e8ef;--button-hover:#d8dee8;--field:#fff;--field-text:#111;--accent:#2563eb;--border:#c8d1df;--status:#e7ebf2}
+*{box-sizing:border-box}body{margin:0;background:var(--chrome);color:var(--text);font:13px -apple-system,system-ui;overflow:hidden}
+#tabs{height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--bg)}
+#tabs button{border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:220px}
+#tabs button.active{background:var(--chrome);color:var(--text)}#tabs button:not(.active){background:var(--button);color:var(--muted)}
+#tabs button span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#tabs .close{opacity:.55;font-size:14px;line-height:1}#tabs .close:hover{opacity:1}
+#tabs .plus{border-radius:6px;padding:5px 9px;background:var(--button);color:var(--text)}
+.toolbar{height:64px;display:flex;align-items:center;gap:8px;padding:0 12px}
+.brand{font-weight:650;font-size:13px;white-space:nowrap;margin-right:2px}
+.icon{border:0;border-radius:8px;background:var(--button);color:var(--text);padding:7px 10px;font:inherit;cursor:pointer;min-width:34px}
+.icon:hover{background:var(--button-hover)}.icon:disabled{opacity:.4;cursor:default}
+#sec{font-size:12px;min-width:18px;text-align:center}
+#url{flex:1;background:var(--field);color:var(--field-text);border:0;border-radius:8px;padding:7px 11px;font:inherit;outline:none;min-width:80px}
+#url:focus{box-shadow:0 0 0 2px var(--accent)}
+.go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit;cursor:pointer}
+#progress{display:none;position:fixed;top:32px;left:0;right:0;height:2px;background:var(--accent);transform-origin:0 50%;animation:fdb-progress 1.1s ease-in-out infinite;z-index:9}
+@keyframes fdb-progress{0%{transform:scaleX(.05)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
+body.loading #progress{display:block}
+#status{display:none;position:fixed;left:0;bottom:0;right:0;height:20px;line-height:20px;padding:0 12px;background:var(--status);color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.compact #tabs{height:26px}
+body.compact #progress{top:26px}body.compact #tabs button{padding:2px 6px;font-size:11px}
+body.loading #url{opacity:.85}
+</style><style id="customSkinStyle"></style></head><body>
+<div id="tabs"></div>
+<div class="toolbar">
+  <span class="brand">Free Domain Browser</span>
+  <button id="back" class="icon" title="Back (Alt+Left)" disabled>◀</button>
+  <button id="forward" class="icon" title="Forward (Alt+Right)" disabled>▶</button>
+  <button id="reload" class="icon" title="Reload (Cmd/Ctrl+R)">↻</button>
+  <button id="home" class="icon" title="Home">⌂</button>
+  <span id="sec" title="Connection">🔒</span>
+  <input id="url" value="https://yahoo.com/" autocomplete="off" spellcheck="false" placeholder="Search or enter a domain — try hello.fdn">
+  <span id="review" style="display:none;gap:2px;align-items:center"><button id="reviewUp" class="icon" title="Open the community review thread">👍 <span id="reviewUpCount">0</span></button><button id="reviewDown" class="icon" title="Open the community review thread">👎 <span id="reviewDownCount">0</span></button></span>
+  <button id="external" class="icon" title="Open in system browser">↗</button>
+  <button id="clearCache" class="icon" title="Clear registry cache">⌫</button>
+  <button id="chat" class="icon" title="Community chat">💬</button>
+  <button id="settings" class="icon" title="Settings (Cmd/Ctrl+,)">⚙</button>
+  <button id="go" class="go" title="Go">Go</button>
 </div>
-<div id="status" style="display:none;position:fixed;left:0;bottom:0;right:0;height:20px;line-height:20px;padding:0 12px;background:#111722;color:#aebbd0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+<div id="progress"></div>
+<div id="status"></div>
 <script>
 window.__fdbInitialUrl=__FDB_INITIAL_URL__;
 var tabs=[{uid:0,url:window.__fdbInitialUrl||'',label:'New Tab'}];
-var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;
+var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;var currentSettings={theme:'system',custom_css:''};
+var REVIEW_INDEX_URL='https://raw.githubusercontent.com/free-domain-name/registry/main/reviews/index.json';
+var STUMBLE_URL='https://free-domain-name.github.io/tauri-browser/stumble.html';
+var reviewIndex=null;var reviewPromise=null;var reviewDomain=null;
 function current(){return tabs[active]}
 function tabForUid(uid){for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid)return tabs[i]}return null}
 function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function isExternal(url){return /^https?:\/\//i.test(url||'')}
+function applyTheme(){
+  var theme=currentSettings.theme||'system';
+  var dark=theme==='dark'||(theme==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  try{document.getElementById('customSkinStyle').textContent=currentSettings.custom_css||''}catch(e){}
+}
 function render(){
   var box=document.getElementById('tabs');box.innerHTML='';
   tabs.forEach(function(t,i){
-    var b=document.createElement('button');
-    b.style.cssText='border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;'+
-      (i===active?'background:#1f2430;color:#fff':'background:#2a3040;color:#9aa4b8');
+    var b=document.createElement('button');if(i===active)b.className='active';
     b.title=t.url;
-    var label=document.createElement('span');label.textContent=t.label||t.url;b.appendChild(label);
-    var close=document.createElement('span');close.textContent='×';close.title='Close tab';
+    var label=document.createElement('span');label.textContent=t.label||t.url||'New Tab';b.appendChild(label);
+    var close=document.createElement('span');close.className='close';close.textContent='×';close.title='Close tab';
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
     b.onclick=function(){active=i;render();send({cmd:'select_tab',uid:t.uid})};
+    b.onauxclick=function(e){if(e.button===1){e.preventDefault();closeTab(i)}};
     box.appendChild(b);
   });
-  var plus=document.createElement('button');
-  plus.textContent='+';plus.title='New tab';
-  plus.style.cssText='border:0;border-radius:6px;padding:5px 9px;background:#2a3040;color:#fff;font:inherit;cursor:pointer';
-  plus.onclick=function(){newTab('')};
-  box.appendChild(plus);
+  var plus=document.createElement('button');plus.className='plus';plus.textContent='+';plus.title='New tab (Cmd/Ctrl+T)';plus.onclick=function(){newTab('')};box.appendChild(plus);
   document.getElementById('url').value=current().url||'';
   var t=current();
   document.getElementById('back').disabled=!t.canBack;
   document.getElementById('forward').disabled=!t.canForward;
+  document.getElementById('external').disabled=!isExternal(t.url);
+  syncReview();
 }
 function newTab(u){
   var uid=nextUid++;
   tabs.push({uid:uid,url:u||'',label:'New Tab'});active=tabs.length-1;render();
   send({cmd:'new_tab',uid:uid,url:u||''});
+  if(!u)send({cmd:'focus_chrome'});
 }
 function closeTab(i){
   if(tabs.length<2)return;
@@ -58,26 +95,109 @@ function closeTab(i){
   send({cmd:'close_tab',uid:closing.uid});
   send({cmd:'select_tab',uid:current().uid});
 }
-function go(){var u=document.getElementById('url').value.trim();if(!u){send({cmd:'home'});return}if(!/^[a-z]+:\/\//i.test(u))u='https://'+u;navigate(u)}
+function looksLikeSearch(u){return /\s/.test(u)}
+function go(){
+  var u=document.getElementById('url').value.trim();
+  if(!u){send({cmd:'home'});return}
+  if(looksLikeSearch(u)){navigate('https://duckduckgo.com/?q='+encodeURIComponent(u));return}
+  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)&&!/^fdn:/i.test(u))u='https://'+u;
+  navigate(u);
+}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
-window.fdbStatus=function(text){var el=document.getElementById('status');if(!el)return;if(!showStatus){el.style.display='none';return}el.textContent=text||'';el.style.display=text?'block':'none'};
-window.fdbSettings=function(s){showStatus=!!s.show_status;document.body.classList.toggle('compact',!!s.compact_tabs);var el=document.getElementById('status');if(!showStatus&&el)el.style.display='none'};
-window.fdbLoad=function(loading,back,forward,uid){var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.style.cursor=loading?'progress':'default'}};
-window.fdbUpdate=function(url,title,uid){var t=tabForUid(uid);if(!t)return;if(url)t.url=url;if(title)t.label=title;var sec=document.getElementById('sec');if(sec){sec.textContent=url&&url.indexOf('https://')===0?'🔒':url&&url.indexOf('http://')===0?'⚠':'📄'}if(uid===current().uid)render()};
+function external(){var u=current().url;if(isExternal(u))send({cmd:'external',url:u});}
+function clearCache(){send({cmd:'clear_cache'})}
+function reviewHost(){
+  var raw=current().url||'';
+  try{
+    var parsed=new URL(raw);
+    var host=parsed.protocol==='fdn:'?parsed.host:parsed.hostname;
+    host=(host||'').toLowerCase();
+    return host||null;
+  }catch(e){return null}
+}
+function loadReviewIndex(){
+  if(reviewIndex)return Promise.resolve(reviewIndex);
+  if(reviewPromise)return reviewPromise;
+  reviewPromise=fetch(REVIEW_INDEX_URL,{headers:{Accept:'application/vnd.github+json'}})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+    .then(function(data){var map={};(data&&data.domains||[]).forEach(function(entry){if(entry&&entry.domain)map[entry.domain]=entry});reviewIndex=map;return map})
+    .catch(function(){reviewIndex={};return reviewIndex})
+    .then(function(map){reviewPromise=null;syncReview();return map});
+  return reviewPromise;
+}
+function syncReview(){
+  if(!reviewIndex){loadReviewIndex();return}
+  var domain=reviewHost();var entry=domain?reviewIndex[domain]:null;
+  var box=document.getElementById('review');if(!box)return;
+  if(!entry){reviewDomain=null;box.style.display='none';return}
+  reviewDomain=domain;box.style.display='inline-flex';
+  document.getElementById('reviewUpCount').textContent=String(Number(entry.up)||0);
+  document.getElementById('reviewDownCount').textContent=String(Number(entry.down)||0);
+}
+function openReview(){if(!reviewDomain)return;newTab(STUMBLE_URL+'?domain='+encodeURIComponent(reviewDomain))}
+window.fdbNewTab=function(){newTab('')};
+window.fdbRestoreTab=function(){if(!lastClosed)return;var u=lastClosed.url;lastClosed=null;newTab(u||'')};
+window.fdbCloseActive=function(){closeTab(active)};
+window.fdbFocusUrl=function(){document.getElementById('url').focus();document.getElementById('url').select()};
+window.fdbReload=function(){send({cmd:'reload'})};
+window.fdbBack=function(){send({cmd:'back'})};
+window.fdbForward=function(){send({cmd:'forward'})};
+window.fdbOpenSettings=function(){settings()};
+window.fdbCycleTab=function(delta){if(!tabs.length)return;active=(active+(delta||1)+tabs.length)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})};
+window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active=index;render();send({cmd:'select_tab',uid:current().uid})};
+window.fdbStatus=function(text){
+  var el=document.getElementById('status');if(!el)return;
+  if(!showStatus){el.style.display='none';return}
+  el.textContent=text||'';el.style.display=text?'block':'none';
+  if(text){clearTimeout(window.__fdbStatusTimer);window.__fdbStatusTimer=setTimeout(function(){el.style.display='none'},4000)}
+};
+window.fdbSettings=function(s){
+  currentSettings={theme:s.theme||'system',custom_css:s.custom_css||''};
+  showStatus=!!s.show_status;
+  document.body.classList.toggle('compact',!!s.compact_tabs);
+  applyTheme();
+  if(!showStatus){var el=document.getElementById('status');if(el)el.style.display='none'}
+};
+window.fdbLoad=function(loading,back,forward,uid){
+  var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;
+  if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.classList.toggle('loading',!!loading)}
+};
+window.fdbUpdate=function(url,title,uid){
+  var t=tabForUid(uid);if(!t)return;if(url)t.url=url;if(title)t.label=title;
+  var sec=document.getElementById('sec');
+  if(sec){sec.textContent=(url&&url.indexOf('https://')===0)?'🔒':(url&&url.indexOf('http://')===0)?'⚠':'📄'}
+  if(uid===current().uid)render();
+  syncReview();
+};
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
+document.getElementById('back').onclick=function(){send({cmd:'back'})};
+document.getElementById('forward').onclick=function(){send({cmd:'forward'})};
+document.getElementById('reload').onclick=function(){send({cmd:'reload'})};
+document.getElementById('home').onclick=function(){send({cmd:'home'})};
+document.getElementById('go').onclick=go;
+document.getElementById('external').onclick=external;
+document.getElementById('reviewUp').onclick=openReview;
+document.getElementById('reviewDown').onclick=openReview;
+document.getElementById('clearCache').onclick=clearCache;
+document.getElementById('chat').onclick=chat;
+document.getElementById('settings').onclick=settings;
 document.addEventListener('keydown',function(e){
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('')}
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
-  if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})}
-  if((e.metaKey||e.ctrlKey)&&/^[1-9]$/.test(e.key)){e.preventDefault();var n=Math.min(parseInt(e.key,10)-1,tabs.length-1);active=n;render();send({cmd:'select_tab',uid:current().uid})}
-  if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='t'&&lastClosed){
-    e.preventDefault();var u=lastClosed.url;lastClosed=null;newTab(u||'');
-  }
+  var mod=e.metaKey||e.ctrlKey;
+  if(mod&&e.shiftKey&&e.key.toLowerCase()==='t'&&lastClosed){e.preventDefault();var u=lastClosed.url;lastClosed=null;newTab(u||'')}
+  else if(mod&&e.key.toLowerCase()==='t'){e.preventDefault();newTab('')}
+  else if(mod&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
+  else if(mod&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
+  else if(mod&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
+  else if(mod&&e.key===','){e.preventDefault();settings()}
+  else if(e.altKey&&e.key==='ArrowLeft'){e.preventDefault();send({cmd:'back'})}
+  else if(e.altKey&&e.key==='ArrowRight'){e.preventDefault();send({cmd:'forward'})}
+  else if(e.ctrlKey&&e.key==='Tab'){e.preventDefault();active=(active+1)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})}
+  else if(mod&&/^[1-9]$/.test(e.key)){e.preventDefault();var n=Math.min(parseInt(e.key,10)-1,tabs.length-1);active=n;render();send({cmd:'select_tab',uid:current().uid})}
 });
-render();</script>
+if(window.matchMedia){try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme)}catch(e){}}
+applyTheme();render();
+</script>
 </body></html>

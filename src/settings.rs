@@ -11,6 +11,8 @@ pub struct Settings {
     pub dnt: bool,
     pub compact_tabs: bool,
     pub show_status: bool,
+    pub theme: String,
+    pub custom_css: String,
 }
 
 impl Default for Settings {
@@ -21,6 +23,8 @@ impl Default for Settings {
             dnt: false,
             compact_tabs: false,
             show_status: true,
+            theme: "system".to_string(),
+            custom_css: String::new(),
         }
     }
 }
@@ -32,6 +36,16 @@ impl Settings {
         let mut settings: Settings = serde_json::from_value(value.clone()).ok()?;
         if settings.home.trim().is_empty() {
             settings.home = Settings::default().home;
+        }
+        if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
+            settings.theme = Settings::default().theme;
+        }
+        if settings.custom_css.len() > 24_000 {
+            let mut end = 24_000;
+            while !settings.custom_css.is_char_boundary(end) {
+                end -= 1;
+            }
+            settings.custom_css.truncate(end);
         }
         Some(settings)
     }
@@ -79,6 +93,11 @@ pub fn load() -> Settings {
     if primary.exists() {
         return load_from(&primary);
     }
+    // An explicit settings path is an isolation boundary (tests and parallel
+    // profiles). Do not leak the shared fallback file into that profile.
+    if std::env::var_os("FDB_SETTINGS_PATH").is_some() {
+        return Settings::default();
+    }
     load_from(&fallback_path())
 }
 
@@ -102,10 +121,43 @@ mod tests {
             dnt: true,
             compact_tabs: true,
             show_status: false,
+            theme: "dark".into(),
+            custom_css: "body{background:#000}".into(),
         };
         save_to(&path, &settings).unwrap();
         assert_eq!(load_from(&path), settings);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn explicit_path_does_not_read_the_shared_fallback() {
+        let dir = std::env::temp_dir().join(format!("fdb-settings-explicit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        // SAFETY: environment mutation is process-global. This test owns the
+        // variable for its duration and restores it before returning.
+        let previous = std::env::var_os("FDB_SETTINGS_PATH");
+        unsafe {
+            std::env::set_var("FDB_SETTINGS_PATH", &path);
+        }
+        let settings = load();
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var("FDB_SETTINGS_PATH", value),
+                None => std::env::remove_var("FDB_SETTINGS_PATH"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(settings, Settings::default());
+    }
+
+    #[test]
+    fn custom_css_truncates_on_a_char_boundary() {
+        let css = format!("{}é", "a".repeat(23_999));
+        let value = serde_json::json!({"custom_css": css});
+        let settings = Settings::from_value(&value).unwrap();
+        assert!(settings.custom_css.len() <= 24_000);
+        assert!(settings.custom_css.is_char_boundary(settings.custom_css.len()));
     }
 
     #[test]
