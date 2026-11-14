@@ -1,5 +1,5 @@
 use cef::*;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::shared::simple_app::{create_content_view, open_review_window};
@@ -74,6 +74,8 @@ pub struct SimpleHandler {
     chat_panel: Option<BrowserView>,
     settings_open: bool,
     chat_open: bool,
+    chat_panel_uid: Option<u64>,
+    chat_tabs: HashSet<u64>,
     tabs: Vec<Tab>,
     pending_uids: VecDeque<u64>,
     pending_views: Vec<(u64, BrowserView)>,
@@ -364,6 +366,8 @@ impl SimpleHandler {
                 chat_panel: None,
                 settings_open: false,
                 chat_open: false,
+                chat_panel_uid: None,
+                chat_tabs: HashSet::new(),
                 tabs: Vec::new(),
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
@@ -617,6 +621,10 @@ impl SimpleHandler {
             self.close_settings_view();
         }
         self.chat_panel = Some(view);
+        self.chat_panel_uid = self.active_uid;
+        if let Some(uid) = self.active_uid {
+            self.chat_tabs.insert(uid);
+        }
         self.chat_open = true;
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
@@ -640,6 +648,10 @@ impl SimpleHandler {
             let mut view = View::from(view);
             view.set_visible(1);
         }
+        self.chat_panel_uid = self.active_uid;
+        if let Some(uid) = self.active_uid {
+            self.chat_tabs.insert(uid);
+        }
         self.chat_open = true;
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
@@ -650,7 +662,24 @@ impl SimpleHandler {
         }
     }
 
+    /// Hide the panel without disabling its per-tab chat service. This mirrors
+    /// the Tauri UI's syncChatToActiveTab(): the enabled state belongs to the
+    /// tab, while the panel itself is only visible on an enabled tab.
+    pub fn hide_chat_panel(&mut self) {
+        if let Some(view) = self.chat_panel.as_ref() {
+            let mut view = View::from(view);
+            view.set_visible(0);
+        }
+        self.chat_open = false;
+        self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(false)");
+    }
+
     pub fn close_chat_panel(&mut self) {
+        let uid = self.chat_panel_uid.or(self.active_uid);
+        if let Some(uid) = uid {
+            self.chat_tabs.remove(&uid);
+        }
+        self.chat_panel_uid = None;
         if let Some(view) = self.chat_panel.as_ref() {
             if let Some(browser) = view.browser() {
                 if let Some(frame) = browser.main_frame() {
@@ -658,11 +687,8 @@ impl SimpleHandler {
                     frame.execute_java_script(Some(&CefString::from("window.fdbPanelClose&&fdbPanelClose()")), None, 0);
                 }
             }
-            let mut view = View::from(view);
-            view.set_visible(0);
         }
-        self.chat_open = false;
-        self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(false)");
+        self.hide_chat_panel();
     }
 
     fn chrome_state(&self) {
@@ -674,10 +700,16 @@ impl SimpleHandler {
         if self.tab(uid).is_none() {
             return;
         }
+        if self.chat_open && self.chat_panel_uid != Some(uid) {
+            self.hide_chat_panel();
+        }
         self.active_uid = Some(uid);
         for tab in &self.tabs {
             let mut view = View::from(&tab.view);
             view.set_visible(i32::from(tab.uid == uid));
+        }
+        if !self.chat_open && !self.settings_open && self.chat_tabs.contains(&uid) {
+            self.show_chat_panel();
         }
     }
 
@@ -689,6 +721,10 @@ impl SimpleHandler {
     fn take_tab(&mut self, uid: u64) -> Option<(BrowserView, Option<Browser>)> {
         let index = self.tabs.iter().position(|tab| tab.uid == uid)?;
         let tab = self.tabs.remove(index);
+        self.chat_tabs.remove(&uid);
+        if self.chat_panel_uid == Some(uid) {
+            self.chat_panel_uid = None;
+        }
         if self.active_uid == Some(uid) {
             self.active_uid = self
                 .tabs
@@ -1911,6 +1947,9 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
 fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
     let (removed, window) = {
         let mut handler = inner.lock().expect("Failed to lock inner");
+        if handler.chat_panel_uid == Some(uid) {
+            handler.close_chat_panel();
+        }
         let removed = handler.take_tab(uid);
         (removed, handler.window.clone())
     };

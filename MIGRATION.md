@@ -25,8 +25,8 @@ commits are made here.
 - `fdn-core` Linux tests: 14 passed, 5 live-network ignored.
 - Headless Chromium checks of chrome, status bar, start page, settings and chat
   (including compact side-panel mode) with dynamic DOM assertions.
-- Hidden CEF CDP checks of the settings overlay, chat side panel, theme switch,
-  review-window reuse and native menu installation.
+- Hidden CEF CDP checks of the settings overlay, chat side panel hide/show while
+  switching tabs, theme switch, review-window reuse and native menu installation.
 - Linux `.deb` assembly was verified with `dpkg-deb`, and the Windows NSIS
   script was compiled to a PE installer with `makensis` (in Docker).
 - macOS bundle build: `assets/mac/free-domain-browser-cef.icns` copied into

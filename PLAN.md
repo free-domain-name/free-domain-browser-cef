@@ -23,6 +23,7 @@ Status: desktop functionality is ported, including settings/chat overlays, a reu
 - Chat has a working iroh backend, profile cards, ignore/clear controls, per-tab enablement and a compact side-panel drawer.
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
 - Reviews open in a reusable dedicated CEF top-level window; system/light/dark theme, all seven skins and compact density reach the chrome and internal pages.
+- The chat panel tracks the active tab and hides/shows as tabs change.
 - macOS has a native app/Browser/Edit menu; other platforms use the overflow menu.
 - Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
 

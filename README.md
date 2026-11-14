@@ -11,8 +11,9 @@ Implemented: dynamic tabs with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages with a per-session choice
 memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
-opens as an overlay below the chrome, chat as a 420 px side panel with a compact
-drawer, and community reviews open in a reusable dedicated review window.
+opens as an overlay below the chrome, chat as a 420 px side panel that follows
+the active tab (with a compact drawer), and community reviews open in a reusable
+dedicated review window.
 System/light/dark theme, all seven skins and compact density are applied to the
 chrome and internal pages; macOS gets a native app/Browser/Edit menu. The chat
 page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to enable
