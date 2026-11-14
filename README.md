@@ -84,13 +84,13 @@ Portable Linux and Windows archives can be built on their native platforms:
 
 ```sh
 ./scripts/package-linux.sh      # tar.gz, plus .deb when dpkg-deb is available
-./scripts/package-windows.ps1  # zip with CEF runtime
+./scripts/package-windows.ps1  # zip, plus NSIS setup.exe when makensis exists
 ```
 
 Tagged `v*` pushes run `.github/workflows/release.yml`, which builds those
-portable archives and a Linux `.deb` on macOS, Linux, and Windows, and attaches
-them to the GitHub release. These are ad-hoc/unsigned builds, not MSI/NSIS/
-AppImage packages.
+portable archives, a Linux `.deb`, and a Windows NSIS setup when the tools are
+available, and attaches them to the GitHub release. These are ad-hoc/unsigned
+builds; MSI and AppImage packages are not produced.
 
 Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
 helpers need hardened-runtime JIT/library entitlements, so the script signs

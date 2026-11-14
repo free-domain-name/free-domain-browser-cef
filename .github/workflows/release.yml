@@ -45,7 +45,7 @@ jobs:
 
       - name: Install Windows CEF build tools
         if: runner.os == 'Windows'
-        run: choco install cmake ninja -y --no-progress
+        run: choco install cmake ninja nsis -y --no-progress
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -67,6 +67,7 @@ jobs:
             target/FreeDomainBrowser-CEF-linux-*.tar.gz
             target/FreeDomainBrowser-CEF-linux-*.deb
             target/FreeDomainBrowser-CEF-windows-x64.zip
+            target/FreeDomainBrowser-CEF-windows-x64-setup.exe
 
   release:
     needs: package

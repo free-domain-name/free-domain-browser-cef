@@ -16,3 +16,17 @@ $out = "target/$name.zip"
 if (Test-Path $out) { Remove-Item -Force $out }
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $out
 Write-Host "wrote $out"
+
+# Build an NSIS installer when makensis is available; the portable zip remains
+# the fallback on machines without NSIS.
+$nsis = Get-Command makensis -ErrorAction SilentlyContinue
+if ($null -ne $nsis) {
+  $stageAbs = (Resolve-Path $stage).Path
+  $setup = Join-Path (Get-Location) "target/$name-setup.exe"
+  Remove-Item -Force $setup -ErrorAction SilentlyContinue
+  & $nsis.Source "/DSTAGE=$stageAbs" "/DOUTFILE=$setup" "assets/windows/installer.nsi"
+  if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
+  Write-Host "wrote $setup"
+} else {
+  Write-Host "makensis not found; skipping Windows installer"
+}
