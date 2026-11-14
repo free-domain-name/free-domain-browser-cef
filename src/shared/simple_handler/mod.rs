@@ -1697,7 +1697,7 @@ fn open_review_window_async(domain: String) {
     )
     .expect("valid review URL");
     url.query_pairs_mut().append_pair("domain", &domain);
-    if !open_review_window(inner, url.as_str()) {
+    if !open_review_window(inner, url.as_str(), &domain) {
         if let Ok(handler) = instance.lock() {
             handler.chrome_toast("Could not open review window");
         }

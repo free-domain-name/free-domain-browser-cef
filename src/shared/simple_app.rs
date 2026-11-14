@@ -361,6 +361,7 @@ wrap_window_delegate! {
     struct ReviewWindowDelegate {
         view: RefCell<Option<BrowserView>>,
         runtime_style: RuntimeStyle,
+        title: String,
     }
 
     impl ViewDelegate {
@@ -375,7 +376,7 @@ wrap_window_delegate! {
         fn on_window_created(&self, window: Option<&mut Window>) {
             let Some(window) = window else { return; };
             let Some(view) = self.view.borrow().clone() else { return; };
-            window.set_title(Some(&CefString::from("Community reviews")));
+            window.set_title(Some(&CefString::from(self.title.as_str())));
             let mut child = View::from(&view);
             window.add_child_view(Some(&mut child));
             child.set_visible(1);
@@ -403,11 +404,16 @@ wrap_window_delegate! {
 pub fn open_review_window(
     inner: std::sync::Arc<std::sync::Mutex<SimpleHandler>>,
     url: &str,
+    domain: &str,
 ) -> bool {
     let Some(view) = create_content_view(inner, url) else {
         return false;
     };
-    let mut delegate = ReviewWindowDelegate::new(RefCell::new(Some(view)), RuntimeStyle::ALLOY);
+    let mut delegate = ReviewWindowDelegate::new(
+        RefCell::new(Some(view)),
+        RuntimeStyle::ALLOY,
+        format!("Review — {domain}"),
+    );
     window_create_top_level(Some(&mut delegate));
     true
 }
