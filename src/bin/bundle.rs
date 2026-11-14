@@ -56,6 +56,28 @@ fn adhoc_sign(app: &std::path::Path) -> anyhow::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
+fn add_bundle_metadata(app: &std::path::Path) -> anyhow::Result<()> {
+    let plist = app.join("Contents/Info.plist");
+    for (key, value) in [
+        ("CFBundleDisplayName", "Free Domain Browser"),
+        ("LSApplicationCategoryType", "public.app-category.productivity"),
+        (
+            "NSHumanReadableCopyright",
+            "Copyright © Free Domain Browser contributors",
+        ),
+    ] {
+        let status = std::process::Command::new("plutil")
+            .args(["-replace", key, "-string", value])
+            .arg(&plist)
+            .status()?;
+        if !status.success() {
+            anyhow::bail!("plutil failed to set {key}");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
     use cef::build_util::mac::{bundle, BundleInfo};
     use semver::Version;
@@ -122,6 +144,7 @@ fn main() -> anyhow::Result<()> {
         Some(Path::new("assets").to_path_buf()),
         info,
     )?;
+    add_bundle_metadata(&app)?;
     adhoc_sign(&app)?;
 
     // `cargo run` should launch the app in this terminal (with logs), not just
