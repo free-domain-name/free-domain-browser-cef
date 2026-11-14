@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use super::simple_handler::*;
 
 /// Height of the fixed HTML chrome bar, in DIP.
-const CHROME_HEIGHT: i32 = 116;
+// Chrome page layout: tab strip (32) + toolbar (64) — no status-bar strip.
+const CHROME_HEIGHT: i32 = 79;
 
 wrap_window_delegate! {
     struct SimpleWindowDelegate {
