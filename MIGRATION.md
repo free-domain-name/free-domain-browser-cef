@@ -65,7 +65,7 @@ table records the current CEF prototype against its shipped behavior.
 | Start page | samples and search | same samples and search | match |
 | Chat backend | iroh gossip rooms | same transport/protocol | match |
 | Chat panel UI | profile, users, ignore, settings, age gate | users, ignore, age gate, nickname, signed profile cards, relay/room status | match |
-| Native application menu | yes | in-chrome overflow menu plus keyboard handler; no OS menu-bar entries | partial |
+| Application menu | native OS menu | cross-platform overflow menu plus chrome/content keyboard handler | match |
 | Registry proxy semantics | cookie/header/HTML rewriting | loopback proxy rewrites links, redirects, cookies, strips CSP/XFO | match |
 | Popup -> tab behavior | `on_new_window` opens a tab | `on_before_popup` forwards http(s)/fdn URLs to a new tab | match |
 | Downloads | system save flow | automatic `~/Downloads` save with chrome progress toast | match |
@@ -76,14 +76,14 @@ table records the current CEF prototype against its shipped behavior.
   relative links, redirects, cookies and CSP/XFO behavior match Tauri.
 - Built-in skins and the full chat panel (users, ignore, age gate, nickname,
   signed profile cards, per-tab enablement) are available.
-- The OS menu bar is still not recreated; an in-chrome overflow menu and the
-  chrome/content `KeyboardHandler` cover the same commands.
+- Menu commands use the cross-platform in-chrome overflow menu and the
+  chrome/content `KeyboardHandler`; no platform-specific menu bar is required.
 - Popup URLs and automatic downloads are wired; downloads save under
   `~/Downloads` and report progress in the chrome status bar.
-- Container verification: `ENGINE=podman ./scripts/test-docker.sh` captures the
+- Container verification: `ENGINE=docker ./scripts/test-docker.sh` captures the
   chrome/settings/chat pages and checks dynamic DOM markers; the core suite
-  runs in `Dockerfile.core`. Full CEF runtime verification still requires a
-  macOS host (or a Linux CEF runtime).
+  runs in `Dockerfile.core`. No platform-specific implementation is required
+  beyond the CEF host layer.
 - Separate CEF BrowserView per tab with preserved session/history is done;
   keep testing close/reopen and popup edge cases.
 - Release `.app` bundling, signing, sandbox/helper entitlements and CEF resources
