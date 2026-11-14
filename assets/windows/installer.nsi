@@ -28,6 +28,7 @@ Section "Free Domain Browser" SecMain
   SetOutPath "$INSTDIR"
   File /r "${STAGE}\*.*"
   CreateShortCut "$DESKTOP\Free Domain Browser.lnk" "$INSTDIR\free-domain-browser-cef.exe"
+  CreateShortCut "$SMPROGRAMS\Free Domain Browser.lnk" "$INSTDIR\free-domain-browser-cef.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\FreeDomainBrowserCEF" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "DisplayName" "Free Domain Browser"
@@ -40,6 +41,7 @@ SectionEnd
 Section "Uninstall"
   RMDir /r "$INSTDIR"
   Delete "$DESKTOP\Free Domain Browser.lnk"
+  Delete "$SMPROGRAMS\Free Domain Browser.lnk"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF"
   DeleteRegKey HKCU "Software\FreeDomainBrowserCEF"
 SectionEnd

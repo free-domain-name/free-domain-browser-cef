@@ -27,6 +27,8 @@ commits are made here.
   (including compact side-panel mode) with dynamic DOM assertions.
 - Hidden CEF CDP checks of the settings overlay, chat side panel, theme switch,
   review-window reuse and native menu installation.
+- Linux `.deb` assembly was verified with `dpkg-deb`, and the Windows NSIS
+  script was compiled to a PE installer with `makensis` (in Docker).
 - macOS bundle build: `assets/mac/free-domain-browser-cef.icns` copied into
   `Contents/Resources`, `CFBundleIconFile`, Utilities category, copyright,
   display name, high-resolution flag and the GPL LICENSE populated. The DMG was
