@@ -104,6 +104,7 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
         )
         .append_pair("show_status", if settings.show_status { "1" } else { "0" })
         .append_pair("theme", &settings.theme)
+        .append_pair("skin", &settings.skin)
         .append_pair("custom_css", &settings.custom_css)
         .finish();
     format!("{base}?{query}")
@@ -167,7 +168,9 @@ fn error_page(failed_url: &str, error_text: &str, error_code: i32) -> String {
 }
 
 fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
-    let target = outcome.registry_target.clone().unwrap_or_default();
+    let target = crate::proxy::proxy_url(&outcome.domain, &outcome.path)
+        .or_else(|| outcome.registry_target.clone())
+        .unwrap_or_default();
     let public = outcome.public_url.clone().unwrap_or_default();
     CONFLICT_HTML
         .replace("{{domain}}", &outcome.domain)
@@ -351,6 +354,7 @@ impl SimpleHandler {
             "compact_tabs": settings.compact_tabs,
             "show_status": settings.show_status,
             "theme": settings.theme,
+            "skin": settings.skin,
             "custom_css": settings.custom_css,
         });
         let script = format!("window.fdbSettings&&fdbSettings({payload})");
@@ -646,6 +650,33 @@ impl SimpleHandler {
         }
     }
 
+
+    fn on_before_popup(
+        &mut self,
+        browser: Option<&mut Browser>,
+        target_url: Option<&CefString>,
+    ) -> i32 {
+        let Some(browser) = browser else { return 0; };
+        if self.chrome_browser_id == Some(browser.identifier()) {
+            return 0;
+        }
+        let Some(target_url) = target_url else { return 0; };
+        let url = target_url.to_string();
+        if url.is_empty()
+            || !(url.starts_with("http://") || url.starts_with("https://") || url.starts_with("fdn://"))
+        {
+            return 0;
+        }
+        if let Some(instance) = SimpleHandler::instance() {
+            let payload = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".to_string());
+            let script = format!("window.fdbNewTabUrl&&fdbNewTabUrl({payload})");
+            if let Ok(inner) = instance.lock() {
+                inner.chrome_execute(0, &script);
+            }
+        }
+        1
+    }
+
     fn on_load_end(
         &mut self,
         browser: Option<&mut Browser>,
@@ -905,10 +936,106 @@ wrap_client! {
             Some(SimpleHandlerRequestHandler::new(self.inner.clone()))
         }
 
+        fn download_handler(&self) -> Option<DownloadHandler> {
+            Some(SimpleDownloadHandler::new())
+        }
+
         fn keyboard_handler(&self) -> Option<KeyboardHandler> {
             Some(SimpleHandlerKeyboardHandler::new(self.inner.clone()))
         }
     }
+}
+
+
+wrap_download_handler! {
+    struct SimpleDownloadHandler;
+
+    impl DownloadHandler {
+        fn can_download(
+            &self,
+            _browser: Option<&mut Browser>,
+            _url: Option<&CefString>,
+            _request_method: Option<&CefString>,
+        ) -> i32 {
+            1
+        }
+
+        fn on_before_download(
+            &self,
+            _browser: Option<&mut Browser>,
+            _download_item: Option<&mut DownloadItem>,
+            suggested_name: Option<&CefString>,
+            callback: Option<&mut BeforeDownloadCallback>,
+        ) -> i32 {
+            let Some(callback) = callback else { return 0; };
+            let suggested = suggested_name
+                .map(CefString::to_string)
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| "download".to_string());
+            let path = unique_download_path(&suggested);
+            let cef_path = CefString::from(path.to_string_lossy().as_ref());
+            callback.cont(Some(&cef_path), 0);
+            if let Some(instance) = SimpleHandler::instance() {
+                if let Ok(mut inner) = instance.lock() {
+                    inner.chrome_toast(&format!("Downloading to {}", path.display()));
+                }
+            }
+            1
+        }
+
+        fn on_download_updated(
+            &self,
+            _browser: Option<&mut Browser>,
+            download_item: Option<&mut DownloadItem>,
+            _callback: Option<&mut DownloadItemCallback>,
+        ) {
+            let Some(item) = download_item else { return; };
+            let percent = item.percent_complete();
+            let done = item.is_complete() != 0;
+            if let Some(instance) = SimpleHandler::instance() {
+                if let Ok(mut inner) = instance.lock() {
+                    if done {
+                        inner.chrome_toast("Download complete");
+                    } else {
+                        inner.chrome_toast(&format!("Downloading… {percent}%"));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn unique_download_path(suggested: &str) -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let directory = home
+        .as_ref()
+        .map(|home| home.join("Downloads"))
+        .filter(|directory| directory.is_dir())
+        .or_else(|| home.clone())
+        .unwrap_or_else(std::env::temp_dir);
+    let base = std::path::Path::new(suggested)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "download".to_string());
+    let candidate = directory.join(&base);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let path = std::path::Path::new(&base);
+    let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("download");
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    for index in 1..1000 {
+        let name = match extension {
+            Some(extension) => format!("{stem} ({index}).{extension}"),
+            None => format!("{stem} ({index})"),
+        };
+        let candidate = directory.join(name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    directory.join(base)
 }
 
 wrap_display_handler! {
@@ -936,6 +1063,7 @@ wrap_display_handler! {
             let (Some(browser), Some(url)) = (browser, url) else { return; };
             let id = browser.identifier();
             let url = url.to_string();
+            let url = crate::proxy::display_url(&url).unwrap_or(url);
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.update_chrome(id, Some(&url), None);
         }
@@ -1143,6 +1271,26 @@ wrap_life_span_handler! {
             inner.do_close(browser).into()
         }
 
+        fn on_before_popup(
+            &self,
+            browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _popup_id: i32,
+            target_url: Option<&CefString>,
+            _target_frame_name: Option<&CefString>,
+            _target_disposition: WindowOpenDisposition,
+            _user_gesture: i32,
+            _popup_features: Option<&PopupFeatures>,
+            _window_info: Option<&mut WindowInfo>,
+            _client: Option<&mut Option<Client>>,
+            _settings: Option<&mut BrowserSettings>,
+            _extra_info: Option<&mut Option<DictionaryValue>>,
+            _no_javascript_access: Option<&mut i32>,
+        ) -> i32 {
+            let mut inner = self.inner.lock().expect("Failed to lock inner");
+            inner.on_before_popup(browser, target_url)
+        }
+
         fn on_before_close(&self, browser: Option<&mut Browser>) {
             let mut inner = self.inner.lock().expect("Failed to lock inner");
             inner.on_before_close(browser);
@@ -1291,16 +1439,19 @@ fn handle_chat_command(browser_id: i32, message: &str) {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else { return; };
     let Some(cmd) = value.get("cmd").and_then(|cmd| cmd.as_str()).map(str::to_string) else { return; };
     let service = crate::chat::service().clone();
+    // CEF has one chat panel per tab; key the service by the panel's browser
+    // identifier so closing this tab does not leave another tab's room open.
+    let tab_id = format!("cef-{browser_id}");
     crate::chat::runtime().spawn(async move {
         let result: Result<serde_json::Value, String> = match cmd.as_str() {
             "snapshot" => Ok(serde_json::json!(service.snapshot().await)),
             "enable" => service
-                .set_enabled("cef".into(), true)
+                .set_enabled(tab_id.clone(), true)
                 .await
                 .map(|snapshot| serde_json::json!(snapshot))
                 .map_err(|error| error.to_string()),
             "disable" => service
-                .set_enabled("cef".into(), false)
+                .set_enabled(tab_id.clone(), false)
                 .await
                 .map(|snapshot| serde_json::json!(snapshot))
                 .map_err(|error| error.to_string()),
@@ -1316,6 +1467,17 @@ fn handle_chat_command(browser_id: i32, message: &str) {
             "set_nickname" => {
                 let nickname = value.get("nickname").and_then(|nickname| nickname.as_str()).unwrap_or_default().to_string();
                 service.set_nickname(nickname).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+            }
+            "set_profile" => {
+                let profile = crate::chat::settings::Profile {
+                    description: value.get("description").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    gender: value.get("gender").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    age_band: value.get("age_band").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    country: value.get("country").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    city: value.get("city").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                };
+                let show = value.get("show").and_then(|v| v.as_bool()).unwrap_or(false);
+                service.set_profile(profile, show).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
             }
             "ignore" => {
                 let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
@@ -1392,7 +1554,15 @@ fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
     let Some((view, browser)) = removed else {
         return;
     };
-    let _ = browser;
+    // Closing a chat tab must release its per-tab room; otherwise the iroh
+    // session would keep running with no visible panel.
+    if let Some(browser) = browser.as_ref() {
+        let tab_id = format!("cef-{}", browser.identifier());
+        let service = crate::chat::service().clone();
+        crate::chat::runtime().spawn(async move {
+            let _ = service.set_enabled(tab_id, false).await;
+        });
+    }
     if let Some(window) = window {
         let mut view = View::from(&view);
         window.remove_child_view(Some(&mut view));
@@ -1404,7 +1574,7 @@ fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
 }
 
 fn clear_registry_cache() {
-    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("fdn-registry"));
+    crate::proxy::clear_cache();
 }
 
 /// Open an http(s) URL in the user's normal browser. Registry names and the
@@ -1469,11 +1639,18 @@ fn spawn_navigation(target_id: i32, target: String) {
                     Ok(outcome) => match outcome.kind {
                         fdn_core::OutcomeKind::Conflict => internal_page_url(&conflict_page(&outcome)),
                         fdn_core::OutcomeKind::Unregistered => internal_page_url(&claim_page(&outcome)),
-                        _ => outcome
-                            .registry_target
-                            .or(outcome.public_url)
-                            .or(outcome.url)
-                            .unwrap_or(target),
+                        _ => {
+                            let registry = if outcome.source == fdn_core::Source::GithubRegistry {
+                                crate::proxy::proxy_url(&outcome.domain, &outcome.path)
+                                    .or_else(|| outcome.registry_target.clone())
+                            } else {
+                                None
+                            };
+                            registry
+                                .or(outcome.public_url)
+                                .or(outcome.url)
+                                .unwrap_or(target)
+                        }
                     },
                     Err(_) => target,
                 }

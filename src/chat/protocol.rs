@@ -25,12 +25,14 @@ pub const PRESENCE_MAX_SKEW_MS: i64 = 2 * 60 * 1000;
 
 const MESSAGE_DOMAIN: &[u8] = b"fdn-chat/message/v1\0";
 const PRESENCE_DOMAIN: &[u8] = b"fdn-chat/presence/v1\0";
+const PROFILE_DOMAIN: &[u8] = b"fdn-chat/profile/v1\0";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Wire {
     Message(Message),
     Presence(Presence),
+    Profile(ProfileCard),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +60,22 @@ pub struct Presence {
     pub sig: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileCard {
+    pub v: u8,
+    pub room: String,
+    pub sender: String,
+    pub nickname: String,
+    pub profile_version: u32,
+    pub timestamp: i64,
+    pub description: String,
+    pub gender: String,
+    pub age_band: String,
+    pub country: String,
+    pub city: String,
+    pub sig: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProtocolError {
     #[error("invalid envelope JSON: {0}")]
@@ -82,6 +100,8 @@ pub enum ProtocolError {
     SignatureEncoding,
     #[error("signature does not verify")]
     Signature,
+    #[error("invalid profile: {0}")]
+    Profile(String),
 }
 
 impl Wire {
@@ -224,6 +244,121 @@ impl Presence {
     }
 }
 
+
+impl ProfileCard {
+    #[allow(clippy::too_many_arguments)]
+    pub fn create(
+        room: &str,
+        sender: EndpointId,
+        nickname: &str,
+        profile_version: u32,
+        description: &str,
+        gender: &str,
+        age_band: &str,
+        country: &str,
+        city: &str,
+    ) -> Result<Self, ProtocolError> {
+        validate_nickname(nickname)?;
+        validate_profile(description, gender, age_band, country, city)?;
+        Ok(Self {
+            v: PROTOCOL_VERSION,
+            room: room.to_string(),
+            sender: sender.to_string(),
+            nickname: nickname.trim().to_string(),
+            profile_version,
+            timestamp: now_ms(),
+            description: description.trim().to_string(),
+            gender: gender.trim().to_string(),
+            age_band: age_band.trim().to_string(),
+            country: country.trim().to_ascii_uppercase(),
+            city: city.trim().to_string(),
+            sig: String::new(),
+        })
+    }
+
+    pub fn sign(&mut self, key: &SecretKey) {
+        let signature = key.sign(&self.signing_bytes(&key.public()));
+        self.sig = hex::encode(signature.to_bytes());
+    }
+
+    pub fn verify(&self, now_ms: i64) -> Result<EndpointId, ProtocolError> {
+        if self.v != PROTOCOL_VERSION {
+            return Err(ProtocolError::Version(self.v));
+        }
+        validate_nickname(&self.nickname)?;
+        validate_profile(
+            &self.description,
+            &self.gender,
+            &self.age_band,
+            &self.country,
+            &self.city,
+        )?;
+        let sender = parse_sender(&self.sender)?;
+        if (now_ms - self.timestamp).abs() > PRESENCE_MAX_SKEW_MS {
+            return Err(ProtocolError::Timestamp);
+        }
+        verify_signature(&sender, &self.signing_bytes(&sender), &self.sig)?;
+        Ok(sender)
+    }
+
+    fn signing_bytes(&self, sender: &EndpointId) -> Vec<u8> {
+        let mut out = Vec::with_capacity(256 + self.description.len());
+        out.extend_from_slice(PROFILE_DOMAIN);
+        out.push(self.v);
+        put_str(&mut out, &self.room);
+        out.extend_from_slice(sender.as_bytes());
+        put_str(&mut out, &self.nickname);
+        out.extend_from_slice(&self.profile_version.to_be_bytes());
+        out.extend_from_slice(&self.timestamp.to_be_bytes());
+        put_str(&mut out, &self.description);
+        put_str(&mut out, &self.gender);
+        put_str(&mut out, &self.age_band);
+        put_str(&mut out, &self.country);
+        put_str(&mut out, &self.city);
+        out
+    }
+}
+
+fn validate_profile(
+    description: &str,
+    gender: &str,
+    age_band: &str,
+    country: &str,
+    city: &str,
+) -> Result<(), ProtocolError> {
+    if description.chars().count() > 160 {
+        return Err(ProtocolError::Profile(
+            "description is longer than 160 characters".to_string(),
+        ));
+    }
+    if gender.chars().count() > 32 {
+        return Err(ProtocolError::Profile(
+            "gender is longer than 32 characters".to_string(),
+        ));
+    }
+    if city.chars().count() > 48 {
+        return Err(ProtocolError::Profile(
+            "city is longer than 48 characters".to_string(),
+        ));
+    }
+    if !age_band.is_empty()
+        && !matches!(
+            age_band,
+            "18-24" | "25-34" | "35-44" | "45-54" | "55-64" | "65+" | "prefer not to say"
+        )
+    {
+        return Err(ProtocolError::Profile("unknown age band".to_string()));
+    }
+    if !country.is_empty()
+        && (country.len() != 2 || !country.chars().all(|character| character.is_ascii_alphabetic()))
+    {
+        return Err(ProtocolError::Profile(
+            "country must be a two-letter ISO code".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn fingerprint(sender: &EndpointId) -> String {
     let digest = Sha256::digest(sender.as_bytes());
     hex::encode(&digest[..2])
@@ -315,6 +450,27 @@ mod tests {
     }
 
     #[test]
+    fn profile_card_signs_and_verifies() {
+        let key = key();
+        let mut card = ProfileCard::create(
+            "fdn:general:v1",
+            key.public(),
+            "alex",
+            3,
+            "hello",
+            "prefer not to say",
+            "25-34",
+            "de",
+            "Berlin",
+        )
+        .expect("create");
+        card.sign(&key);
+        assert_eq!(card.verify(now_ms()).expect("verify"), key.public());
+        card.city = "Hamburg".to_string();
+        assert!(card.verify(now_ms()).is_err());
+    }
+
+    #[test]
     fn stale_message_is_rejected() {
         let key = key();
         let mut message = Message::create("fdn:general:v1", key.public(), "alex", 0, "hello", None)
@@ -336,7 +492,7 @@ mod tests {
                 assert_eq!(decoded.text, "hi");
                 assert_eq!(decoded.verify(now_ms()).expect("verify"), key.public());
             }
-            Wire::Presence(_) => panic!("wrong variant"),
+            Wire::Presence(_) | Wire::Profile(_) => panic!("wrong variant"),
         }
     }
 

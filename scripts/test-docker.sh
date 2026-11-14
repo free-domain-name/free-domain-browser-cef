@@ -5,6 +5,9 @@ cd "$ROOT"
 ENGINE=${ENGINE:-podman}
 mkdir -p target/docker-out
 "$ENGINE" build -t free-domain-browser-cef-web-test -f Dockerfile.test .
+# The chrome template contains a build-time placeholder; substitute it before
+# loading the page in Chromium so its JavaScript actually runs.
+sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/docker-out/chrome.html
 "$ENGINE" run --rm \
   -v "$ROOT/assets:/assets:ro" \
   -v "$ROOT/target/docker-out:/out" \
@@ -20,5 +23,25 @@ mkdir -p target/docker-out
   -v "$ROOT/target/docker-out:/out" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars \
-  --window-size=1000,700 --screenshot=/out/chat.png file:///assets/chat.html
+  --window-size=1000,900 --screenshot=/out/chat.png file:///assets/chat.html
+# Dynamic smoke checks: JS must render the tab strip/menu, settings must expose
+# the skin picker, and chat must expose the profile editor and age gate.
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/target/docker-out:/out" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///out/chrome.html > target/docker-out/chrome.dom
+grep -q 'id="menu"' target/docker-out/chrome.dom
+grep -q 'New tab (Cmd/Ctrl+T)' target/docker-out/chrome.dom
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/settings.html > target/docker-out/settings.dom
+grep -q 'id="skin"' target/docker-out/settings.dom
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/chat.html > target/docker-out/chat.dom
+grep -q 'id="profileDescription"' target/docker-out/chat.dom
+grep -q 'id="age"' target/docker-out/chat.dom
+echo "web checks passed"
 echo "screenshots: $ROOT/target/docker-out/{chrome,settings,chat}.png"

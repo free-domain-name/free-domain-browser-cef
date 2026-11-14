@@ -12,6 +12,7 @@ pub struct Settings {
     pub compact_tabs: bool,
     pub show_status: bool,
     pub theme: String,
+    pub skin: String,
     pub custom_css: String,
 }
 
@@ -24,6 +25,7 @@ impl Default for Settings {
             compact_tabs: false,
             show_status: true,
             theme: "system".to_string(),
+            skin: "default".to_string(),
             custom_css: String::new(),
         }
     }
@@ -39,6 +41,12 @@ impl Settings {
         }
         if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
             settings.theme = Settings::default().theme;
+        }
+        if !matches!(
+            settings.skin.as_str(),
+            "default" | "high-tech" | "futuristic" | "historic" | "victorian" | "amazon" | "terminal"
+        ) {
+            settings.skin = Settings::default().skin;
         }
         if settings.custom_css.len() > 24_000 {
             let mut end = 24_000;
@@ -122,6 +130,7 @@ mod tests {
             compact_tabs: true,
             show_status: false,
             theme: "dark".into(),
+            skin: "terminal".into(),
             custom_css: "body{background:#000}".into(),
         };
         save_to(&path, &settings).unwrap();

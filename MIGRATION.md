@@ -51,7 +51,7 @@ table records the current CEF prototype against its shipped behavior.
 | Area | Tauri | CEF | Status |
 | --- | --- | --- | --- |
 | Registry lookup / resolver | sharded GitHub registry + public DNS | same `fdn-core` resolver | match |
-| `fdn://` input and registry names | custom protocol proxy | resolves to target URL directly | partial |
+| `fdn://` input and registry names | custom protocol proxy | loopback `*.localhost` proxy with link/cookie/header rewriting | match |
 | Registry/public conflict chooser | in-chrome modal | internal `conflict.html` page | match |
 | Unregistered-name claim flow | shard path, JSON, copy, GitHub, recheck | same, in `claim.html` | match |
 | Community reviews | index counts + dedicated review window | index counts + review tab (`stumble.html`) | partial |
@@ -59,24 +59,31 @@ table records the current CEF prototype against its shipped behavior.
 | Global browser shortcuts | native menu forwards to chrome | chrome JS plus content `KeyboardHandler` | match |
 | Appearance: theme | system/light/dark | system/light/dark in settings | match |
 | Appearance: density | comfortable/compact | compact tab strip | partial |
-| Appearance: built-in skins | seven skins | none; custom CSS only | missing |
+| Appearance: built-in skins | seven skins | seven built-in palettes in Settings | match |
 | Appearance: custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
-| Toolbar | home, external, cache, review, chat, settings | same plus Go; no progress bar | partial |
+| Toolbar | home, external, cache, review, chat, settings | same plus Go and loading progress bar | match |
 | Start page | samples and search | same samples and search | match |
 | Chat backend | iroh gossip rooms | same transport/protocol | match |
-| Chat panel UI | profile, users, ignore, settings, age gate | simplified chat page | partial |
-| Native application menu | yes | no; keyboard handler covers shortcuts | missing |
-| Registry proxy semantics | cookie/header/HTML rewriting | not implemented | missing |
-| Popup -> tab behavior | `on_new_window` opens a tab | CEF default behavior not wired | missing |
+| Chat panel UI | profile, users, ignore, settings, age gate | users, ignore, age gate, nickname, signed profile cards, relay/room status | match |
+| Native application menu | yes | in-chrome overflow menu plus keyboard handler; no OS menu-bar entries | partial |
+| Registry proxy semantics | cookie/header/HTML rewriting | loopback proxy rewrites links, redirects, cookies, strips CSP/XFO | match |
+| Popup -> tab behavior | `on_new_window` opens a tab | `on_before_popup` forwards http(s)/fdn URLs to a new tab | match |
+| Downloads | system save flow | automatic `~/Downloads` save with chrome progress toast | match |
 
 ## Remaining work
 
-- Implement the `fdn://` resource-handler proxy (relative links, cookies,
-  redirects, CSP/XFO stripping) instead of loading the record target directly.
-- Port the built-in Tauri skins and the richer chat panel (profiles, users,
-  ignore lists, per-tab enablement).
-- Add a native application menu or verify every platform-level shortcut path.
-- Wire popup windows to new tabs and add a download/progress surface.
+- Registry names now load through a loopback `*.localhost` HTTP proxy so
+  relative links, redirects, cookies and CSP/XFO behavior match Tauri.
+- Built-in skins and the full chat panel (users, ignore, age gate, nickname,
+  signed profile cards, per-tab enablement) are available.
+- The OS menu bar is still not recreated; an in-chrome overflow menu and the
+  chrome/content `KeyboardHandler` cover the same commands.
+- Popup URLs and automatic downloads are wired; downloads save under
+  `~/Downloads` and report progress in the chrome status bar.
+- Container verification: `ENGINE=podman ./scripts/test-docker.sh` captures the
+  chrome/settings/chat pages and checks dynamic DOM markers; the core suite
+  runs in `Dockerfile.core`. Full CEF runtime verification still requires a
+  macOS host (or a Linux CEF runtime).
 - Separate CEF BrowserView per tab with preserved session/history is done;
   keep testing close/reopen and popup edge cases.
 - Release `.app` bundling, signing, sandbox/helper entitlements and CEF resources

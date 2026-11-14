@@ -64,6 +64,24 @@ impl Settings {
 }
 
 impl Profile {
+    pub fn is_empty(&self) -> bool {
+        self.description.trim().is_empty()
+            && self.gender.trim().is_empty()
+            && self.age_band.trim().is_empty()
+            && self.country.trim().is_empty()
+            && self.city.trim().is_empty()
+    }
+
+    pub fn normalized(&self) -> Self {
+        Self {
+            description: self.description.trim().to_string(),
+            gender: self.gender.trim().to_string(),
+            age_band: self.age_band.trim().to_string(),
+            country: self.country.trim().to_ascii_uppercase(),
+            city: self.city.trim().to_string(),
+        }
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.description.chars().count() > 160 {
             return Err("description is longer than 160 characters".to_string());

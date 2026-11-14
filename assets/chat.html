@@ -1,62 +1,91 @@
-<html><head><meta charset="utf-8"><style>
-*{box-sizing:border-box}body{margin:0;background:#0f131a;color:#e8edf7;font:14px -apple-system,system-ui;height:100vh;display:flex}
-aside{width:260px;background:#151b25;border-right:1px solid #263042;padding:20px 16px}
-aside h1{font-size:15px;margin:0 0 16px;color:#fff}
-.room{padding:9px 10px;border-radius:8px;color:#aeb9cc;cursor:pointer;margin-bottom:4px}
-.room.active{background:#22304a;color:#fff}
-main{flex:1;display:flex;flex-direction:column}
-header{padding:18px 24px;border-bottom:1px solid #263042;font-weight:600}
-.messages{flex:1;padding:24px;overflow:auto}
-.msg{max-width:70%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45}
-.msg.me{margin-left:auto;background:#2f4f9e}
-.meta{font-size:11px;color:#8d9ab1;margin-bottom:4px}
-footer{display:flex;gap:10px;padding:16px 24px;border-top:1px solid #263042}
-input{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit}
-button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit}
-.note{font-size:12px;color:#8d9ab1;padding:0 24px 10px}
-</style><title>Free Domain Chat</title></head><body>
-<aside><h1>Free Domain Chat</h1><div class="room active" data-room="general"># general</div><div class="room" data-room="registry"># registry</div><div class="room" data-room="support"># support</div></aside>
-<main><header id="room"># general</header><div class="messages" id="messages"></div><div class="note" id="connection">Local chat prototype — connect to use the community relay.</div><footer><input id="text" placeholder="Message #general"><button id="connect">Connect</button><button id="send">Send</button></footer></main>
+<html><head><meta charset="utf-8"><title>Free Domain Chat</title><style>
+*{box-sizing:border-box}body{margin:0;background:#0f131a;color:#e8edf7;font:14px -apple-system,system-ui;height:100vh;display:flex;overflow:hidden}
+aside{width:280px;background:#151b25;border-right:1px solid #263042;padding:20px 16px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+aside h1{font-size:15px;margin:0;color:#fff}.sub{color:#8290a8;font-size:12px;line-height:1.45}
+.card{background:#111722;border:1px solid #263042;border-radius:10px;padding:12px}
+.card h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#8290a8;margin:0 0 8px}
+#users{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto}
+#users li{display:flex;align-items:center;gap:8px;font-size:12px;color:#c6d0e2}#users .dot{width:7px;height:7px;border-radius:50%;background:#3ddc84;flex:none}
+#users .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#users .who small{color:#8290a8;display:block;font-size:10px}
+#users button{background:none;border:0;color:#9dbcff;font:inherit;font-size:11px;cursor:pointer;padding:2px 4px}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+header{padding:16px 24px;border-bottom:1px solid #263042;display:flex;align-items:center;gap:12px}
+header h2{font-size:15px;margin:0}header .pill{font-size:11px;color:#9dbcff;background:#22304a;border-radius:999px;padding:3px 9px}
+header .spacer{flex:1}header button{background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer}
+#connection{padding:6px 24px;color:#8290a8;font-size:11px;border-bottom:1px solid #1d2635;min-height:26px}
+.messages{flex:1;padding:22px 24px;overflow:auto}
+.msg{max-width:72%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45;word-wrap:break-word}
+.msg.me{margin-left:auto;background:#2f4f9e}.msg.ignored{opacity:.55;font-style:italic}
+.meta{font-size:11px;color:#8d9ab1;margin-bottom:4px}.empty{color:#8290a8;font-size:13px}
+footer{display:flex;gap:10px;padding:14px 24px;border-top:1px solid #263042}
+#text{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit;outline:none}#text:focus{border-color:#4f7cff}
+footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit;cursor:pointer}footer button:disabled{opacity:.45;cursor:default}
+#age{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:5}
+#age .box{max-width:460px;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:28px}#age h2{margin:0 0 8px}#age p{color:#aebbd0;line-height:1.55;font-size:13px}
+#age label{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c6d0e2;font-size:13px}#age button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:10px 16px;font:inherit;cursor:pointer}#age button:disabled{opacity:.45;cursor:default}
+</style></head><body>
+<aside>
+<h1>Free Domain Chat</h1><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
+<div class="card"><h2>Room</h2><div id="room" style="color:#c6d0e2">fdn:general:v1</div><div class="sub" id="relay" style="margin-top:6px"></div></div>
+<div class="card"><h2>You</h2><input id="nickname" maxlength="32" placeholder="Nickname" style="width:100%;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px 10px;font:inherit"><button id="saveNick" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save nickname</button></div>
+<details class="card" id="profileCard"><summary>Profile</summary>
+<textarea id="profileDescription" maxlength="160" placeholder="About you (optional)" style="width:100%;min-height:58px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit;resize:vertical"></textarea>
+<input id="profileGender" maxlength="32" placeholder="Gender" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
+<select id="profileAge" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit"><option value="">Age band</option><option>18-24</option><option>25-34</option><option>35-44</option><option>45-54</option><option>55-64</option><option>65+</option><option>prefer not to say</option></select>
+<input id="profileCountry" maxlength="2" placeholder="Country (ISO)" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
+<input id="profileCity" maxlength="48" placeholder="City" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
+<label style="display:flex;gap:8px;align-items:center;margin-top:8px;color:#aebbd0;font-size:12px"><input id="profileShow" type="checkbox"> Show profile in rooms</label>
+<button id="saveProfile" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save profile</button></details>
+<div class="card"><h2>Online <span id="onlineCount">0</span></h2><ul id="users"></ul></div>
+</aside>
+<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="join">Join chat</button><button id="disable">Leave</button></header>
+<div id="connection">Connecting to the community relay…</div>
+<div class="messages" id="messages"><div class="empty">Join the room to load messages.</div></div>
+<footer><input id="text" placeholder="Message #general" disabled><button id="send" disabled>Send</button></footer></main>
+<div id="age"><div class="box"><h2>Before you join</h2><p>This is an unmoderated community chat. Messages can contain mature language or links from strangers. You must be 18 or older to continue.</p><label><input id="ageCheck" type="checkbox"> I am 18 or older and understand this room is unmoderated.</label><button id="ageContinue" disabled>Continue</button></div></div>
 <script>
-var room='general';
-function key(){return 'fdb-chat-'+room}
-function load(){try{return JSON.parse(localStorage.getItem(key())||'[]')}catch(e){return []}}
-function save(v){try{localStorage.setItem(key(),JSON.stringify(v))}catch(e){}}
-function render(){var box=document.getElementById('messages');box.innerHTML='';var list=load();if(!list.length){box.innerHTML='<div class="note" style="padding:0">No messages yet.</div>'}list.forEach(function(m){var d=document.createElement('div');d.className='msg'+(m.me?' me':'');var meta=document.createElement('div');meta.className='meta';meta.textContent=(m.me?'you':'local')+' · '+m.time;d.appendChild(meta);d.appendChild(document.createTextNode(m.text));box.appendChild(d)});box.scrollTop=box.scrollHeight}
-function send(){var input=document.getElementById('text');var text=input.value.trim();if(!text)return;var list=load();list.push({text:text,me:true,time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})});save(list);input.value='';render()}
-document.getElementById('send').onclick=send;document.getElementById('text').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
-document.querySelectorAll('.room').forEach(function(el){el.onclick=function(){document.querySelectorAll('.room').forEach(function(x){x.classList.remove('active')});el.classList.add('active');room=el.dataset.room;document.getElementById('room').textContent='#'+room;document.getElementById('text').placeholder='Message #'+room;render()}});
-var backendEnabled=false;var pendingConnect=false;
-function backend(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
-function connect(){pendingConnect=true;backend({cmd:'confirm_age'})}
-function showConnection(text){var el=document.getElementById('connection');if(el)el.textContent=text}
-function renderBackend(s){
-  backendEnabled=!!s.enabled;
+var state={enabled:false,age_confirmed:false,snapshot:null,pending:false,cooldown:0};
+function send(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function setConnection(text){document.getElementById('connection').textContent=text||''}
+function render(s){
+  if(!s)return;state.snapshot=s;state.enabled=!!s.enabled;state.age_confirmed=!!s.age_confirmed;state.cooldown=Number(s.cooldown_ms)||0;
+  document.getElementById('age').style.display=state.age_confirmed?'none':'flex';
+  document.getElementById('nickname').value=s.nickname||'';
+  var p=s.profile||{};document.getElementById('profileDescription').value=p.description||'';document.getElementById('profileGender').value=p.gender||'';document.getElementById('profileAge').value=p.age_band||'';document.getElementById('profileCountry').value=p.country||'';document.getElementById('profileCity').value=p.city||'';document.getElementById('profileShow').checked=!!s.show_profile_in_rooms;
+  document.getElementById('room').textContent=s.room||'fdn:general:v1';
+  document.getElementById('relay').textContent=s.relay_url||'';
+  document.getElementById('onlineCount').textContent=String(s.online||0);
+  document.getElementById('statePill').textContent=s.enabled?(s.connected?'connected':'joining'):'offline';
+  document.getElementById('join').style.display=state.enabled?'none':'inline-block';
+  document.getElementById('disable').style.display=state.enabled?'inline-block':'none';
+  var list=document.getElementById('users');list.innerHTML='';
+  (s.users||[]).forEach(function(u){var li=document.createElement('li');var dot=document.createElement('span');dot.className='dot';li.appendChild(dot);var who=document.createElement('span');who.className='who';var extra=u.profile&&(u.profile.description||u.profile.city||u.profile.country)?' · '+esc([u.profile.description,u.profile.city,u.profile.country].filter(Boolean).join(' · ')):'';who.innerHTML=esc(u.nickname||u.sender)+'<small>'+esc((u.fingerprint||'').slice(0,12))+(u.is_me?' · you':'')+extra+'</small>';li.appendChild(who);if(!u.is_me){var b=document.createElement('button');b.textContent=u.ignored?'Unignore':'Ignore';b.onclick=function(){send({cmd:u.ignored?'unignore':'ignore',sender:u.sender})};li.appendChild(b)}list.appendChild(li)});
   var box=document.getElementById('messages');box.innerHTML='';
-  (s.messages||[]).forEach(function(m){
-    var d=document.createElement('div');d.className='msg'+(m.mine?' me':'');
-    var meta=document.createElement('div');meta.className='meta';
-    meta.textContent=(m.nickname||m.sender)+' · '+new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    d.appendChild(meta);d.appendChild(document.createTextNode(m.text));box.appendChild(d);
-  });
-  if(!(s.messages||[]).length){box.innerHTML='<div class="note" style="padding:0">No messages yet.</div>'}
+  if(!(s.messages||[]).length){box.innerHTML='<div class="empty">No messages yet.</div>'}
+  (s.messages||[]).forEach(function(m){var d=document.createElement('div');d.className='msg'+(m.mine?' me':'')+(m.ignored?' ignored':'');var meta=document.createElement('div');meta.className='meta';meta.textContent=(m.nickname||m.sender||'?')+' · '+new Date(Number(m.timestamp)||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+(m.ignored?' · ignored':'');d.appendChild(meta);d.appendChild(document.createTextNode(m.text||''));box.appendChild(d)});
   box.scrollTop=box.scrollHeight;
-  showConnection(s.error?('Chat backend: '+s.error):(s.enabled?('Connected · '+s.online+' online · '+s.room):'Chat backend not enabled'));
+  var sendBtn=document.getElementById('send');var input=document.getElementById('text');
+  sendBtn.disabled=!state.enabled||state.cooldown>0;input.disabled=!state.enabled;input.placeholder='Message '+(s.room||'#general');
+  setConnection(s.error?('Chat: '+s.error):(state.enabled?(s.connected?'Connected · '+s.online+' online':'Joining room…'):'Not connected. Join the room to start.'));
 }
+function refresh(){send({cmd:'snapshot'})}
 window.fdbChatResult=function(r){
-  if(!r||!r.ok){showConnection('Chat backend: '+(r&&r.error?r.error:'unavailable'));if(pendingConnect)pendingConnect=false;return}
-  var d=r.data;
-  if(d&&d.messages)renderBackend(d);
-  if(pendingConnect){pendingConnect=false;backend({cmd:'enable'})}
+  if(!r){return}
+  if(!r.ok){setConnection('Chat: '+(r.error||'unavailable'));return}
+  if(r.data&&r.data.room!==undefined)render(r.data);
+  else if(r.data===null)refresh();
 };
-document.getElementById('connect').onclick=connect;
-document.getElementById('send').onclick=function(){
-  var input=document.getElementById('text');var text=input.value.trim();if(!text)return;
-  if(backendEnabled){backend({cmd:'send',text:text});input.value='';return}
-  send();
-};
-setInterval(function(){if(backendEnabled)backend({cmd:'snapshot'})},3000);
-backend({cmd:'snapshot'});
-render();
+document.getElementById('ageCheck').onchange=function(){document.getElementById('ageContinue').disabled=!this.checked};
+document.getElementById('ageContinue').onclick=function(){send({cmd:'confirm_age'})};
+document.getElementById('join').onclick=function(){send({cmd:'enable'})};
+document.getElementById('disable').onclick=function(){send({cmd:'disable'})};
+document.getElementById('saveNick').onclick=function(){var value=document.getElementById('nickname').value.trim();if(value)send({cmd:'set_nickname',nickname:value})};
+document.getElementById('saveProfile').onclick=function(){send({cmd:'set_profile',description:document.getElementById('profileDescription').value,gender:document.getElementById('profileGender').value,age_band:document.getElementById('profileAge').value,country:document.getElementById('profileCountry').value,city:document.getElementById('profileCity').value,show:document.getElementById('profileShow').checked})};
+document.getElementById('send').onclick=function(){var input=document.getElementById('text');var text=input.value.trim();if(!text||!state.enabled)return;send({cmd:'send',text:text});input.value=''};
+document.getElementById('text').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();document.getElementById('send').click()}});
+setInterval(function(){if(state.enabled)refresh()},3000);
+window.addEventListener('pagehide',function(){if(state.enabled)send({cmd:'disable'})});
+refresh();
 </script>
 </body></html>

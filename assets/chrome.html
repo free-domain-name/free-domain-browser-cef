@@ -1,6 +1,13 @@
 <html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Free Domain Browser</title><style>
 :root{--bg:#171b24;--chrome:#1f2430;--text:#fff;--muted:#9aa4b8;--button:#2a3040;--button-hover:#343c4e;--field:#fff;--field-text:#111;--accent:#4f7cff;--border:#334055;--status:#111722}
 :where(html[data-theme=light]){--bg:#eef1f6;--chrome:#f8f9fb;--text:#141821;--muted:#5d687c;--button:#e4e8ef;--button-hover:#d8dee8;--field:#fff;--field-text:#111;--accent:#2563eb;--border:#c8d1df;--status:#e7ebf2}
+
+:where(html[data-skin=high-tech]){--bg:#0c1114;--chrome:#11181d;--text:#d8f7ff;--muted:#78a6b2;--button:#18262c;--button-hover:#22353d;--field:#071014;--field-text:#d8f7ff;--accent:#22d3ee;--border:#1d3a42;--status:#071014;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+:where(html[data-skin=futuristic]){--bg:#120b24;--chrome:#1b1033;--text:#f3e8ff;--muted:#b39ddb;--button:#2a1a4d;--button-hover:#392369;--field:#0c0618;--field-text:#f3e8ff;--accent:#a855f7;--border:#4c2a7a;--status:#0c0618}
+:where(html[data-skin=historic]){--bg:#e8dcc3;--chrome:#f3ead6;--text:#3b2a18;--muted:#7a644c;--button:#ddceb1;--button-hover:#d1c09f;--field:#fffaf0;--field-text:#2b1d10;--accent:#8b5e34;--border:#c4ae8b;--status:#e0d1b4;font-family:Georgia,'Times New Roman',serif}
+:where(html[data-skin=victorian]){--bg:#2a1820;--chrome:#3a2029;--text:#f4e6d0;--muted:#c9a98d;--button:#4d2a35;--button-hover:#603643;--field:#1d1016;--field-text:#f4e6d0;--accent:#b8860b;--border:#6e4350;--status:#1d1016;font-family:Georgia,'Times New Roman',serif}
+:where(html[data-skin=amazon]){--bg:#10251b;--chrome:#173326;--text:#e8f5e9;--muted:#9cc3a8;--button:#204734;--button-hover:#2a5a43;--field:#0a1a12;--field-text:#e8f5e9;--accent:#e07a3f;--border:#2f5e45;--status:#0a1a12}
+:where(html[data-skin=terminal]){--bg:#050805;--chrome:#071007;--text:#b8ffb8;--muted:#5f9f5f;--button:#0d1f0d;--button-hover:#143014;--field:#020402;--field-text:#b8ffb8;--accent:#22c55e;--border:#1f4a1f;--status:#020402;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--chrome);color:var(--text);font:13px -apple-system,system-ui;overflow:hidden}
 #tabs{height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--bg)}
 #tabs button{border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:220px}
@@ -15,6 +22,7 @@
 #url{flex:1;background:var(--field);color:var(--field-text);border:0;border-radius:8px;padding:7px 11px;font:inherit;outline:none;min-width:80px}
 #url:focus{box-shadow:0 0 0 2px var(--accent)}
 .go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit;cursor:pointer}
+.menu-wrap{position:relative;display:inline-flex}#menuPanel{display:none;position:absolute;right:0;top:42px;z-index:20;min-width:220px;background:var(--chrome);border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.35)}#menuPanel.open{display:block}#menuPanel button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text);font:inherit;padding:8px 10px;border-radius:7px;cursor:pointer}#menuPanel button:hover{background:var(--button-hover)}#menuPanel hr{border:0;border-top:1px solid var(--border);margin:5px 4px}
 #progress{display:none;position:fixed;top:32px;left:0;right:0;height:2px;background:var(--accent);transform-origin:0 50%;animation:fdb-progress 1.1s ease-in-out infinite;z-index:9}
 @keyframes fdb-progress{0%{transform:scaleX(.05)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
 body.loading #progress{display:block}
@@ -37,6 +45,7 @@ body.loading #url{opacity:.85}
   <button id="clearCache" class="icon" title="Clear registry cache">⌫</button>
   <button id="chat" class="icon" title="Community chat">💬</button>
   <button id="settings" class="icon" title="Settings (Cmd/Ctrl+,)">⚙</button>
+  <span class="menu-wrap"><button id="menu" class="icon" title="Menu">☰</button><div id="menuPanel" role="menu"><button data-menu="new">New tab</button><button data-menu="close">Close tab</button><button data-menu="reload">Reload</button><button data-menu="back">Back</button><button data-menu="forward">Forward</button><hr><button data-menu="settings">Settings</button><button data-menu="chat">Community chat</button><button data-menu="external">Open in system browser</button><button data-menu="clear">Clear registry cache</button><hr><button data-menu="quit">Quit</button></div></span>
   <button id="go" class="go" title="Go">Go</button>
 </div>
 <div id="progress"></div>
@@ -44,7 +53,7 @@ body.loading #url{opacity:.85}
 <script>
 window.__fdbInitialUrl=__FDB_INITIAL_URL__;
 var tabs=[{uid:0,url:window.__fdbInitialUrl||'',label:'New Tab'}];
-var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;var currentSettings={theme:'system',custom_css:''};
+var active=0;var lastClosed=null;var nextUid=1;var showStatus=true;var currentSettings={theme:'system',skin:'default',custom_css:''};
 var REVIEW_INDEX_URL='https://raw.githubusercontent.com/free-domain-name/registry/main/reviews/index.json';
 var STUMBLE_URL='https://free-domain-name.github.io/tauri-browser/stumble.html';
 var reviewIndex=null;var reviewPromise=null;var reviewDomain=null;
@@ -56,6 +65,7 @@ function applyTheme(){
   var theme=currentSettings.theme||'system';
   var dark=theme==='dark'||(theme==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme=dark?'dark':'light';
+  document.documentElement.dataset.skin=currentSettings.skin||'default';
   try{document.getElementById('customSkinStyle').textContent=currentSettings.custom_css||''}catch(e){}
 }
 function render(){
@@ -109,6 +119,11 @@ function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
 function external(){var u=current().url;if(isExternal(u))send({cmd:'external',url:u});}
 function clearCache(){send({cmd:'clear_cache'})}
+function quit(){send({cmd:'quit'})}
+function closeMenu(){var panel=document.getElementById('menuPanel');if(panel)panel.classList.remove('open')}
+document.getElementById('menu').onclick=function(e){e.stopPropagation();document.getElementById('menuPanel').classList.toggle('open')};
+document.getElementById('menuPanel').onclick=function(e){var action=e.target&&e.target.dataset&&e.target.dataset.menu;if(!action)return;closeMenu();if(action==='new')newTab('');else if(action==='close')closeTab(active);else if(action==='reload')send({cmd:'reload'});else if(action==='back')send({cmd:'back'});else if(action==='forward')send({cmd:'forward'});else if(action==='settings')settings();else if(action==='chat')chat();else if(action==='external')external();else if(action==='clear')clearCache();else if(action==='quit')quit()};
+document.addEventListener('click',closeMenu);
 function reviewHost(){
   var raw=current().url||'';
   try{
@@ -139,6 +154,7 @@ function syncReview(){
 }
 function openReview(){if(!reviewDomain)return;newTab(STUMBLE_URL+'?domain='+encodeURIComponent(reviewDomain))}
 window.fdbNewTab=function(){newTab('')};
+window.fdbNewTabUrl=function(url){if(url)newTab(url)};
 window.fdbRestoreTab=function(){if(!lastClosed)return;var u=lastClosed.url;lastClosed=null;newTab(u||'')};
 window.fdbCloseActive=function(){closeTab(active)};
 window.fdbFocusUrl=function(){document.getElementById('url').focus();document.getElementById('url').select()};
@@ -155,7 +171,7 @@ window.fdbStatus=function(text){
   if(text){clearTimeout(window.__fdbStatusTimer);window.__fdbStatusTimer=setTimeout(function(){el.style.display='none'},4000)}
 };
 window.fdbSettings=function(s){
-  currentSettings={theme:s.theme||'system',custom_css:s.custom_css||''};
+  currentSettings={theme:s.theme||'system',skin:s.skin||'default',custom_css:s.custom_css||''};
   showStatus=!!s.show_status;
   document.body.classList.toggle('compact',!!s.compact_tabs);
   applyTheme();

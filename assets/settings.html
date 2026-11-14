@@ -18,6 +18,7 @@ button{background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18p
 <div class="grid">
 <div class="card"><h2>Appearance</h2>
 <label>Theme <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label>Skin <select id="skin"><option value="default">Default</option><option value="high-tech">High-Tech</option><option value="futuristic">Futuristic</option><option value="historic">Historic</option><option value="victorian">Victorian</option><option value="amazon">Amazon</option><option value="terminal">Terminal</option></select></label>
 <label>Compact tab strip <input id="compact_tabs" type="checkbox"></label>
 <label>Show status messages <input id="show_status" type="checkbox" checked></label>
 <div class="note">Theme and custom CSS apply immediately after saving.</div>
@@ -35,12 +36,12 @@ button{background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18p
 </div>
 <button id="save" style="margin-top:20px">Save settings</button><span id="status"></span>
 <script>
-var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),compact_tabs:document.getElementById('compact_tabs'),show_status:document.getElementById('show_status'),theme:document.getElementById('theme'),custom_css:document.getElementById('custom_css')};
-try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;if(saved.compact_tabs!==undefined)fields.compact_tabs.checked=saved.compact_tabs;if(saved.show_status!==undefined)fields.show_status.checked=saved.show_status;if(saved.theme)fields.theme.value=saved.theme;if(typeof saved.custom_css==='string')fields.custom_css.value=saved.custom_css;}catch(e){}
-try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('compact_tabs'))fields.compact_tabs.checked=q.get('compact_tabs')==='1';if(q.has('show_status'))fields.show_status.checked=q.get('show_status')==='1';if(q.has('theme'))fields.theme.value=q.get('theme');if(q.has('custom_css'))fields.custom_css.value=q.get('custom_css');}catch(e){}
+var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),compact_tabs:document.getElementById('compact_tabs'),show_status:document.getElementById('show_status'),theme:document.getElementById('theme'),skin:document.getElementById('skin'),custom_css:document.getElementById('custom_css')};
+try{var saved=JSON.parse(localStorage.getItem('fdb-settings')||'{}');if(saved.home)fields.home.value=saved.home;if(saved.cookies!==undefined)fields.cookies.checked=saved.cookies;if(saved.dnt!==undefined)fields.dnt.checked=saved.dnt;if(saved.compact_tabs!==undefined)fields.compact_tabs.checked=saved.compact_tabs;if(saved.show_status!==undefined)fields.show_status.checked=saved.show_status;if(saved.theme)fields.theme.value=saved.theme;if(saved.skin)fields.skin.value=saved.skin;if(typeof saved.custom_css==='string')fields.custom_css.value=saved.custom_css;}catch(e){}
+try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('compact_tabs'))fields.compact_tabs.checked=q.get('compact_tabs')==='1';if(q.has('show_status'))fields.show_status.checked=q.get('show_status')==='1';if(q.has('theme'))fields.theme.value=q.get('theme');if(q.has('skin'))fields.skin.value=q.get('skin');if(q.has('custom_css'))fields.custom_css.value=q.get('custom_css');}catch(e){}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 document.getElementById('save').onclick=function(){
-  var data={cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,show_status:fields.show_status.checked,theme:fields.theme.value,custom_css:fields.custom_css.value};
+  var data={cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,show_status:fields.show_status.checked,theme:fields.theme.value,skin:fields.skin.value,custom_css:fields.custom_css.value};
   try{localStorage.setItem('fdb-settings',JSON.stringify(data))}catch(e){}
   send(data);document.getElementById('status').textContent='Saved';
 };

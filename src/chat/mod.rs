@@ -74,8 +74,10 @@ use self::{
     config::BootstrapConfig,
     identity::Identity,
     policy::{LimitError, Policy},
-    protocol::{fingerprint, now_ms, Message, Presence, ProtocolError, Wire, MAX_TEXT_CHARS},
-    settings::{Settings, SettingsStore},
+    protocol::{
+        fingerprint, now_ms, Message, Presence, ProfileCard, ProtocolError, Wire, MAX_TEXT_CHARS,
+    },
+    settings::{Profile, Settings, SettingsStore},
     transport::Transport,
 };
 
@@ -128,6 +130,35 @@ pub struct MessageView {
     pub profile_version: u32,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ProfileView {
+    pub description: String,
+    pub gender: String,
+    pub age_band: String,
+    pub country: String,
+    pub city: String,
+}
+
+impl ProfileView {
+    fn from_profile(profile: &Profile) -> Self {
+        Self {
+            description: profile.description.clone(),
+            gender: profile.gender.clone(),
+            age_band: profile.age_band.clone(),
+            country: profile.country.clone(),
+            city: profile.city.clone(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.description.trim().is_empty()
+            && self.gender.trim().is_empty()
+            && self.age_band.trim().is_empty()
+            && self.country.trim().is_empty()
+            && self.city.trim().is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct UserView {
     pub sender: String,
@@ -136,6 +167,7 @@ pub struct UserView {
     pub ignored: bool,
     pub is_me: bool,
     pub last_seen_ms: i64,
+    pub profile: Option<ProfileView>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -153,6 +185,8 @@ pub struct Snapshot {
     pub age_confirmed: bool,
     pub error: Option<String>,
     pub relay_url: String,
+    pub profile: ProfileView,
+    pub show_profile_in_rooms: bool,
 }
 
 struct Shared {
@@ -160,6 +194,8 @@ struct Shared {
     room: String,
     relay_url: String,
     nickname: Mutex<String>,
+    profile: Mutex<Option<ProfileView>>,
+    show_profile: AtomicBool,
     profile_version: AtomicU32,
     connected: AtomicBool,
     error: Mutex<Option<String>>,
@@ -308,6 +344,12 @@ impl ChatService {
             room: bootstrap.lobby_room.clone(),
             relay_url: bootstrap.relay_url.clone(),
             nickname: Mutex::new(settings.nickname.clone()),
+            profile: Mutex::new(if settings.show_profile_in_rooms {
+                Some(ProfileView::from_profile(&settings.profile))
+            } else {
+                None
+            }),
+            show_profile: AtomicBool::new(settings.show_profile_in_rooms),
             profile_version: AtomicU32::new(settings.profile_version),
             connected: AtomicBool::new(false),
             error: Mutex::new(None),
@@ -324,6 +366,11 @@ impl ChatService {
             ignored: false,
             is_me: true,
             last_seen_ms: now_ms(),
+            profile: if settings.show_profile_in_rooms {
+                Some(ProfileView::from_profile(&settings.profile))
+            } else {
+                None
+            },
         };
         shared
             .users
@@ -404,6 +451,8 @@ impl ChatService {
                 age_confirmed: settings.age_confirmed,
                 error: inner.error.clone(),
                 relay_url: self.bootstrap.relay_url.clone(),
+                profile: ProfileView::from_profile(&settings.profile),
+                show_profile_in_rooms: settings.show_profile_in_rooms,
             },
         }
     }
@@ -496,6 +545,76 @@ impl ChatService {
             {
                 user.nickname = nickname;
                 user.last_seen_ms = now_ms();
+            }
+            let settings = self.settings.get();
+            emit_state(&self.app, &shared, &settings, true);
+        }
+        Ok(self.snapshot().await)
+    }
+
+
+    pub async fn set_profile(
+        &self,
+        profile: Profile,
+        show_in_rooms: bool,
+    ) -> Result<Snapshot, ChatError> {
+        let profile = profile.normalized();
+        profile.validate().map_err(ChatError::Invalid)?;
+        let next_version = self
+            .settings
+            .get()
+            .profile_version
+            .wrapping_add(1);
+        self.settings
+            .update(|settings| {
+                settings.profile = profile.clone();
+                settings.show_profile_in_rooms = show_in_rooms;
+                settings.profile_version = next_version;
+            })
+            .map_err(ChatError::Storage)?;
+
+        let session = {
+            let inner = self.inner.lock().await;
+            inner
+                .session
+                .as_ref()
+                .map(|session| (session.sender.clone(), Arc::clone(&session.identity), Arc::clone(&session.shared)))
+        };
+        if let Some((sender, identity, shared)) = session {
+            *shared.profile.lock().expect("profile lock") = Some(ProfileView::from_profile(&profile));
+            shared
+                .show_profile
+                .store(show_in_rooms, Ordering::Relaxed);
+            shared
+                .profile_version
+                .store(next_version, Ordering::Relaxed);
+            let nickname = shared.nickname.lock().expect("nickname lock").clone();
+            if let Some(user) = shared
+                .users
+                .lock()
+                .expect("users lock")
+                .get_mut(&shared.node_id.to_string())
+            {
+                user.profile = show_in_rooms.then(|| ProfileView::from_profile(&profile));
+                user.last_seen_ms = now_ms();
+            }
+            if show_in_rooms {
+                if let Ok(mut card) = ProfileCard::create(
+                    &shared.room,
+                    shared.node_id,
+                    &nickname,
+                    next_version,
+                    &profile.description,
+                    &profile.gender,
+                    &profile.age_band,
+                    &profile.country,
+                    &profile.city,
+                ) {
+                    card.sign(&identity.key);
+                    if let Ok(bytes) = Wire::Profile(card).encode() {
+                        let _ = sender.broadcast(bytes.into()).await;
+                    }
+                }
             }
             let settings = self.settings.get();
             emit_state(&self.app, &shared, &settings, true);
@@ -742,6 +861,38 @@ fn handle_payload(app: &AppHandle, shared: &Arc<Shared>, content: &[u8], setting
             emit_presence(app, shared);
             emit_state(app, shared, settings, true);
         }
+        Wire::Profile(card) => {
+            if card.room != shared.room {
+                return;
+            }
+            let sender = match card.verify(now) {
+                Ok(sender) => sender,
+                Err(error) => {
+                    emit_error(app, &format!("dropped unsigned profile: {error}"));
+                    return;
+                }
+            };
+            let profile = ProfileView {
+                description: card.description.clone(),
+                gender: card.gender.clone(),
+                age_band: card.age_band.clone(),
+                country: card.country.clone(),
+                city: card.city.clone(),
+            };
+            touch_user(shared, sender, &card.nickname, None);
+            if let Some(user) = shared
+                .users
+                .lock()
+                .expect("users lock")
+                .get_mut(&sender.to_string())
+            {
+                user.nickname = card.nickname.clone();
+                user.profile = Some(profile);
+                user.last_seen_ms = now;
+            }
+            emit_presence(app, shared);
+            emit_state(app, shared, settings, true);
+        }
     }
 }
 
@@ -755,6 +906,7 @@ fn touch_user(shared: &Shared, sender: EndpointId, nickname: &str, ignored: Opti
         ignored: false,
         is_me: sender == shared.node_id,
         last_seen_ms: now,
+        profile: None,
     });
     entry.nickname = nickname.to_string();
     entry.last_seen_ms = now;
@@ -792,6 +944,39 @@ async fn run_heartbeat(
                 }
             }
             Err(error) => emit_error(&app, &format!("presence create failed: {error}")),
+        }
+
+        if shared.show_profile.load(Ordering::Relaxed) {
+            let nickname = shared.nickname.lock().expect("nickname lock").clone();
+            let profile = shared.profile.lock().expect("profile lock").clone();
+            if let Some(profile) = profile.filter(|profile| !profile.is_empty()) {
+                match ProfileCard::create(
+                    &shared.room,
+                    shared.node_id,
+                    &nickname,
+                    shared.profile_version.load(Ordering::Relaxed),
+                    &profile.description,
+                    &profile.gender,
+                    &profile.age_band,
+                    &profile.country,
+                    &profile.city,
+                ) {
+                    Ok(mut card) => {
+                        card.sign(&identity.key);
+                        match Wire::Profile(card).encode() {
+                            Ok(bytes) => {
+                                if let Err(error) = sender.broadcast(bytes.into()).await {
+                                    emit_error(&app, &format!("profile send failed: {error}"));
+                                }
+                            }
+                            Err(error) => {
+                                emit_error(&app, &format!("profile encode failed: {error}"));
+                            }
+                        }
+                    }
+                    Err(error) => emit_error(&app, &format!("profile create failed: {error}")),
+                }
+            }
         }
 
         let now = now_ms();
@@ -870,6 +1055,8 @@ fn snapshot_from(shared: &Shared, settings: &Settings, enabled: bool) -> Snapsho
         age_confirmed: settings.age_confirmed,
         error: shared.error.lock().expect("error lock").clone(),
         relay_url: shared.relay_url.clone(),
+        profile: ProfileView::from_profile(&settings.profile),
+        show_profile_in_rooms: settings.show_profile_in_rooms,
     }
 }
 

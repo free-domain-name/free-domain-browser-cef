@@ -25,7 +25,7 @@ helper_name = "free_domain_browser_cef_helper"
 
 [dependencies]
 fdn-core = { path = "core" }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "fs", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "fs", "macros", "net", "io-util"] }
 ctrlc = "3"
 libc = "0.2"
 url = "2"
@@ -33,6 +33,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 anyhow = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "http2"] }
 hex = "0.4"
 rand = "0.8"
 iroh = { version = "1.4.1", default-features = false, features = ["tls-ring"] }
