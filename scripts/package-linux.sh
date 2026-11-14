@@ -4,7 +4,9 @@
 # desktop entry. It does not need root to run.
 set -eu
 cd "$(dirname "$0")/.."
-cargo run --release --bin bundle -- --build-only --release
+if [ "${FDB_SKIP_BUILD:-0}" != "1" ]; then
+  cargo run --release --bin bundle -- --build-only --release
+fi
 ARCH="$(uname -m)"
 NAME="FreeDomainBrowser-CEF-linux-${ARCH}"
 ROOT="target/package"

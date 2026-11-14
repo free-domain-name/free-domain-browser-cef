@@ -12,10 +12,10 @@ sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages with a per-session choice
 memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
 opens as an overlay below the chrome, chat as a 420 px side panel with a compact
-drawer, and community reviews open in a dedicated review window. System/light/
-dark theme and all seven skins are applied to the chrome and internal pages;
-compact density is applied to the chrome. The chat page talks to the ported iroh
-service; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to enable
+drawer, and community reviews open in a reusable dedicated review window.
+System/light/dark theme, all seven skins and compact density are applied to the
+chrome and internal pages; macOS gets a native app/Browser/Edit menu. The chat
+page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to enable
 the community relay, otherwise it reports “chat bootstrap is not configured”.
 Still pending: a Developer ID-signed/notarized release, native MSI/NSIS/AppImage/
 deb installers, and a production `fdn-chatd` lobby deployment. The chat
@@ -86,6 +86,10 @@ Portable Linux and Windows archives can be built on their native platforms:
 ./scripts/package-linux.sh      # tar.gz with CEF runtime + .desktop entry
 ./scripts/package-windows.ps1  # zip with CEF runtime
 ```
+
+Tagged `v*` pushes run `.github/workflows/release.yml`, which builds those
+portable archives on macOS, Linux, and Windows and attaches them to the GitHub
+release. These are ad-hoc/unsigned builds, not MSI/NSIS/AppImage/deb packages.
 
 Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
 helpers need hardened-runtime JIT/library entitlements, so the script signs

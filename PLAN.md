@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: desktop functionality is ported, including settings/chat overlays, a dedicated review window and themed internal pages. Remaining work is packaging polish, density inside content pages, and platform-limited mobile support. See `MIGRATION.md`.
+Status: desktop functionality is ported, including settings/chat overlays, a reusable dedicated review window, native macOS menus, themed/compact internal pages and verified DMG plus portable archive packaging. Remaining work is non-macOS native installer polish and platform-limited mobile support. See `MIGRATION.md`.
 
 ## Constraints
 
@@ -22,7 +22,8 @@ Status: desktop functionality is ported, including settings/chat overlays, a ded
 - Settings and chat are internal `file://` pages; settings persist in `localStorage`. Settings opens as a fixed overlay below the chrome and chat as a 420 px side panel.
 - Chat has a working iroh backend, profile cards, ignore/clear controls, per-tab enablement and a compact side-panel drawer.
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
-- Reviews open in a dedicated CEF top-level window; system/light/dark theme and all seven skins reach the chrome and internal pages.
+- Reviews open in a reusable dedicated CEF top-level window; system/light/dark theme, all seven skins and compact density reach the chrome and internal pages.
+- macOS has a native app/Browser/Edit menu; other platforms use the overflow menu.
 - Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
 
 ## Phase 0 — stable dev loop (mostly done)

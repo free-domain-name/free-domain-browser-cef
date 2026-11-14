@@ -25,11 +25,12 @@ commits are made here.
 - `fdn-core` Linux tests: 14 passed, 5 live-network ignored.
 - Headless Chromium checks of chrome, status bar, start page, settings and chat
   (including compact side-panel mode) with dynamic DOM assertions.
-- Hidden CEF CDP checks of the settings overlay, chat side panel, theme switch
-  and dedicated review-window creation.
+- Hidden CEF CDP checks of the settings overlay, chat side panel, theme switch,
+  review-window reuse and native menu installation.
 - macOS bundle build: `assets/mac/free-domain-browser-cef.icns` copied into
-  `Contents/Resources`, `CFBundleIconFile` set, category/copyright/display name
-  populated, and the GPL LICENSE bundled.
+  `Contents/Resources`, `CFBundleIconFile`, Utilities category, copyright,
+  display name, high-resolution flag and the GPL LICENSE populated. The DMG was
+  created, verified (CRC32 valid) and mounted with the app inside.
 - App icons ported from the Tauri project (`assets/icon.{svg,png}`, `icons/`).
 
 ## Build and test
@@ -68,29 +69,28 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Start page | themed inline page, resolver-routed samples | themed `newtab.html`, resolver-routed samples | match |
 | Status/progress | statusbar pill + URL + mode, progress bar | 20 px statusbar (source + URL + mode) and progress bar | match |
 | Theme | system/light/dark across chrome and pages | system/light/dark across chrome and internal pages | match |
-| Density | comfortable/compact across chrome | comfortable/compact setting; chrome compact mode | partial (page content keeps its own density) |
+| Density | comfortable/compact across chrome | comfortable/compact chrome and compact internal-page spacing | match |
 | Built-in skins | seven skins across chrome/pages | seven chrome and internal-page palettes | match |
 | Custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
 | Settings | in-chrome overlay, instant apply | fixed overlay below the chrome, instant apply, close/Escape | match |
-| Application menu | native OS Browser/Edit menu | cross-platform overflow menu + keyboard handler | match (generalised) |
+| Application menu | native OS Browser/Edit menu | native macOS app/Browser/Edit menu plus overflow fallback and keyboard handler | match on macOS; overflow on Linux/Windows |
 | External open | resolves registry target / public URL | resolves and opens registry target / public URL | match |
 | Popup -> tab | new tab through resolver | `on_before_popup` creates a tab through the resolver | match |
 | Downloads | no handler | automatic `~/Downloads` save with progress | CEF ahead |
 | Registry proxy | redirects, header stripping, HTML rewrite, cookies | same, with COOP/COEP/CSP/XFO stripping | match |
 | Chat backend | iroh gossip, signed profile cards, per-tab enable | same transport/protocol, per-tab enable, profile cooldown | match |
 | Chat UI | side panel with profile view, ignore list, clear data | 420 px side panel with compact drawer, profile view, ignore list, clear data, age gate | match |
-| App icon / bundle metadata | full icon set + category/description/license | full icon set, macOS category/copyright/display name/icon, bundled LICENSE | partial (Windows resource metadata and Linux desktop metadata ship in the portable packages) |
+| App icon / bundle metadata | full icon set + category/description/license | full icon set; macOS category/copyright/display/high-res/icon metadata; Windows icon+version resources; Linux desktop entry; bundled LICENSE | match |
 | Review window | dedicated window | dedicated top-level CEF window | match |
 | Mobile (Android/iOS) | supported | not supported by this CEF desktop prototype | not in scope |
-| Installers / release CI | DMG/MSI/NSIS/AppImage/deb | macOS `.app` zip + optional DMG, portable Linux tar.gz, portable Windows zip | partial (no signed MSI/NSIS/AppImage/deb pipeline) |
+| Installers / release CI | DMG/MSI/NSIS/AppImage/deb | verified macOS `.app` zip + DMG, portable Linux tar.gz, portable Windows zip; tagged CI workflow builds all three | partial (portable archives, not MSI/NSIS/AppImage/deb) |
 
 ## Remaining work
 
-- Density is applied to the browser chrome; page content intentionally keeps
-  its own layout.
 - Windows executable resource metadata and Linux distribution packaging are
   portable archives rather than MSI/NSIS/deb/AppImage installers.
-- The cross-platform overflow menu replaces Tauri's native Browser/Edit menu.
+- Linux/Windows menus use the cross-platform overflow fallback; macOS gets the
+  native app/Browser/Edit menu.
 - Mobile targets are outside the CEF desktop prototype; CEF is a desktop
   embedding and this repository does not ship Android/iOS shells.
 - Notarization still needs Apple credentials; ad-hoc signing is done by the

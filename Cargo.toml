@@ -43,11 +43,16 @@ n0-future = "0.3"
 sha2 = "0.11"
 cef = { version = "156.4.0", default-features = false, features = ["build-util"] }
 
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
 objc2-foundation = "0.3.2"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSApplication",
+  "NSMenu",
+  "NSMenuItem",
   "NSEvent",
   "NSResponder",
   "NSUserInterfaceValidation",

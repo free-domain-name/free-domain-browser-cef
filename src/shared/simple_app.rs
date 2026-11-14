@@ -1,5 +1,6 @@
 use cef::*;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use super::simple_handler::*;
 
@@ -357,9 +358,16 @@ wrap_browser_process_handler! {
     }
 }
 
+static REVIEW_SLOT: OnceLock<Arc<Mutex<Option<BrowserView>>>> = OnceLock::new();
+
+fn review_slot() -> &'static Arc<Mutex<Option<BrowserView>>> {
+    REVIEW_SLOT.get_or_init(|| Arc::new(Mutex::new(None)))
+}
+
 wrap_window_delegate! {
     struct ReviewWindowDelegate {
         view: RefCell<Option<BrowserView>>,
+        slot: Arc<Mutex<Option<BrowserView>>>,
         runtime_style: RuntimeStyle,
         title: String,
     }
@@ -390,6 +398,12 @@ wrap_window_delegate! {
             window.show();
         }
 
+        fn on_window_destroyed(&self, _window: Option<&mut Window>) {
+            if let Ok(mut slot) = self.slot.lock() {
+                *slot = None;
+            }
+        }
+
         fn window_runtime_style(&self) -> RuntimeStyle {
             self.runtime_style
         }
@@ -406,11 +420,33 @@ pub fn open_review_window(
     url: &str,
     domain: &str,
 ) -> bool {
+    let slot = review_slot();
+    if let Some(existing) = slot.lock().ok().and_then(|slot| slot.clone()) {
+        if let Some(browser) = existing.browser() {
+            if let Some(frame) = browser.main_frame() {
+                let mut frame = frame;
+                frame.load_url(Some(&CefString::from(url)));
+                if let Some(window) = View::from(&existing).window() {
+                    let title = format!("Review — {domain}");
+                    window.set_title(Some(&CefString::from(title.as_str())));
+                    window.show();
+                    return true;
+                }
+            }
+        }
+        if let Ok(mut slot) = slot.lock() {
+            *slot = None;
+        }
+    }
     let Some(view) = create_content_view(inner, url) else {
         return false;
     };
+    if let Ok(mut slot) = slot.lock() {
+        *slot = Some(view.clone());
+    }
     let mut delegate = ReviewWindowDelegate::new(
         RefCell::new(Some(view)),
+        slot.clone(),
         RuntimeStyle::ALLOY,
         format!("Review — {domain}"),
     );

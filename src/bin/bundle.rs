@@ -58,9 +58,14 @@ fn adhoc_sign(app: &std::path::Path) -> anyhow::Result<()> {
 #[cfg(target_os = "macos")]
 fn add_bundle_metadata(app: &std::path::Path) -> anyhow::Result<()> {
     let plist = app.join("Contents/Info.plist");
+    let version = env!("CARGO_PKG_VERSION");
     for (key, value) in [
         ("CFBundleDisplayName", "Free Domain Browser"),
-        ("LSApplicationCategoryType", "public.app-category.productivity"),
+        ("CFBundleName", "Free Domain Browser"),
+        (
+            "LSApplicationCategoryType",
+            "public.app-category.utilities",
+        ),
         (
             "NSHumanReadableCopyright",
             "Copyright © Free Domain Browser contributors",
@@ -72,6 +77,29 @@ fn add_bundle_metadata(app: &std::path::Path) -> anyhow::Result<()> {
             .status()?;
         if !status.success() {
             anyhow::bail!("plutil failed to set {key}");
+        }
+    }
+    let info = format!("Free Domain Browser CEF {version} · GPL-3.0-only");
+    for (key, kind, value) in [
+        ("CFBundleGetInfoString", "-string", info.as_str()),
+        ("NSHighResolutionCapable", "-bool", "true"),
+    ] {
+        // Bundle generation may or may not have created the key; try insert
+        // first and fall back to replace when it already exists.
+        let inserted = std::process::Command::new("plutil")
+            .args(["-insert", key, kind, value])
+            .arg(&plist)
+            .status()?
+            .success();
+        if !inserted {
+            let replaced = std::process::Command::new("plutil")
+                .args(["-replace", key, kind, value])
+                .arg(&plist)
+                .status()?
+                .success();
+            if !replaced {
+                anyhow::bail!("plutil failed to set {key}");
+            }
         }
     }
     Ok(())

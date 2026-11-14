@@ -8,11 +8,19 @@ use objc2::{
     sel,
 };
 use objc2_app_kit::{
-    NSApp, NSApplication, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent,
-    NSUserInterfaceValidations, NSValidatedUserInterfaceItem,
+    NSApp, NSApplication, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSMenu,
+    NSMenuItem, NSUserInterfaceValidations, NSValidatedUserInterfaceItem,
 };
-use objc2_foundation::{NSBundle, NSObjectNSThreadPerformAdditions, ns_string};
+use objc2_foundation::{NSBundle, NSObjectNSThreadPerformAdditions, NSString, ns_string};
 use std::{cell::Cell, ptr};
+
+fn run_chrome(script: &str) {
+    if let Some(handler) = SimpleHandler::instance() {
+        if let Ok(inner) = handler.lock() {
+            inner.chrome_execute(0, script);
+        }
+    }
+}
 
 define_class! {
     #[unsafe(super(NSObject))]
@@ -37,6 +45,56 @@ define_class! {
                 owner: &*app,
                 topLevelObjects: ptr::null_mut::<*const AnyObject>()
             ];
+            self.install_main_menu(MainThreadMarker::new().expect("Not running on the main thread"));
+        }
+
+        #[unsafe(method(fdbNewTab:))]
+        unsafe fn fdb_new_tab(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbNewTab&&fdbNewTab()");
+        }
+
+        #[unsafe(method(fdbCloseTab:))]
+        unsafe fn fdb_close_tab(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbCloseActive&&fdbCloseActive()");
+        }
+
+        #[unsafe(method(fdbFocusUrl:))]
+        unsafe fn fdb_focus_url(&self, _sender: &AnyObject) {
+            if let Some(handler) = SimpleHandler::instance() {
+                if let Ok(inner) = handler.lock() {
+                    inner.chrome_focus("window.fdbFocusUrl&&fdbFocusUrl()");
+                }
+            }
+        }
+
+        #[unsafe(method(fdbBack:))]
+        unsafe fn fdb_back(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbBack&&fdbBack()");
+        }
+
+        #[unsafe(method(fdbForward:))]
+        unsafe fn fdb_forward(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbForward&&fdbForward()");
+        }
+
+        #[unsafe(method(fdbReload:))]
+        unsafe fn fdb_reload(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbReload&&fdbReload()");
+        }
+
+        #[unsafe(method(fdbPrevTab:))]
+        unsafe fn fdb_prev_tab(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbCycleTab&&fdbCycleTab(-1)");
+        }
+
+        #[unsafe(method(fdbNextTab:))]
+        unsafe fn fdb_next_tab(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbCycleTab&&fdbCycleTab(1)");
+        }
+
+        #[unsafe(method(fdbSettings:))]
+        unsafe fn fdb_settings(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbOpenSettings&&fdbOpenSettings()");
         }
     }
 
@@ -87,6 +145,173 @@ define_class! {
 }
 
 impl SimpleAppDelegate {
+    unsafe fn install_main_menu(&self, mtm: MainThreadMarker) {
+        let main = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("MainMenu"));
+        main.setAutoenablesItems(false);
+
+        let app_item = main.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Free Domain Browser"),
+            None,
+            &NSString::from_str(""),
+        );
+        let app_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("Free Domain Browser"));
+        let about = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("About Free Domain Browser"),
+            Some(sel!(orderFrontStandardAboutPanel:)),
+            &NSString::from_str(""),
+        );
+        about.setTarget(None);
+        app_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let services_item = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Services"),
+            None,
+            &NSString::from_str(""),
+        );
+        let services_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("Services"));
+        services_item.setSubmenu(Some(&services_menu));
+        NSApp(mtm).setServicesMenu(Some(&services_menu));
+        app_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let hide = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Hide Free Domain Browser"),
+            Some(sel!(hide:)),
+            &NSString::from_str("h"),
+        );
+        hide.setTarget(None);
+        let hide_others = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Hide Others"),
+            Some(sel!(hideOtherApplications:)),
+            &NSString::from_str("h"),
+        );
+        hide_others.setTarget(None);
+        hide_others.setKeyEquivalentModifierMask(
+            objc2_app_kit::NSEventModifierFlags::Command | objc2_app_kit::NSEventModifierFlags::Option,
+        );
+        let show_all = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Show All"),
+            Some(sel!(unhideAllApplications:)),
+            &NSString::from_str(""),
+        );
+        show_all.setTarget(None);
+        app_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let quit = app_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Quit Free Domain Browser"),
+            Some(sel!(terminate:)),
+            &NSString::from_str("q"),
+        );
+        quit.setTarget(None);
+        app_item.setSubmenu(Some(&app_menu));
+
+        let file_item = main.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Browser"),
+            None,
+            &NSString::from_str(""),
+        );
+        let file_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("Browser"));
+        for (title, selector, key) in [
+            ("Back", sel!(fdbBack:), "["),
+            ("Forward", sel!(fdbForward:), "]"),
+            ("Reload", sel!(fdbReload:), "r"),
+        ] {
+            let item = file_menu.addItemWithTitle_action_keyEquivalent(
+                &NSString::from_str(title),
+                Some(selector),
+                &NSString::from_str(key),
+            );
+            unsafe { let _: () = msg_send![&item, setTarget: self]; }
+        }
+        file_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let new_tab = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("New Tab"),
+            Some(sel!(fdbNewTab:)),
+            &NSString::from_str("t"),
+        );
+        unsafe { let _: () = msg_send![&new_tab, setTarget: self]; }
+        let close_tab = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Close Tab"),
+            Some(sel!(fdbCloseTab:)),
+            &NSString::from_str("w"),
+        );
+        unsafe { let _: () = msg_send![&close_tab, setTarget: self]; }
+        let prev_tab = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Previous Tab"),
+            Some(sel!(fdbPrevTab:)),
+            &NSString::from_str("\t"),
+        );
+        unsafe { let _: () = msg_send![&prev_tab, setTarget: self]; }
+        prev_tab.setKeyEquivalentModifierMask(
+            objc2_app_kit::NSEventModifierFlags::Control | objc2_app_kit::NSEventModifierFlags::Shift,
+        );
+        let next_tab = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Next Tab"),
+            Some(sel!(fdbNextTab:)),
+            &NSString::from_str("\t"),
+        );
+        unsafe { let _: () = msg_send![&next_tab, setTarget: self]; }
+        next_tab.setKeyEquivalentModifierMask(objc2_app_kit::NSEventModifierFlags::Control);
+        file_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let open_location = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Open Location…"),
+            Some(sel!(fdbFocusUrl:)),
+            &NSString::from_str("l"),
+        );
+        unsafe { let _: () = msg_send![&open_location, setTarget: self]; }
+        file_menu.addItem(&NSMenuItem::separatorItem(mtm));
+        let appearance = file_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Appearance"),
+            Some(sel!(fdbSettings:)),
+            &NSString::from_str(","),
+        );
+        unsafe { let _: () = msg_send![&appearance, setTarget: self]; }
+        file_item.setSubmenu(Some(&file_menu));
+
+        let edit_item = main.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Edit"),
+            None,
+            &NSString::from_str(""),
+        );
+        let edit_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("Edit"));
+        for (title, selector, key) in [
+            ("Undo", sel!(undo:), "z"),
+            ("Redo", sel!(redo:), "Z"),
+            ("Cut", sel!(cut:), "x"),
+            ("Copy", sel!(copy:), "c"),
+            ("Paste", sel!(paste:), "v"),
+            ("Select All", sel!(selectAll:), "a"),
+        ] {
+            let item = edit_menu.addItemWithTitle_action_keyEquivalent(
+                &NSString::from_str(title),
+                Some(selector),
+                &NSString::from_str(key),
+            );
+            item.setTarget(None);
+        }
+        edit_item.setSubmenu(Some(&edit_menu));
+
+        let window_item = main.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Window"),
+            None,
+            &NSString::from_str(""),
+        );
+        let window_menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str("Window"));
+        let minimize = window_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Minimize"),
+            Some(sel!(performMiniaturize:)),
+            &NSString::from_str("m"),
+        );
+        minimize.setTarget(None);
+        let zoom = window_menu.addItemWithTitle_action_keyEquivalent(
+            &NSString::from_str("Zoom"),
+            Some(sel!(performZoom:)),
+            &NSString::from_str(""),
+        );
+        zoom.setTarget(None);
+        window_item.setSubmenu(Some(&window_menu));
+
+        NSApp(mtm).setMainMenu(Some(&main));
+        debug_assert!(NSApp(mtm).mainMenu().is_some());
+        debug_assert!(main.numberOfItems() >= 4);
+    }
+
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = SimpleAppDelegate::alloc(mtm).set_ivars(());
         unsafe { msg_send![super(this), init] }

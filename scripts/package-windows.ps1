@@ -1,7 +1,9 @@
 # Build a portable Windows x64 package from the CEF bootstrap output.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
-cargo run --release --bin bundle -- --build-only --release
+if ($env:FDB_SKIP_BUILD -ne "1") {
+  cargo run --release --bin bundle -- --build-only --release
+}
 $name = "FreeDomainBrowser-CEF-windows-x64"
 $root = "target/package"
 $stage = Join-Path $root $name
