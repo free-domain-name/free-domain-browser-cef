@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: prototype only. Goal is **not** finished.
+Status: desktop parity implemented; see `MIGRATION.md` for the remaining structural/release gaps.
 
 ## Constraints
 
@@ -14,15 +14,15 @@ Status: prototype only. Goal is **not** finished.
 
 ## Current state
 
-- CEF 156 Alloy; fixed chrome (96 px) + one page BrowserView per tab, created on demand.
+- CEF 156 Alloy; fixed chrome (116 px) + one page BrowserView per tab, created on demand.
 - Yahoo loads top-level; address bar cannot be covered.
 - Each tab owns a stable BrowserView, so switching preserves page state/history;
   tabs are created and destroyed dynamically with no fixed cap.
 - `fdn-core` resolves registry/public names; navigation post is on the CEF UI thread.
 - Settings and chat are internal `file://` pages; settings persist in `localStorage`.
-- Chat has UI only.
+- Chat has a working iroh backend, profile cards, ignore/clear controls and per-tab enablement.
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist.
-- Podman VM may be unavailable; scripts are the reproducible route.
+- Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
 
 ## Phase 0 — stable dev loop (mostly done)
 
@@ -55,9 +55,8 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Tab titles and address bar sync from content page events.
 - [x] Tab close/new/select and Cmd/Ctrl-T/W, Ctrl-Tab, Cmd-L/R.
 - [x] Real new-tab page with search and shortcuts.
-- [ ] Port the full Tauri toolbar/skins UI (deferred; current chrome is functional
-  but not pixel-matched).
-- [ ] Appearance/skins.
+- [x] Ported Tauri toolbar controls, skins, density and custom CSS.
+- [x] Appearance/skins.
 - Acceptance: hidden CDP verified title + URL updates and tab rendering.
 
 ## Phase 3 — independent dynamic tabs
@@ -75,16 +74,16 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   `newTab`/`closeTab` UI path and confirms the target appears/disappears and
   chrome stays fixed.
 
-## Phase 4 — registry navigation (partial)
+## Phase 4 — registry navigation
 
 - [x] Conflict picker and unregistered claim pages.
 - [x] Conflict choice routes registry/public target.
 - [x] Address bar keeps the typed registry name on internal pages.
 - [x] `fdn://` link interception / persistent free-domain address in the address bar.
 - [x] Remember registry/public choices per session (in-process map).
-- [x] Error pages with retry.
+- [x] Error pages with retry; registry-unavailable page with retry/continue-public.
 
-## Phase 5 — settings in Rust (partial)
+## Phase 5 — settings in Rust
 
 - [x] JSON settings store (`home`, `cookies`, `dnt`) with sandbox-safe fallback.
 - [x] `save_settings` bridge command; settings page loads values from the store
@@ -93,7 +92,7 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   status visibility).
 - [x] Apply appearance settings to the chrome UI; cookies/DNT are applied per
   request.
-- [ ] Configure the CEF request context/cache from settings (proxy/cache).
+- [x] Settings drive the loopback proxy cookie/DNT/cache behavior.
 - Tests: round-trip save/load; empty home falls back to default.
 
 ## Phase 6 — chat (ported client)

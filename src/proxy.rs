@@ -438,9 +438,15 @@ fn skip_response_header(name: &str) -> bool {
             | "content-encoding"
             | "transfer-encoding"
             | "content-security-policy"
+            | "content-security-policy-report-only"
             | "x-frame-options"
+            | "cross-origin-opener-policy"
+            | "cross-origin-embedder-policy"
+            | "origin-agent-cluster"
             | "strict-transport-security"
             | "alt-svc"
+            | "report-to"
+            | "nel"
     )
 }
 

@@ -2,7 +2,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-ENGINE=${ENGINE:-podman}
+ENGINE=${ENGINE:-docker}
 mkdir -p target/docker-out
 "$ENGINE" build -t free-domain-browser-cef-web-test -f Dockerfile.test .
 # The chrome template contains a build-time placeholder; substitute it before
@@ -17,13 +17,19 @@ sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/
   -v "$ROOT/target/docker-out:/out" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars \
-  --window-size=1000,700 --screenshot=/out/settings.png file:///assets/settings.html
+  --window-size=1000,820 --screenshot=/out/settings.png file:///assets/settings.html
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/assets:/assets:ro" \
   -v "$ROOT/target/docker-out:/out" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars \
   --window-size=1000,900 --screenshot=/out/chat.png file:///assets/chat.html
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  -v "$ROOT/target/docker-out:/out" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --window-size=1200,760 --screenshot=/out/newtab.png file:///assets/newtab.html
 # Dynamic smoke checks: JS must render the tab strip/menu, settings must expose
 # the skin picker, and chat must expose the profile editor and age gate.
 "$ENGINE" run --rm --entrypoint chromium \
@@ -32,16 +38,27 @@ sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///out/chrome.html > target/docker-out/chrome.dom
 grep -q 'id="menu"' target/docker-out/chrome.dom
 grep -q 'New tab (Cmd/Ctrl+T)' target/docker-out/chrome.dom
+grep -q 'id="statusbar"' target/docker-out/chrome.dom
+grep -q 'id="source"' target/docker-out/chrome.dom
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/assets:/assets:ro" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/settings.html > target/docker-out/settings.dom
 grep -q 'id="skin"' target/docker-out/settings.dom
+grep -q 'id="density"' target/docker-out/settings.dom
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/assets:/assets:ro" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/chat.html > target/docker-out/chat.dom
 grep -q 'id="profileDescription"' target/docker-out/chat.dom
 grep -q 'id="age"' target/docker-out/chat.dom
+grep -q 'id="clearData"' target/docker-out/chat.dom
+grep -q 'id="count"' target/docker-out/chat.dom
+grep -q 'id="ignoreList"' target/docker-out/chat.dom
+"$ENGINE" run --rm --entrypoint chromium \
+  -v "$ROOT/assets:/assets:ro" \
+  free-domain-browser-cef-web-test \
+  --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/newtab.html > target/docker-out/newtab.dom
+grep -q 'data-url="https://google.com"' target/docker-out/newtab.dom
 echo "web checks passed"
-echo "screenshots: $ROOT/target/docker-out/{chrome,settings,chat}.png"
+echo "screenshots: $ROOT/target/docker-out/{chrome,settings,chat,newtab}.png"

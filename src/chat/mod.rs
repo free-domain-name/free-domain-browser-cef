@@ -88,6 +88,7 @@ pub const EVENT_ERROR: &str = "chat://error";
 pub const EVENT_ROOMS: &str = "chat://rooms";
 
 const HEARTBEAT: Duration = Duration::from_secs(15);
+const PROFILE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 const PRESENCE_TTL_MS: i64 = 45_000;
 const MESSAGE_RING: usize = 200;
 
@@ -101,6 +102,8 @@ pub enum ChatError {
     NotEnabled,
     #[error("invalid input: {0}")]
     Invalid(String),
+    #[error("profile updates are limited; try again in {0} ms")]
+    ProfileCooldown(u64),
     #[error("chat transport error: {0}")]
     Transport(String),
     #[error("chat protocol error: {0}")]
@@ -182,6 +185,7 @@ pub struct Snapshot {
     pub messages: Vec<MessageView>,
     pub nickname: String,
     pub cooldown_ms: u64,
+    pub profile_cooldown_ms: u64,
     pub age_confirmed: bool,
     pub error: Option<String>,
     pub relay_url: String,
@@ -203,6 +207,7 @@ struct Shared {
     messages: Mutex<VecDeque<MessageView>>,
     policy: Mutex<Policy>,
     last_noise_ms: AtomicI64,
+    last_profile_ms: AtomicI64,
 }
 
 struct Session {
@@ -357,6 +362,7 @@ impl ChatService {
             messages: Mutex::new(VecDeque::new()),
             policy: Mutex::new(Policy::new(settings.ignored.clone())),
             last_noise_ms: AtomicI64::new(0),
+            last_profile_ms: AtomicI64::new(0),
         });
 
         let me = UserView {
@@ -448,6 +454,7 @@ impl ChatService {
                 messages: Vec::new(),
                 nickname: settings.nickname.clone(),
                 cooldown_ms: 0,
+                profile_cooldown_ms: 0,
                 age_confirmed: settings.age_confirmed,
                 error: inner.error.clone(),
                 relay_url: self.bootstrap.relay_url.clone(),
@@ -560,6 +567,14 @@ impl ChatService {
     ) -> Result<Snapshot, ChatError> {
         let profile = profile.normalized();
         profile.validate().map_err(ChatError::Invalid)?;
+        if show_in_rooms && !profile.is_empty() {
+            if let Some(shared) = self.session_shared().await {
+                let left = profile_cooldown_ms(&shared);
+                if left > 0 {
+                    return Err(ChatError::ProfileCooldown(left));
+                }
+            }
+        }
         let next_version = self
             .settings
             .get()
@@ -599,6 +614,9 @@ impl ChatService {
                 user.last_seen_ms = now_ms();
             }
             if show_in_rooms {
+                shared
+                    .last_profile_ms
+                    .store(now_ms(), Ordering::Relaxed);
                 if let Ok(mut card) = ProfileCard::create(
                     &shared.room,
                     shared.node_id,
@@ -1018,6 +1036,15 @@ fn emit_presence(app: &AppHandle, shared: &Shared) {
     );
 }
 
+fn profile_cooldown_ms(shared: &Shared) -> u64 {
+    let last = shared.last_profile_ms.load(Ordering::Relaxed);
+    if last <= 0 {
+        return 0;
+    }
+    let elapsed = now_ms().saturating_sub(last).max(0) as u64;
+    (PROFILE_COOLDOWN.as_millis() as u64).saturating_sub(elapsed)
+}
+
 fn emit_state(app: &AppHandle, shared: &Shared, settings: &Settings, enabled: bool) {
     let snapshot = snapshot_from(shared, settings, enabled);
     let _ = app.emit(EVENT_STATE, snapshot);
@@ -1052,6 +1079,7 @@ fn snapshot_from(shared: &Shared, settings: &Settings, enabled: bool) -> Snapsho
             .lock()
             .expect("policy lock")
             .send_cooldown_ms(),
+        profile_cooldown_ms: profile_cooldown_ms(&shared),
         age_confirmed: settings.age_confirmed,
         error: shared.error.lock().expect("error lock").clone(),
         relay_url: shared.relay_url.clone(),

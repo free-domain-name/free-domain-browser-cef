@@ -1,17 +1,48 @@
-<html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 10%,#1b2b45,#0b1018 68%);color:#e8edf7;font:15px -apple-system,system-ui;display:flex;align-items:center;justify-content:center;padding:40px}
-main{width:min(760px,90vw)}h1{font-size:30px;margin:0 0 6px;font-weight:650;letter-spacing:-.02em}.sub{color:#93a0b8;margin:0 0 24px}
-form{display:flex;gap:8px}input{flex:1;background:#111a27;border:1px solid #33465f;border-radius:12px;color:#fff;padding:14px 16px;font:inherit;outline:none}input:focus{border-color:#4f7cff}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Tab</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 22% 8%,#202b52 0,#0c1220 44%,#070b12 100%);color:#e8edf7;font:15px -apple-system,system-ui,Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;padding:40px}
+main{width:min(780px,92vw)}
+.mark{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#2dd4bf,#4f7cff);box-shadow:0 14px 40px rgba(45,212,191,.18);margin-bottom:18px}
+.mark svg{width:34px;height:34px;color:#08111f}
+h1{font-size:34px;line-height:1.08;margin:0 0 8px;font-weight:680;letter-spacing:-.035em}
+.sub{color:#9aa8c0;margin:0 0 26px;line-height:1.55;font-size:14px}
+form{display:flex;gap:8px}input{flex:1;background:#0d1522;border:1px solid #2e3d56;border-radius:12px;color:#fff;padding:14px 16px;font:inherit;outline:none}input:focus{border-color:#4f7cff;box-shadow:0 0 0 3px rgba(79,124,255,.16)}
 button{background:#4f7cff;border:0;border-radius:12px;color:#fff;padding:14px 20px;font:inherit;cursor:pointer}
-h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#8290a8;margin:28px 0 10px}
-.links{display:flex;flex-wrap:wrap;gap:8px}a{color:#cfe0ff;text-decoration:none;background:#182235;border:1px solid #2c3c55;padding:10px 13px;border-radius:10px;font-size:13px}a:hover{border-color:#4f7cff}
-.note{color:#8290a8;font-size:12px;line-height:1.5;margin-top:24px}
-</style><title>New Tab</title></head><body><main>
-<h1>Free Domain Browser</h1><p class="sub">Search the web, or type a registry name like <b>hello.fdn</b>.</p>
-<form onsubmit="event.preventDefault();location.href='https://duckduckgo.com/?q='+encodeURIComponent(document.getElementById('q').value)"><input id="q" autofocus placeholder="Search or enter a domain"><button>Search</button></form>
-<h2>Free Domain Registry</h2>
-<div class="links"><a href="fdn://hello.fdn">hello.fdn</a><a href="fdn://insecure.fdn">insecure.fdn</a><a href="fdn://ipmap.info">ipmap.info</a></div>
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#7f8ea8;margin:30px 0 10px}
+.samples{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.sample{display:flex;flex-direction:column;gap:5px;text-align:left;background:#101a2a;border:1px solid #26364d;border-radius:12px;padding:13px 14px;color:#e8edf7;text-decoration:none}
+.sample:hover{border-color:#4f7cff;background:#142033}
+.sample strong{font-size:14px}.sample span{font-size:11px;color:#93a2bb;line-height:1.4}
+.sample .kind{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#6ee7d8}.sample .conflict{color:#fbbf24}
+.fineprint{color:#7887a0;font-size:12px;line-height:1.55;margin-top:26px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+</style>
+</head>
+<body><main>
+<div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.7 2.4 4 5.2 4 8.5s-1.3 6.1-4 8.5c-2.7-2.4-4-5.2-4-8.5s1.3-6.1 4-8.5z"/></svg></div>
+<h1>Every name, two worlds.</h1>
+<p class="sub">The community Free Registry is asked first. If a name is not there, the public web is used. If it exists in both, you choose.</p>
+<form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q)location.href='https://duckduckgo.com/?q='+encodeURIComponent(q)"><input id="q" autofocus placeholder="Search or enter a registry name — try hello.fdn"><button>Search</button></form>
+<h2>Try the registry</h2>
+<div class="samples">
+<button class="sample" type="button" data-url="fdn://hello.fdn"><span class="kind">registry only</span><strong>hello.fdn</strong><span>Resolved from GitHub and served through fdn://</span></button>
+<button class="sample" type="button" data-url="https://google.com"><span class="kind conflict">conflict</span><strong>google.com</strong><span>Exists in the registry and in public DNS</span></button>
+<button class="sample" type="button" data-url="fdn://ipmap.info"><span class="kind">hostname target</span><strong>ipmap.info</strong><span>Target is another hostname, fetched as that host</span></button>
+<button class="sample" type="button" data-url="fdn://insecure.fdn"><span class="kind">port 8080</span><strong>insecure.fdn</strong><span>Plain HTTP with a non-default port</span></button>
+</div>
 <h2>Public web</h2>
-<div class="links"><a href="https://github.com/">GitHub</a><a href="https://yahoo.com/">Yahoo</a><a href="https://example.com/">Example</a></div>
-<p class="note">Registry names resolve through the sharded GitHub registry. A name that is also active on public DNS opens a chooser instead of guessing.</p>
+<div class="samples">
+<button class="sample" type="button" data-url="https://github.com/"><strong>GitHub</strong><span>github.com</span></button>
+<button class="sample" type="button" data-url="https://yahoo.com/"><strong>Yahoo</strong><span>yahoo.com</span></button>
+<button class="sample" type="button" data-url="https://example.com/"><strong>Example</strong><span>example.com</span></button>
+</div>
+<p class="fineprint">Registry records are public and PR-reviewed at <span class="mono">github.com/free-domain-name/registry</span>. Names that also exist on public DNS open a chooser instead of guessing.</p>
+<script>
+function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
+document.querySelectorAll('[data-url]').forEach(function(button){button.onclick=function(){send({cmd:'navigate',url:button.dataset.url})}});
+</script>
 </main></body></html>

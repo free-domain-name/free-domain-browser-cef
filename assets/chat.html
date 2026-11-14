@@ -17,12 +17,18 @@ header .spacer{flex:1}header button{background:#2a3446;color:#dce6f7;border:0;bo
 .msg{max-width:72%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45;word-wrap:break-word}
 .msg.me{margin-left:auto;background:#2f4f9e}.msg.ignored{opacity:.55;font-style:italic}
 .meta{font-size:11px;color:#8d9ab1;margin-bottom:4px}.empty{color:#8290a8;font-size:13px}
+footer .count{font-size:11px;color:#8290a8;white-space:nowrap}
 footer{display:flex;gap:10px;padding:14px 24px;border-top:1px solid #263042}
 #text{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit;outline:none}#text:focus{border-color:#4f7cff}
 footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit;cursor:pointer}footer button:disabled{opacity:.45;cursor:default}
 #age{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:5}
 #age .box{max-width:460px;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:28px}#age h2{margin:0 0 8px}#age p{color:#aebbd0;line-height:1.55;font-size:13px}
 #age label{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c6d0e2;font-size:13px}#age button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:10px 16px;font:inherit;cursor:pointer}#age button:disabled{opacity:.45;cursor:default}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow-wrap:anywhere}
+#clearData{margin-top:8px;background:#5a2630;color:#ffd9df;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
+#ignoreList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}#ignoreList li{display:flex;align-items:center;gap:6px;font-size:12px}#ignoreList li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#ignoreList button{background:none;border:0;color:#9dbcff;font:inherit;font-size:11px;cursor:pointer}
+#profileView[hidden]{display:none}#profileView{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:6}
+#profileView .box{max-width:480px;width:100%;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:26px}#profileView h2{margin:0 0 14px}#profileView dl{margin:0}#profileView dt{color:#8290a8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:10px}#profileView dd{margin:2px 0 0;color:#e8edf7;font-size:13px;overflow-wrap:anywhere}#profileView button{margin-top:16px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
 </style></head><body>
 <aside>
 <h1>Free Domain Chat</h1><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
@@ -35,55 +41,133 @@ footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:1
 <input id="profileCountry" maxlength="2" placeholder="Country (ISO)" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
 <input id="profileCity" maxlength="48" placeholder="City" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
 <label style="display:flex;gap:8px;align-items:center;margin-top:8px;color:#aebbd0;font-size:12px"><input id="profileShow" type="checkbox"> Show profile in rooms</label>
-<button id="saveProfile" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save profile</button></details>
+<button id="saveProfile" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save profile</button><div id="profileStatus" class="sub" style="margin-top:6px"></div></details>
+<details class="card" id="identityCard"><summary>Identity</summary><div class="sub" style="margin-top:8px">Fingerprint</div><div id="fingerprint" class="mono">—</div><div class="sub" style="margin-top:8px">Node</div><div id="nodeId" class="mono">—</div><button id="clearData" type="button">Clear local chat data</button><div id="clearHint" class="sub" style="margin-top:6px"></div></details>
+<details class="card" id="ignoreCard"><summary>Ignored <span id="ignoreCount">0</span></summary><ul id="ignoreList"></ul><div id="ignoreEmpty" class="sub">Nobody is ignored.</div></details>
 <div class="card"><h2>Online <span id="onlineCount">0</span></h2><ul id="users"></ul></div>
 </aside>
 <main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="join">Join chat</button><button id="disable">Leave</button></header>
 <div id="connection">Connecting to the community relay…</div>
 <div class="messages" id="messages"><div class="empty">Join the room to load messages.</div></div>
-<footer><input id="text" placeholder="Message #general" disabled><button id="send" disabled>Send</button></footer></main>
+<footer><input id="text" maxlength="500" placeholder="Message #general" disabled><span id="count" class="count">0 / 500</span><button id="send" disabled>Send</button></footer></main>
 <div id="age"><div class="box"><h2>Before you join</h2><p>This is an unmoderated community chat. Messages can contain mature language or links from strangers. You must be 18 or older to continue.</p><label><input id="ageCheck" type="checkbox"> I am 18 or older and understand this room is unmoderated.</label><button id="ageContinue" disabled>Continue</button></div></div>
+<div id="profileView" hidden><div class="box"><h2 id="profileTitle">Profile</h2><dl id="profileFacts"></dl><div id="profileEmpty" class="sub" hidden>This person has not shared a profile.</div><button id="profileClose" type="button">Close</button></div></div>
 <script>
-var state={enabled:false,age_confirmed:false,snapshot:null,pending:false,cooldown:0};
+var state={enabled:false,age_confirmed:false,snapshot:null,cooldownUntil:0,clearArmed:false,clearTimer:null,profileSender:null};
 function send(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
+function $(id){return document.getElementById(id)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-function setConnection(text){document.getElementById('connection').textContent=text||''}
+function setConnection(text){$('connection').textContent=text||''}
+function renderUsers(users){
+  var list=$('users');list.textContent='';
+  (users||[]).forEach(function(u){
+    var li=document.createElement('li');
+    var dot=document.createElement('span');dot.className='dot';li.appendChild(dot);
+    var who=document.createElement('button');who.className='who';who.type='button';
+    who.style.cssText='flex:1;background:none;border:0;color:#c6d0e2;font:inherit;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:'+(u.profile?'pointer':'default');
+    who.textContent=u.nickname||u.sender;
+    var small=document.createElement('small');small.textContent=(u.fingerprint||'')+(u.is_me?' · you':'');
+    who.appendChild(small);
+    if(u.profile){who.title='Open profile';who.onclick=function(){openProfile(u.sender)}}
+    li.appendChild(who);
+    if(u.profile&&!u.ignored){var pb=document.createElement('button');pb.textContent='Profile';pb.onclick=function(){openProfile(u.sender)};li.appendChild(pb)}
+    if(!u.is_me){var ib=document.createElement('button');ib.textContent=u.ignored?'Unignore':'Ignore';ib.onclick=function(){send({cmd:u.ignored?'unignore':'ignore',sender:u.sender})};li.appendChild(ib)}
+    list.appendChild(li);
+  });
+}
+function renderIgnored(users){
+  var ignored=(users||[]).filter(function(u){return u.ignored});
+  var list=$('ignoreList');list.textContent='';
+  $('ignoreEmpty').style.display=ignored.length?'none':'block';
+  $('ignoreCount').textContent=String(ignored.length);
+  ignored.forEach(function(u){
+    var li=document.createElement('li');var label=document.createElement('span');
+    label.textContent=(u.nickname||'anon')+' #'+(u.fingerprint||'????');
+    var b=document.createElement('button');b.textContent='Unignore';b.onclick=function(){send({cmd:'unignore',sender:u.sender})};
+    li.appendChild(label);li.appendChild(b);list.appendChild(li);
+  });
+}
+function tickCooldown(){
+  var left=Math.max(0,state.cooldownUntil-Date.now());
+  var button=$('send');
+  if(button){button.disabled=!state.enabled||left>0;button.textContent=left>0?('Wait '+Math.ceil(left/1000)+'s'):'Send'}
+  if(left>0){clearTimeout(state.cooldownTimer);state.cooldownTimer=setTimeout(tickCooldown,250)}
+}
 function render(s){
-  if(!s)return;state.snapshot=s;state.enabled=!!s.enabled;state.age_confirmed=!!s.age_confirmed;state.cooldown=Number(s.cooldown_ms)||0;
-  document.getElementById('age').style.display=state.age_confirmed?'none':'flex';
-  document.getElementById('nickname').value=s.nickname||'';
-  var p=s.profile||{};document.getElementById('profileDescription').value=p.description||'';document.getElementById('profileGender').value=p.gender||'';document.getElementById('profileAge').value=p.age_band||'';document.getElementById('profileCountry').value=p.country||'';document.getElementById('profileCity').value=p.city||'';document.getElementById('profileShow').checked=!!s.show_profile_in_rooms;
-  document.getElementById('room').textContent=s.room||'fdn:general:v1';
-  document.getElementById('relay').textContent=s.relay_url||'';
-  document.getElementById('onlineCount').textContent=String(s.online||0);
-  document.getElementById('statePill').textContent=s.enabled?(s.connected?'connected':'joining'):'offline';
-  document.getElementById('join').style.display=state.enabled?'none':'inline-block';
-  document.getElementById('disable').style.display=state.enabled?'inline-block':'none';
-  var list=document.getElementById('users');list.innerHTML='';
-  (s.users||[]).forEach(function(u){var li=document.createElement('li');var dot=document.createElement('span');dot.className='dot';li.appendChild(dot);var who=document.createElement('span');who.className='who';var extra=u.profile&&(u.profile.description||u.profile.city||u.profile.country)?' · '+esc([u.profile.description,u.profile.city,u.profile.country].filter(Boolean).join(' · ')):'';who.innerHTML=esc(u.nickname||u.sender)+'<small>'+esc((u.fingerprint||'').slice(0,12))+(u.is_me?' · you':'')+extra+'</small>';li.appendChild(who);if(!u.is_me){var b=document.createElement('button');b.textContent=u.ignored?'Unignore':'Ignore';b.onclick=function(){send({cmd:u.ignored?'unignore':'ignore',sender:u.sender})};li.appendChild(b)}list.appendChild(li)});
-  var box=document.getElementById('messages');box.innerHTML='';
-  if(!(s.messages||[]).length){box.innerHTML='<div class="empty">No messages yet.</div>'}
-  (s.messages||[]).forEach(function(m){var d=document.createElement('div');d.className='msg'+(m.mine?' me':'')+(m.ignored?' ignored':'');var meta=document.createElement('div');meta.className='meta';meta.textContent=(m.nickname||m.sender||'?')+' · '+new Date(Number(m.timestamp)||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+(m.ignored?' · ignored':'');d.appendChild(meta);d.appendChild(document.createTextNode(m.text||''));box.appendChild(d)});
+  if(!s)return;
+  state.snapshot=s;state.enabled=!!s.enabled;state.age_confirmed=!!s.age_confirmed;
+  state.cooldownUntil=Date.now()+(Number(s.cooldown_ms)||0);
+  $('age').style.display=state.age_confirmed?'none':'flex';
+  $('count').textContent=($('text').value||'').length+' / 500';
+  $('nickname').value=s.nickname||'';
+  var p=s.profile||{};
+  $('profileDescription').value=p.description||'';$('profileGender').value=p.gender||'';$('profileAge').value=p.age_band||'';$('profileCountry').value=p.country||'';$('profileCity').value=p.city||'';$('profileShow').checked=!!s.show_profile_in_rooms;
+  $('room').textContent=s.room||'fdn:general:v1';
+  $('relay').textContent=s.relay_url||'';
+  $('fingerprint').textContent=s.fingerprint||s.node_id||'—';
+  $('nodeId').textContent=s.node_id||'—';
+  $('onlineCount').textContent=String(s.online||0);
+  var left=Number(s.profile_cooldown_ms)||0;
+  $('profileStatus').textContent=left>0?('Profile updates are limited; try again in '+Math.ceil(left/60000)+' min.'):(s.show_profile_in_rooms?'Your profile is shared with the room.':'Your profile is private.');
+  $('statePill').textContent=s.enabled?(s.connected?'connected':'joining'):'offline';
+  $('join').style.display=state.enabled?'none':'inline-block';
+  $('disable').style.display=state.enabled?'inline-block':'none';
+  renderUsers(s.users||[]);renderIgnored(s.users||[]);
+  var box=$('messages');box.textContent='';
+  if(!(s.messages||[]).length){var empty=document.createElement('div');empty.className='empty';empty.textContent='No messages yet.';box.appendChild(empty)}
+  (s.messages||[]).forEach(function(m){
+    var d=document.createElement('div');d.className='msg'+(m.mine?' me':'')+(m.ignored?' ignored':'');
+    var meta=document.createElement('div');meta.className='meta';
+    meta.textContent=(m.nickname||m.sender||'?')+' · '+new Date(Number(m.timestamp)||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+(m.ignored?' · ignored':'');
+    d.appendChild(meta);d.appendChild(document.createTextNode(m.text||''));box.appendChild(d);
+  });
   box.scrollTop=box.scrollHeight;
-  var sendBtn=document.getElementById('send');var input=document.getElementById('text');
-  sendBtn.disabled=!state.enabled||state.cooldown>0;input.disabled=!state.enabled;input.placeholder='Message '+(s.room||'#general');
+  var input=$('text');input.disabled=!state.enabled;input.placeholder='Message '+(s.room||'#general');
+  tickCooldown();
   setConnection(s.error?('Chat: '+s.error):(state.enabled?(s.connected?'Connected · '+s.online+' online':'Joining room…'):'Not connected. Join the room to start.'));
 }
+function openProfile(sender){
+  var user=(state.snapshot&&state.snapshot.users||[]).filter(function(u){return u.sender===sender})[0];
+  if(!user||!user.profile)return;
+  state.profileSender=sender;
+  $('profileTitle').textContent=(user.nickname||'anon')+' #'+(user.fingerprint||'????');
+  var facts=$('profileFacts');facts.textContent='';
+  [['Description',user.profile.description],['Gender',user.profile.gender],['Age band',user.profile.age_band],['Country',user.profile.country],['City',user.profile.city]].forEach(function(row){
+    if(!row[1]||!String(row[1]).trim())return;
+    var block=document.createElement('div');var dt=document.createElement('dt');dt.textContent=row[0];var dd=document.createElement('dd');dd.textContent=row[1];block.appendChild(dt);block.appendChild(dd);facts.appendChild(block);
+  });
+  $('profileEmpty').hidden=!!facts.childNodes.length;
+  $('profileView').style.display='flex';
+}
+function closeProfile(){state.profileSender=null;$('profileView').style.display='none'}
 function refresh(){send({cmd:'snapshot'})}
 window.fdbChatResult=function(r){
-  if(!r){return}
-  if(!r.ok){setConnection('Chat: '+(r.error||'unavailable'));return}
+  if(!r)return;
+  if(!r.ok){var msg=r.error||'unavailable';setConnection('Chat: '+msg);$('profileStatus').textContent=msg;$('clearData').textContent='Clear local chat data';return}
   if(r.data&&r.data.room!==undefined)render(r.data);
   else if(r.data===null)refresh();
 };
-document.getElementById('ageCheck').onchange=function(){document.getElementById('ageContinue').disabled=!this.checked};
-document.getElementById('ageContinue').onclick=function(){send({cmd:'confirm_age'})};
-document.getElementById('join').onclick=function(){send({cmd:'enable'})};
-document.getElementById('disable').onclick=function(){send({cmd:'disable'})};
-document.getElementById('saveNick').onclick=function(){var value=document.getElementById('nickname').value.trim();if(value)send({cmd:'set_nickname',nickname:value})};
-document.getElementById('saveProfile').onclick=function(){send({cmd:'set_profile',description:document.getElementById('profileDescription').value,gender:document.getElementById('profileGender').value,age_band:document.getElementById('profileAge').value,country:document.getElementById('profileCountry').value,city:document.getElementById('profileCity').value,show:document.getElementById('profileShow').checked})};
-document.getElementById('send').onclick=function(){var input=document.getElementById('text');var text=input.value.trim();if(!text||!state.enabled)return;send({cmd:'send',text:text});input.value=''};
-document.getElementById('text').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();document.getElementById('send').click()}});
+$('ageCheck').onchange=function(){$('ageContinue').disabled=!this.checked};
+$('ageContinue').onclick=function(){send({cmd:'confirm_age'})};
+$('join').onclick=function(){send({cmd:'enable'})};
+$('disable').onclick=function(){send({cmd:'disable'})};
+$('saveNick').onclick=function(){var value=$('nickname').value.trim();if(value)send({cmd:'set_nickname',nickname:value})};
+$('saveProfile').onclick=function(){send({cmd:'set_profile',description:$('profileDescription').value,gender:$('profileGender').value,age_band:$('profileAge').value,country:$('profileCountry').value,city:$('profileCity').value,show:$('profileShow').checked})};
+$('clearData').onclick=function(){
+  if(!state.clearArmed){
+    state.clearArmed=true;this.textContent='Click again to erase everything';
+    $('clearHint').textContent='This removes the signing key, nickname, profile and ignore list.';
+    clearTimeout(state.clearTimer);
+    state.clearTimer=setTimeout(function(){state.clearArmed=false;$('clearData').textContent='Clear local chat data';$('clearHint').textContent=''},6000);
+    return;
+  }
+  clearTimeout(state.clearTimer);state.clearArmed=false;this.textContent='Clearing…';$('clearHint').textContent='';
+  send({cmd:'clear_local_data'});
+};
+$('profileClose').onclick=closeProfile;
+$('send').onclick=function(){var input=$('text');var text=input.value.trim();if(!text||!state.enabled||Date.now()<state.cooldownUntil)return;send({cmd:'send',text:text});input.value='';$('count').textContent='0 / 500'};
+$('text').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}});
+$('text').addEventListener('input',function(){$('count').textContent=$('text').value.length+' / 500'});
 setInterval(function(){if(state.enabled)refresh()},3000);
 window.addEventListener('pagehide',function(){if(state.enabled)send({cmd:'disable'})});
 refresh();

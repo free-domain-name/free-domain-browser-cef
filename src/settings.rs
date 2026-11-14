@@ -10,6 +10,7 @@ pub struct Settings {
     pub cookies: bool,
     pub dnt: bool,
     pub compact_tabs: bool,
+    pub density: String,
     pub show_status: bool,
     pub theme: String,
     pub skin: String,
@@ -23,6 +24,7 @@ impl Default for Settings {
             cookies: true,
             dnt: false,
             compact_tabs: false,
+            density: "comfortable".to_string(),
             show_status: true,
             theme: "system".to_string(),
             skin: "default".to_string(),
@@ -41,6 +43,9 @@ impl Settings {
         }
         if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
             settings.theme = Settings::default().theme;
+        }
+        if !matches!(settings.density.as_str(), "comfortable" | "compact") {
+            settings.density = Settings::default().density;
         }
         if !matches!(
             settings.skin.as_str(),
@@ -130,6 +135,7 @@ mod tests {
             compact_tabs: true,
             show_status: false,
             theme: "dark".into(),
+            density: "compact".into(),
             skin: "terminal".into(),
             custom_css: "body{background:#000}".into(),
         };

@@ -117,7 +117,9 @@ fn main() -> anyhow::Result<()> {
         Path::new(bootstrap_dir),
         "free-domain-browser-cef",
         "free_domain_browser_cef_helper",
-        None,
+        // `assets/mac/free-domain-browser-cef.icns` is copied into
+        // Contents/Resources and referenced as CFBundleIconFile.
+        Some(Path::new("assets").to_path_buf()),
         info,
     )?;
     adhoc_sign(&app)?;

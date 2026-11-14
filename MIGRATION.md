@@ -6,29 +6,34 @@ commits are made here.
 ## Current architecture
 
 - CEF 156, Alloy runtime style (multiple BrowserViews).
-- One fixed chrome BrowserView (height 96) above one page BrowserView.
-- Chrome bar HTML is a `data:` URI; tabs, address bar, settings and chat buttons.
-- Internal pages (`settings`, `chat`) are written to `file://` so they get a real
-  origin and can use `localStorage`.
-- Navigation IPC uses a synthetic `https://fdb.invalid/navigate?url=...` URL,
-  intercepted in `on_before_browse`; page views are blocked from using it.
-- `fdn-core` (workspace crate) resolves registry/public names off the UI thread;
-  the result is posted back to the CEF UI thread and loaded in the page view.
-- Settings persist through `localStorage`.
+- One fixed chrome BrowserView (116 px: 32 px tabs, 64 px toolbar, 20 px status)
+  above one page BrowserView.
+- Chrome bar HTML runs from a `data:` URI; internal pages (`settings`, `chat`,
+  `claim`, `conflict`, `unavailable`, `error`, `newtab`) are written to
+  `file://` under `free-domain-browser-cef-ui` so they have a real origin.
+- Registry navigation uses `fdn-core` off the UI thread; the result is posted
+  back to the CEF UI thread.
+- Settings persist through the shared settings store and are re-applied to the
+  chrome immediately.
+- Registry pages are served through the loopback `*.localhost` proxy so
+  relative links, redirects, cookies and headers behave like Tauri's `fdn://`
+  protocol.
 
 ## Verified
 
-- CEF prototype loads Yahoo and keeps the chrome view above the page.
-- CEF unit tests: navigation URL parser.
+- CEF unit tests: 27 passed.
 - `fdn-core` Linux tests: 14 passed, 5 live-network ignored.
-- Headless screenshots of chrome, settings and chat.
+- Headless Chromium checks of chrome, status bar, start page, settings and chat
+  (Docker/Podman) with dynamic DOM assertions.
+- macOS bundle build: `assets/mac/free-domain-browser-cef.icns` copied into
+  `Contents/Resources` and `CFBundleIconFile` set.
+- App icons ported from the Tauri project (`assets/icon.{svg,png}`, `icons/`).
 
 ## Build and test
 
 ```sh
 export PATH=/tmp/buildtools/cmake/data/bin:/tmp/buildtools/bin:$PATH
 export CARGO_HOME=/tmp/cef-cargo-home2
-export CEF_PATH=/tmp/cef-binary-156.0.26
 cargo build
 cargo test --bin free-domain-browser-cef
 cargo test -p fdn-core
@@ -37,54 +42,54 @@ cargo test -p fdn-core
 Container checks:
 
 ```sh
-ENGINE=podman ./scripts/test-core-docker.sh
-ENGINE=podman ./scripts/test-docker.sh
+./scripts/test-core-docker.sh
+./scripts/test-docker.sh
 ```
 
-The Podman VM may be unavailable; the scripts are the reproducible path.
+Both scripts use the Docker CLI by default (`ENGINE=docker`).
 
 ## Tauri parity audit
 
-The reference app is `/Users/ozkan/projects/tauri-browser` (read-only). This
-table records the current CEF prototype against its shipped behavior.
+The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 
 | Area | Tauri | CEF | Status |
 | --- | --- | --- | --- |
 | Registry lookup / resolver | sharded GitHub registry + public DNS | same `fdn-core` resolver | match |
-| `fdn://` input and registry names | custom protocol proxy | loopback `*.localhost` proxy with link/cookie/header rewriting | match |
-| Registry/public conflict chooser | in-chrome modal | internal `conflict.html` page | match |
-| Unregistered-name claim flow | shard path, JSON, copy, GitHub, recheck | same, in `claim.html` | match |
-| Community reviews | index counts + dedicated review window | index counts + review tab (`stumble.html`) | partial |
-| Tabs / per-tab history | native child webviews, JS history | one `BrowserView` per tab, CEF history | match |
-| Global browser shortcuts | native menu forwards to chrome | chrome JS plus content `KeyboardHandler` | match |
-| Appearance: theme | system/light/dark | system/light/dark in settings | match |
-| Appearance: density | comfortable/compact | compact tab strip | partial |
-| Appearance: built-in skins | seven skins | seven built-in palettes in Settings | match |
-| Appearance: custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
-| Toolbar | home, external, cache, review, chat, settings | same plus Go and loading progress bar | match |
-| Start page | samples and search | same samples and search | match |
-| Chat backend | iroh gossip rooms | same transport/protocol | match |
-| Chat panel UI | profile, users, ignore, settings, age gate | users, ignore, age gate, nickname, signed profile cards, relay/room status | match |
-| Application menu | native OS menu | cross-platform overflow menu plus chrome/content keyboard handler | match |
-| Registry proxy semantics | cookie/header/HTML rewriting | loopback proxy rewrites links, redirects, cookies, strips CSP/XFO | match |
-| Popup -> tab behavior | `on_new_window` opens a tab | `on_before_popup` forwards http(s)/fdn URLs to a new tab | match |
-| Downloads | system save flow | automatic `~/Downloads` save with chrome progress toast | match |
+| Registry-unavailable result | retry / continue-to-public modal | `unavailable.html` with retry and public continuation | match |
+| Registry/public conflict | in-chrome modal | `conflict.html` chooser page | match (presentation differs) |
+| Unregistered claim flow | steps, shard path, JSON, copy, GitHub, async recheck | same in `claim.html` | match |
+| Community reviews | index counts + dedicated review window | index counts + review tab | partial (tab instead of window) |
+| Tabs / history | iframe tabs with JS history | native BrowserView per tab with CEF history | match |
+| Reopen tab / numeric tab keys | yes | yes | match |
+| Shortcuts | native menu + chrome keys | chrome keys + content KeyboardHandler (`Cmd/Ctrl+[ ]`, `Alt+←/→`, `Ctrl+Tab`, `Cmd/Ctrl+1..9`) | match |
+| Start page | themed inline page, resolver-routed samples | themed `newtab.html`, resolver-routed samples | match |
+| Status/progress | statusbar pill + URL + mode, progress bar | 20 px statusbar (source + URL + mode) and progress bar | match |
+| Theme | system/light/dark across chrome and pages | system/light/dark on chrome; internal pages remain dark | partial |
+| Density | comfortable/compact across chrome | comfortable/compact setting; chrome compact mode | partial |
+| Built-in skins | seven skins across chrome/pages | seven chrome palettes | partial |
+| Custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
+| Settings | in-chrome overlay, instant apply | settings tab, instant apply, back/close | partial (tab) |
+| Application menu | native OS Browser/Edit menu | cross-platform overflow menu + keyboard handler | match (generalised) |
+| External open | resolves registry target / public URL | resolves and opens registry target / public URL | match |
+| Popup -> tab | new tab through resolver | `on_before_popup` creates a tab through the resolver | match |
+| Downloads | no handler | automatic `~/Downloads` save with progress | CEF ahead |
+| Registry proxy | redirects, header stripping, HTML rewrite, cookies | same, with COOP/COEP/CSP/XFO stripping | match |
+| Chat backend | iroh gossip, signed profile cards, per-tab enable | same transport/protocol, per-tab enable, profile cooldown | match |
+| Chat UI | side panel with profile view, ignore list, clear data | tab with profile view, ignore list, clear data, age gate, fingerprint/relay; no side-panel placement | partial (tab) |
+| App icon / bundle metadata | full icon set + category/description/license | icon set and macOS `CFBundleIconFile`; bundle metadata is minimal | partial |
+| Review window | dedicated window | review tab | partial |
+| Mobile (Android/iOS) | supported | not supported by this CEF desktop prototype | not in scope |
+| Installers / release CI | DMG/MSI/NSIS/AppImage/deb | macOS `.app` zip script only | missing |
 
 ## Remaining work
 
-- Registry names now load through a loopback `*.localhost` HTTP proxy so
-  relative links, redirects, cookies and CSP/XFO behavior match Tauri.
-- Built-in skins and the full chat panel (users, ignore, age gate, nickname,
-  signed profile cards, per-tab enablement) are available.
-- Menu commands use the cross-platform in-chrome overflow menu and the
-  chrome/content `KeyboardHandler`; no platform-specific menu bar is required.
-- Popup URLs and automatic downloads are wired; downloads save under
-  `~/Downloads` and report progress in the chrome status bar.
-- Container verification: `ENGINE=docker ./scripts/test-docker.sh` captures the
-  chrome/settings/chat pages and checks dynamic DOM markers; the core suite
-  runs in `Dockerfile.core`. No platform-specific implementation is required
-  beyond the CEF host layer.
-- Separate CEF BrowserView per tab with preserved session/history is done;
-  keep testing close/reopen and popup edge cases.
-- Release `.app` bundling, signing, sandbox/helper entitlements and CEF resources
-  are implemented; notarization still needs credentials.
+- Chat and settings are full tabs rather than Tauri's side panel/overlay. The
+  features work, but the page is replaced while they are open.
+- Theme and skins apply to the chrome; internal pages (settings/chat/claim) are
+  still dark-only.
+- Reviews open in a tab; Tauri uses a separate window.
+- Desktop icons are wired for the macOS app bundle. Windows resource icons,
+  Linux `.desktop` metadata and cross-platform installers are not built yet.
+- Mobile targets are outside the CEF desktop prototype.
+- Notarization still needs Apple credentials; ad-hoc signing is done by the
+  bundle helper.

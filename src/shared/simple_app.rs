@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use super::simple_handler::*;
 
 /// Height of the fixed HTML chrome bar, in DIP.
-const CHROME_HEIGHT: i32 = 96;
+const CHROME_HEIGHT: i32 = 116;
 
 wrap_window_delegate! {
     struct SimpleWindowDelegate {

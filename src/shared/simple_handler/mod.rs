@@ -54,7 +54,7 @@ struct Tab {
     view: BrowserView,
 }
 
-const CHROME_HEIGHT: i32 = 96;
+const CHROME_HEIGHT: i32 = 116;
 
 pub struct SimpleHandler {
     is_alloy_style: bool,
@@ -74,6 +74,7 @@ const SETTINGS_HTML: &str = include_str!("../../../assets/settings.html");
 const CHAT_HTML: &str = include_str!("../../../assets/chat.html");
 const CONFLICT_HTML: &str = include_str!("../../../assets/conflict.html");
 const CLAIM_HTML: &str = include_str!("../../../assets/claim.html");
+const UNAVAILABLE_HTML: &str = include_str!("../../../assets/unavailable.html");
 const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
 const ERROR_HTML: &str = include_str!("../../../assets/error.html");
 
@@ -102,6 +103,7 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
             "compact_tabs",
             if settings.compact_tabs { "1" } else { "0" },
         )
+        .append_pair("density", &settings.density)
         .append_pair("show_status", if settings.show_status { "1" } else { "0" })
         .append_pair("theme", &settings.theme)
         .append_pair("skin", &settings.skin)
@@ -197,6 +199,19 @@ fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
     );
     let free_namespace = outcome.domain == "fdn" || outcome.domain.ends_with(".fdn");
     let badge = if free_namespace { "Available" } else { "Unregistered" };
+    let public_row = if free_namespace {
+        String::new()
+    } else {
+        format!(
+            "<p style=\"margin-top:22px\"><a class=\"button secondary\" href=\"{}\">Try public website</a></p>",
+            html_escape(
+                outcome
+                    .public_url
+                    .as_deref()
+                    .unwrap_or("https://github.com/free-domain-name/registry"),
+            )
+        )
+    };
     let domain_js = serde_json::to_string(&outcome.domain).unwrap_or_else(|_| "\"\"".into());
     CLAIM_HTML
         .replace("{{domain}}", &html_escape(&outcome.domain))
@@ -218,15 +233,43 @@ fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
             "{{repo_url}}",
             "https://github.com/free-domain-name/registry",
         )
+        .replace("{{public_row}}", &public_row)
+}
+
+fn unavailable_page(outcome: &fdn_core::NavigationOutcome) -> String {
+    let free_namespace = outcome.domain == "fdn" || outcome.domain.ends_with(".fdn");
+    let public_url = outcome.public_url.clone().unwrap_or_default();
+    let public_button = if free_namespace || public_url.is_empty() {
+        String::new()
+    } else {
+        format!(
+            r#"<button id="public" class="secondary" type="button">Continue to public web</button>"#
+        )
+    };
+    let domain_js = serde_json::to_string(&outcome.domain).unwrap_or_else(|_| "\"\"".into());
+    let public_js = serde_json::to_string(&public_url).unwrap_or_else(|_| "\"\"".into());
+    UNAVAILABLE_HTML
+        .replace("{{domain}}", &html_escape(&outcome.domain))
+        .replace("{{domain_js}}", &domain_js)
         .replace(
-            "{{public_url}}",
+            "{{message}}",
             &html_escape(
                 outcome
-                    .public_url
+                    .message
                     .as_deref()
-                    .unwrap_or("https://github.com/free-domain-name/registry"),
+                    .unwrap_or("The registry request failed."),
             ),
         )
+        .replace("{{public_button}}", &public_button)
+        .replace(
+            "{{free_note}}",
+            if free_namespace {
+                "Public DNS cannot answer .fdn names, so retry when the registry is reachable."
+            } else {
+                "Retry, or continue explicitly to the public web."
+            },
+        )
+        .replace("{{public_js}}", &public_js)
 }
 
 fn choice_target(url: &str) -> Option<(String, String)> {
@@ -352,6 +395,7 @@ impl SimpleHandler {
         let settings = crate::settings::load();
         let payload = serde_json::json!({
             "compact_tabs": settings.compact_tabs,
+            "density": settings.density,
             "show_status": settings.show_status,
             "theme": settings.theme,
             "skin": settings.skin,
@@ -1219,9 +1263,9 @@ wrap_keyboard_handler! {
                 Some("window.fdbReload&&fdbReload()")
             } else if command && key == 188 {
                 Some("window.fdbOpenSettings&&fdbOpenSettings()")
-            } else if alt && key == 37 {
+            } else if (alt && key == 37) || (command && key == 219) {
                 Some("window.fdbBack&&fdbBack()")
-            } else if alt && key == 39 {
+            } else if (alt && key == 39) || (command && key == 221) {
                 Some("window.fdbForward&&fdbForward()")
             } else if modifiers & 4 != 0 && key == 9 {
                 Some(if shift {
@@ -1487,6 +1531,11 @@ fn handle_chat_command(browser_id: i32, message: &str) {
                 let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
                 service.unignore(sender).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
             }
+            "clear_local_data" => service
+                .clear_local_data()
+                .await
+                .map(|snapshot| serde_json::json!(snapshot))
+                .map_err(|error| error.to_string()),
             _ => Err("unknown chat command".into()),
         };
         let payload = match result {
@@ -1580,6 +1629,43 @@ fn clear_registry_cache() {
 /// Open an http(s) URL in the user's normal browser. Registry names and the
 /// synthetic internal URLs are deliberately rejected.
 fn open_external(raw: &str) -> Result<(), String> {
+    // A registry page has no public URL of its own. Resolve its fdn:// URL to
+    // the registry target (or public fallback) before handing it to the OS.
+    if raw.starts_with("fdn://") {
+        let raw = raw.to_string();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            let url = match runtime {
+                Ok(runtime) => runtime.block_on(async move {
+                    let cache = std::env::temp_dir().join("fdn-registry");
+                    let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
+                        return None;
+                    };
+                    let Ok(navigator) = fdn_core::Navigator::new() else {
+                        return None;
+                    };
+                    let input = raw.trim_start_matches("fdn://");
+                    let outcome = navigator.resolve(&registry, input).await.ok()?;
+                    if outcome.source == fdn_core::Source::GithubRegistry {
+                        outcome.registry_target
+                    } else {
+                        outcome.public_url.or(outcome.url)
+                    }
+                }),
+                Err(_) => None,
+            };
+            if let Some(url) = url {
+                let _ = open_external_http(&url);
+            }
+        });
+        return Ok(());
+    }
+    open_external_http(raw)
+}
+
+fn open_external_http(raw: &str) -> Result<(), String> {
     let parsed = url::Url::parse(raw).map_err(|error| error.to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err("external URLs must be http(s)".to_string());
@@ -1639,6 +1725,7 @@ fn spawn_navigation(target_id: i32, target: String) {
                     Ok(outcome) => match outcome.kind {
                         fdn_core::OutcomeKind::Conflict => internal_page_url(&conflict_page(&outcome)),
                         fdn_core::OutcomeKind::Unregistered => internal_page_url(&claim_page(&outcome)),
+                        fdn_core::OutcomeKind::Unavailable => internal_page_url(&unavailable_page(&outcome)),
                         _ => {
                             let registry = if outcome.source == fdn_core::Source::GithubRegistry {
                                 crate::proxy::proxy_url(&outcome.domain, &outcome.path)
@@ -1804,7 +1891,7 @@ wrap_task! {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{choice_target, error_page, navigation_key, navigation_target, open_external};
+    use super::{choice_target, error_page, navigation_key, navigation_target, open_external, unavailable_page};
 
     #[test]
     fn accepts_chrome_navigation() {
@@ -1837,10 +1924,32 @@ mod navigation_tests {
     }
 
     #[test]
-    fn external_open_is_limited_to_http_and_https() {
-        assert!(open_external("fdn://hello.fdn").is_err());
+    fn external_open_accepts_web_and_resolves_free_names() {
+        assert!(open_external("fdn://hello.fdn").is_ok());
         assert!(open_external("file:///tmp/secret").is_err());
         assert!(open_external("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn unavailable_page_offers_retry_and_conditional_public_fallback() {
+        let mut outcome = fdn_core::NavigationOutcome {
+            kind: fdn_core::OutcomeKind::Unavailable,
+            domain: "hello.fdn".into(),
+            path: "/".into(),
+            source: fdn_core::Source::GithubRegistry,
+            url: None,
+            registry_url: None,
+            public_url: Some("https://hello.fdn/".into()),
+            registry_target: None,
+            message: Some("offline".into()),
+        };
+        let page = unavailable_page(&outcome);
+        assert!(page.contains("Retry registry"));
+        assert!(!page.contains("Continue to public web"));
+        outcome.domain = "example.com".into();
+        outcome.public_url = Some("https://example.com/".into());
+        let page = unavailable_page(&outcome);
+        assert!(page.contains("Continue to public web"));
     }
 
     #[test]
