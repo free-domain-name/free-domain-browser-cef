@@ -10,15 +10,17 @@ there is no `X-Frame-Options` block and the page cannot paint over the chrome.
 Implemented: dynamic tabs with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages with a per-session choice
-memory, `fdn://` link handling, retry error pages, and a local chat UI. The chat
-page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally
-`FDN_CHAT_RELAY_URL`) to enable the community relay, otherwise it reports
-“chat bootstrap is not configured”.
-Still pending: a Developer ID-signed/notarized release and a production
-`fdn-chatd` lobby deployment. The chat transport/protocol has been validated
-locally with two browser instances and a headless gossip peer over the public
-relay; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to point at
-a deployed lobby.
+memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
+opens as an overlay below the chrome, chat as a 420 px side panel with a compact
+drawer, and community reviews open in a dedicated review window. System/light/
+dark theme and all seven skins are applied to the chrome and internal pages;
+compact density is applied to the chrome. The chat page talks to the ported iroh
+service; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to enable
+the community relay, otherwise it reports “chat bootstrap is not configured”.
+Still pending: a Developer ID-signed/notarized release, native MSI/NSIS/AppImage/
+deb installers, and a production `fdn-chatd` lobby deployment. The chat
+transport/protocol has been validated locally with two browser instances and a
+headless gossip peer over the public relay.
 
 ## Requirements
 
@@ -71,10 +73,18 @@ cargo run --bin bundle -- --build-only
 
 Package an ad-hoc-signed release `.app` zip (macOS). The bundle step signs the
 app, its helpers, and the embedded framework so macOS will launch it locally;
-distribution still needs a Developer ID signature:
+distribution still needs a Developer ID signature. An optional DMG is created
+when `hdiutil` is available:
 
 ```sh
 ./scripts/package-release.sh
+```
+
+Portable Linux and Windows archives can be built on their native platforms:
+
+```sh
+./scripts/package-linux.sh      # tar.gz with CEF runtime + .desktop entry
+./scripts/package-windows.ps1  # zip with CEF runtime
 ```
 
 Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF

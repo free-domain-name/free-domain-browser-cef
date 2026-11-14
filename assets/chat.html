@@ -17,6 +17,19 @@ header .spacer{flex:1}header button{background:#2a3446;color:#dce6f7;border:0;bo
 .msg{max-width:72%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45;word-wrap:break-word}
 .msg.me{margin-left:auto;background:#2f4f9e}.msg.ignored{opacity:.55;font-style:italic}
 .meta{font-size:11px;color:#8d9ab1;margin-bottom:4px}.empty{color:#8290a8;font-size:13px}
+body.panel{display:block;position:relative}
+body.panel aside{display:none;position:absolute;inset:0;z-index:20;width:100%;max-width:none;background:#151b25;border:0;padding:18px;overflow:auto}
+body.panel.showAside aside{display:flex}
+body.panel main{height:100vh}
+body.panel header{padding:12px 14px;gap:6px;flex-wrap:wrap}
+body.panel header .spacer{display:none}
+body.panel .messages{padding:14px}
+body.panel footer{padding:10px 12px}
+body.panel #panelMenu{display:inline-block}
+body.panel #panelClose{display:inline-block;position:fixed;top:8px;right:8px;z-index:30}
+#panelMenu,#panelClose{display:none}
+body.panel aside #panelMenuClose{display:block;margin-bottom:8px}
+#panelMenuClose{display:none;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
 footer .count{font-size:11px;color:#8290a8;white-space:nowrap}
 footer{display:flex;gap:10px;padding:14px 24px;border-top:1px solid #263042}
 #text{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit;outline:none}#text:focus{border-color:#4f7cff}
@@ -31,7 +44,7 @@ footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:1
 #profileView .box{max-width:480px;width:100%;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:26px}#profileView h2{margin:0 0 14px}#profileView dl{margin:0}#profileView dt{color:#8290a8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:10px}#profileView dd{margin:2px 0 0;color:#e8edf7;font-size:13px;overflow-wrap:anywhere}#profileView button{margin-top:16px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
 </style></head><body>
 <aside>
-<h1>Free Domain Chat</h1><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
+<h1>Free Domain Chat</h1><button id="panelMenuClose" type="button">Close menu</button><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
 <div class="card"><h2>Room</h2><div id="room" style="color:#c6d0e2">fdn:general:v1</div><div class="sub" id="relay" style="margin-top:6px"></div></div>
 <div class="card"><h2>You</h2><input id="nickname" maxlength="32" placeholder="Nickname" style="width:100%;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px 10px;font:inherit"><button id="saveNick" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save nickname</button></div>
 <details class="card" id="profileCard"><summary>Profile</summary>
@@ -46,13 +59,14 @@ footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:1
 <details class="card" id="ignoreCard"><summary>Ignored <span id="ignoreCount">0</span></summary><ul id="ignoreList"></ul><div id="ignoreEmpty" class="sub">Nobody is ignored.</div></details>
 <div class="card"><h2>Online <span id="onlineCount">0</span></h2><ul id="users"></ul></div>
 </aside>
-<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="join">Join chat</button><button id="disable">Leave</button></header>
+<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="panelMenu" type="button">Menu</button><button id="join">Join chat</button><button id="disable">Leave</button><button id="panelClose" type="button">Close</button></header>
 <div id="connection">Connecting to the community relay…</div>
 <div class="messages" id="messages"><div class="empty">Join the room to load messages.</div></div>
 <footer><input id="text" maxlength="500" placeholder="Message #general" disabled><span id="count" class="count">0 / 500</span><button id="send" disabled>Send</button></footer></main>
 <div id="age"><div class="box"><h2>Before you join</h2><p>This is an unmoderated community chat. Messages can contain mature language or links from strangers. You must be 18 or older to continue.</p><label><input id="ageCheck" type="checkbox"> I am 18 or older and understand this room is unmoderated.</label><button id="ageContinue" disabled>Continue</button></div></div>
 <div id="profileView" hidden><div class="box"><h2 id="profileTitle">Profile</h2><dl id="profileFacts"></dl><div id="profileEmpty" class="sub" hidden>This person has not shared a profile.</div><button id="profileClose" type="button">Close</button></div></div>
 <script>
+var PANEL=/[?&]panel=1/.test(location.search);if(PANEL)document.body.classList.add('panel');
 var state={enabled:false,age_confirmed:false,snapshot:null,cooldownUntil:0,clearArmed:false,clearTimer:null,profileSender:null};
 function send(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
 function $(id){return document.getElementById(id)}
@@ -148,7 +162,7 @@ window.fdbChatResult=function(r){
   else if(r.data===null)refresh();
 };
 $('ageCheck').onchange=function(){$('ageContinue').disabled=!this.checked};
-$('ageContinue').onclick=function(){send({cmd:'confirm_age'})};
+$('ageContinue').onclick=function(){send({cmd:'confirm_age'});setTimeout(function(){send({cmd:'enable'})},150)};
 $('join').onclick=function(){send({cmd:'enable'})};
 $('disable').onclick=function(){send({cmd:'disable'})};
 $('saveNick').onclick=function(){var value=$('nickname').value.trim();if(value)send({cmd:'set_nickname',nickname:value})};
@@ -169,6 +183,12 @@ $('send').onclick=function(){var input=$('text');var text=input.value.trim();if(
 $('text').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}});
 $('text').addEventListener('input',function(){$('count').textContent=$('text').value.length+' / 500'});
 setInterval(function(){if(state.enabled)refresh()},3000);
+$('panelMenu').onclick=function(){document.body.classList.toggle('showAside')};
+$('panelMenuClose').onclick=function(){document.body.classList.remove('showAside')};
+$('panelClose').onclick=function(){if(state.enabled)send({cmd:'disable'});setTimeout(function(){send({cmd:'close_panel'})},80)};
+window.fdbPanelClose=function(){if(state.enabled)send({cmd:'disable'})};
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('age').offsetParent&&$('profileView').hidden)$('panelClose').click()});
+window.fdbChatPanelOpen=function(){if(PANEL&&window.innerWidth<600){document.body.classList.remove('showAside')}};
 window.addEventListener('pagehide',function(){if(state.enabled)send({cmd:'disable'})});
 refresh();
 </script>

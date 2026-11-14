@@ -45,12 +45,14 @@ function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 var HINTS={default:'The original clean chrome.', 'high-tech':'Graphite HUD with cyan instrumentation.', futuristic:'Neon glass and violet gradients.', historic:'Parchment paper and ink typography.', victorian:'Deep rose, brass and serif type.', amazon:'Rainforest greens with clay accents.', terminal:'CRT phosphor green on black.'};
 function showHint(){document.getElementById('skinHint').textContent=HINTS[fields.skin.value]||HINTS.default}
 function payload(){return {cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,show_status:fields.show_status.checked,theme:fields.theme.value,density:fields.density.value,skin:fields.skin.value,custom_css:fields.custom_css.value}}
-function apply(silent){var data=payload();try{localStorage.setItem('fdb-settings',JSON.stringify(data))}catch(e){}send(data);if(!silent)document.getElementById('status').textContent='Saved'}
+function preview(){var t=fields.theme.value;var dark=t==='dark'||(t==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.skin=fields.skin.value;document.documentElement.dataset.density=fields.density.value}
+function apply(silent){preview();var data=payload();try{localStorage.setItem('fdb-settings',JSON.stringify(data))}catch(e){}send(data);if(!silent)document.getElementById('status').textContent='Saved'}
 ['theme','density','skin'].forEach(function(id){fields[id].addEventListener('change',function(){showHint();apply(true)})});
 fields.custom_css.addEventListener('change',function(){apply(true)});
 document.getElementById('reset').onclick=function(){fields.theme.value='system';fields.density.value='comfortable';fields.skin.value='default';fields.custom_css.value='';showHint();apply(false)};
 document.getElementById('save').onclick=function(){apply(false)};
-document.getElementById('close').onclick=function(){if(history.length>1)history.back();else send({cmd:'home'})};
+document.getElementById('close').onclick=function(){send({cmd:'close_settings'})};
 showHint();
+document.addEventListener('keydown',function(e){if(e.key==='Escape')send({cmd:'close_settings'})});
 </script>
 </body></html>

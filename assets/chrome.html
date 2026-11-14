@@ -17,6 +17,7 @@
 .toolbar{height:64px;display:flex;align-items:center;gap:8px;padding:0 12px}
 .brand{font-weight:650;font-size:13px;white-space:nowrap;margin-right:2px}
 .icon{border:0;border-radius:8px;background:var(--button);color:var(--text);padding:7px 10px;font:inherit;cursor:pointer;min-width:34px}
+.icon.active{background:#2a4a7a;color:#fff}
 .icon:hover{background:var(--button-hover)}.icon:disabled{opacity:.4;cursor:default}
 #sec{font-size:12px;min-width:18px;text-align:center}
 #url{flex:1;background:var(--field);color:var(--field-text);border:0;border-radius:8px;padding:7px 11px;font:inherit;outline:none;min-width:80px}
@@ -45,7 +46,7 @@ body.loading #url{opacity:.85}
   <button id="clearCache" aria-label="Clear registry cache" class="icon" title="Clear registry cache">⌫</button>
   <button id="chat" aria-label="Community chat" class="icon" title="Community chat">💬</button>
   <button id="settings" aria-label="Settings" class="icon" title="Settings (Cmd/Ctrl+,)">⚙</button>
-  <span class="menu-wrap"><button id="menu" aria-label="Menu" class="icon" title="Menu">☰</button><div id="menuPanel" role="menu" aria-label="Browser menu"><button role="menuitem" data-menu="new">New tab</button><button role="menuitem" data-menu="close">Close tab</button><button role="menuitem" data-menu="reload">Reload</button><button role="menuitem" data-menu="back">Back</button><button role="menuitem" data-menu="forward">Forward</button><hr><button role="menuitem" data-menu="settings">Settings</button><button role="menuitem" data-menu="chat">Community chat</button><button role="menuitem" data-menu="external">Open in system browser</button><button role="menuitem" data-menu="clear">Clear registry cache</button><hr><button role="menuitem" data-menu="quit">Quit</button></div></span>
+  <span class="menu-wrap"><button id="menu" aria-label="Menu" class="icon" title="Menu">☰</button><div id="menuPanel" role="menu" aria-label="Browser menu"><button role="menuitem" data-menu="new">New tab</button><button role="menuitem" data-menu="close">Close tab</button><button role="menuitem" data-menu="reload">Reload</button><button role="menuitem" data-menu="back">Back</button><button role="menuitem" data-menu="forward">Forward</button><hr><button role="menuitem" data-menu="settings">Settings</button><button role="menuitem" data-menu="chat">Community chat</button><button role="menuitem" data-menu="external">Open in system browser</button><button role="menuitem" data-menu="clear">Clear registry cache</button><hr><button role="menuitem" data-menu="about">About Free Domain Browser</button><button role="menuitem" data-menu="quit">Quit</button></div></span>
   <button id="go" aria-label="Go" class="go" title="Go">Go</button>
 </div>
 <div id="progress"></div>
@@ -120,12 +121,13 @@ function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
 function settings(){send({cmd:'settings'})}
 function chat(){send({cmd:'chat'})}
+function about(){send({cmd:'about'})}
 function external(){var u=current().url;if(isExternal(u))send({cmd:'external',url:u});}
 function clearCache(){send({cmd:'clear_cache'})}
 function quit(){send({cmd:'quit'})}
 function closeMenu(){var panel=document.getElementById('menuPanel');if(panel)panel.classList.remove('open')}
 document.getElementById('menu').onclick=function(e){e.stopPropagation();document.getElementById('menuPanel').classList.toggle('open')};
-document.getElementById('menuPanel').onclick=function(e){var action=e.target&&e.target.dataset&&e.target.dataset.menu;if(!action)return;closeMenu();if(action==='new')newTab('');else if(action==='close')closeTab(active);else if(action==='reload')send({cmd:'reload'});else if(action==='back')send({cmd:'back'});else if(action==='forward')send({cmd:'forward'});else if(action==='settings')settings();else if(action==='chat')chat();else if(action==='external')external();else if(action==='clear')clearCache();else if(action==='quit')quit()};
+document.getElementById('menuPanel').onclick=function(e){var action=e.target&&e.target.dataset&&e.target.dataset.menu;if(!action)return;closeMenu();if(action==='new')newTab('');else if(action==='close')closeTab(active);else if(action==='reload')send({cmd:'reload'});else if(action==='back')send({cmd:'back'});else if(action==='forward')send({cmd:'forward'});else if(action==='settings')settings();else if(action==='chat')chat();else if(action==='external')external();else if(action==='clear')clearCache();else if(action==='about')about();else if(action==='quit')quit()};
 document.addEventListener('click',closeMenu);
 function reviewHost(){
   var raw=current().url||'';
@@ -155,16 +157,19 @@ function syncReview(){
   document.getElementById('reviewUpCount').textContent=String(Number(entry.up)||0);
   document.getElementById('reviewDownCount').textContent=String(Number(entry.down)||0);
 }
-function openReview(){if(!reviewDomain)return;newTab(STUMBLE_URL+'?domain='+encodeURIComponent(reviewDomain))}
+function openReview(){if(!reviewDomain)return;send({cmd:'review',domain:reviewDomain})}
 window.fdbNewTab=function(){newTab('')};
 window.fdbNewTabUrl=function(url){if(!url)return;newTab('');setTimeout(function(){send({cmd:'navigate',url:url})},250)};
 window.fdbRestoreTab=function(){if(!lastClosed)return;var u=lastClosed.url;lastClosed=null;newTab(u||'')};
 window.fdbCloseActive=function(){closeTab(active)};
 window.fdbFocusUrl=function(){document.getElementById('url').focus();document.getElementById('url').select()};
 window.fdbReload=function(){send({cmd:'reload'})};
+window.fdbQuit=function(){send({cmd:'quit'})};
 window.fdbBack=function(){send({cmd:'back'})};
 window.fdbForward=function(){send({cmd:'forward'})};
 window.fdbOpenSettings=function(){settings()};
+window.fdbSettingsOpen=function(open){var b=document.getElementById('settings');if(b)b.classList.toggle('active',!!open)};
+window.fdbChatPanel=function(open){var b=document.getElementById('chat');if(b){b.classList.toggle('active',!!open);b.setAttribute('aria-expanded',open?'true':'false')}};
 window.fdbCycleTab=function(delta){if(!tabs.length)return;active=(active+(delta||1)+tabs.length)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})};
 window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active=index;render();send({cmd:'select_tab',uid:current().uid})};
 window.fdbStatus=function(text){
@@ -211,6 +216,7 @@ document.addEventListener('keydown',function(e){
   else if(mod&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
   else if(mod&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
   else if(mod&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
+  else if(mod&&e.key.toLowerCase()==='q'){e.preventDefault();quit()}
   else if(mod&&e.key===','){e.preventDefault();settings()}
   else if((e.altKey&&e.key==='ArrowLeft')||(mod&&e.key==='[')){e.preventDefault();send({cmd:'back'})}
   else if((e.altKey&&e.key==='ArrowRight')||(mod&&e.key===']')){e.preventDefault();send({cmd:'forward'})}

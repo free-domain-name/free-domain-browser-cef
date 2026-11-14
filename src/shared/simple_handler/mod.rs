@@ -2,6 +2,8 @@ use cef::*;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
+use crate::shared::simple_app::{create_content_view, open_review_window};
+
 pub fn get_data_uri(data: &[u8], mime_type: &str) -> String {
     let data = CefString::from(&base64_encode(Some(data)));
     let uri = CefString::from(&uriencode(Some(&data), 0)).to_string();
@@ -37,6 +39,12 @@ enum BridgeAction {
     External(String),
     ClearCache,
     Recheck(i32, String),
+    OpenSettings,
+    CloseSettings,
+    ToggleChatPanel,
+    CloseChatPanel,
+    Review(String),
+    About,
     FocusChrome,
     Quit,
 }
@@ -55,12 +63,17 @@ struct Tab {
 }
 
 const CHROME_HEIGHT: i32 = 116;
+const CHAT_PANEL_WIDTH: i32 = 420;
 
 pub struct SimpleHandler {
     is_alloy_style: bool,
     browser_list: Vec<Browser>,
     chrome_browser_id: Option<i32>,
     chrome_view: Option<View>,
+    settings_view: Option<BrowserView>,
+    chat_panel: Option<BrowserView>,
+    settings_open: bool,
+    chat_open: bool,
     tabs: Vec<Tab>,
     pending_uids: VecDeque<u64>,
     pending_views: Vec<(u64, BrowserView)>,
@@ -78,6 +91,8 @@ const UNAVAILABLE_HTML: &str = include_str!("../../../assets/unavailable.html");
 const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
 const ERROR_HTML: &str = include_str!("../../../assets/error.html");
 
+const APPEARANCE_JS: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var skin=q.get('skin')||'default';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=skin;root.dataset.density=density;var style=document.createElement('style');style.textContent='html[data-theme=light] body{background:#eef2f8!important;color:#182131!important}html[data-theme=light] aside,html[data-theme=light] header,html[data-theme=light] .card,html[data-theme=light] .box,html[data-theme=light] .search{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] .sub,html[data-theme=light] .note,html[data-theme=light] .fineprint,html[data-theme=light] .meta,html[data-theme=light] .empty,html[data-theme=light] .kind{color:#5d687c!important}html[data-theme=light] input,html[data-theme=light] textarea,html[data-theme=light] select{background:#fff!important;color:#111!important;border-color:#c8d1df!important}html[data-theme=light] button{background:#e4e9f1!important;color:#182131!important;border-color:#c8d1df!important}html[data-theme=light] #send,html[data-theme=light] .primary,html[data-theme=light] #ageContinue,html[data-theme=light] .go{background:#2563eb!important;color:#fff!important}html[data-theme=light] .messages,html[data-theme=light] #connection{background:#f7f9fc!important;border-color:#d6deea!important}html[data-theme=light] .msg{background:#fff!important;color:#182131!important;border:1px solid #d6deea}html[data-theme=light] .msg.me{background:#dbe7ff!important}html[data-theme=light] .sample{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] pre,html[data-theme=light] code{background:#f3f5f9!important;color:#182131!important}html[data-theme=light] #age,html[data-theme=light] #profileView{background:rgba(238,242,248,.85)!important}html[data-skin=high-tech]{--skin-bg:#0c1114;--skin-panel:#11181d;--skin-line:#1d3a42;--skin-ink:#d8f7ff;--skin-muted:#78a6b2;--skin-accent:#22d3ee;--skin-input:#071014}html[data-skin=futuristic]{--skin-bg:#120b24;--skin-panel:#1b1033;--skin-line:#4c2a7a;--skin-ink:#f3e8ff;--skin-muted:#b39ddb;--skin-accent:#a855f7;--skin-input:#0c0618}html[data-skin=historic]{--skin-bg:#e8dcc3;--skin-panel:#f3ead6;--skin-line:#c4ae8b;--skin-ink:#3b2a18;--skin-muted:#7a644c;--skin-accent:#8b5e34;--skin-input:#fffaf0}html[data-skin=victorian]{--skin-bg:#2a1820;--skin-panel:#3a2029;--skin-line:#6e4350;--skin-ink:#f4e6d0;--skin-muted:#c9a98d;--skin-accent:#b8860b;--skin-input:#1d1016}html[data-skin=amazon]{--skin-bg:#10251b;--skin-panel:#173326;--skin-line:#2f5e45;--skin-ink:#e8f5e9;--skin-muted:#9cc3a8;--skin-accent:#e07a3f;--skin-input:#0a1a12}html[data-skin=terminal]{--skin-bg:#050805;--skin-panel:#071007;--skin-line:#1f4a1f;--skin-ink:#b8ffb8;--skin-muted:#5f9f5f;--skin-accent:#22c55e;--skin-input:#020402}html[data-skin]:not([data-skin=default]) body{background:var(--skin-bg)!important;color:var(--skin-ink)!important}html[data-skin]:not([data-skin=default]) aside,html[data-skin]:not([data-skin=default]) header,html[data-skin]:not([data-skin=default]) .card,html[data-skin]:not([data-skin=default]) .box,html[data-skin]:not([data-skin=default]) .search{background:var(--skin-panel)!important;border-color:var(--skin-line)!important;color:var(--skin-ink)!important}html[data-skin]:not([data-skin=default]) .sub,html[data-skin]:not([data-skin=default]) .note,html[data-skin]:not([data-skin=default]) .fineprint,html[data-skin]:not([data-skin=default]) .meta,html[data-skin]:not([data-skin=default]) .empty{color:var(--skin-muted)!important}html[data-skin]:not([data-skin=default]) input,html[data-skin]:not([data-skin=default]) textarea,html[data-skin]:not([data-skin=default]) select{background:var(--skin-input)!important;color:var(--skin-ink)!important;border-color:var(--skin-line)!important}html[data-skin]:not([data-skin=default]) button{background:var(--skin-panel)!important;color:var(--skin-ink)!important;border-color:var(--skin-line)!important}html[data-skin]:not([data-skin=default]) #send,html[data-skin]:not([data-skin=default]) .primary,html[data-skin]:not([data-skin=default]) #ageContinue,html[data-skin]:not([data-skin=default]) .go{background:var(--skin-accent)!important;color:#fff!important}';document.head.appendChild(style)}catch(e){}})();</script>"#;
+
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
 fn internal_page_url(html: &str) -> String {
@@ -87,10 +102,28 @@ fn internal_page_url(html: &str) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     html.hash(&mut hasher);
     let path = dir.join(format!("{:x}.html", hasher.finish()));
-    let _ = std::fs::write(&path, html);
+    // Every internal page gets the same appearance bootstrap. The query string
+    // carries theme/skin/density from the Rust settings store.
+    let themed = match html.find("</head>") {
+        Some(index) => {
+            let mut value = String::with_capacity(html.len() + APPEARANCE_JS.len());
+            value.push_str(&html[..index]);
+            value.push_str(APPEARANCE_JS);
+            value.push_str(&html[index..]);
+            value
+        }
+        None => html.to_string(),
+    };
+    let _ = std::fs::write(&path, &themed);
+    let settings = crate::settings::load();
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("theme", &settings.theme)
+        .append_pair("skin", &settings.skin)
+        .append_pair("density", &settings.density)
+        .finish();
     url::Url::from_file_path(&path)
-        .map(|url| url.to_string())
-        .unwrap_or_else(|_| get_data_uri(html.as_bytes(), "text/html"))
+        .map(|url| format!("{url}?{query}"))
+        .unwrap_or_else(|_| get_data_uri(themed.as_bytes(), "text/html"))
 }
 
 fn settings_page_url(settings: &crate::settings::Settings) -> String {
@@ -109,7 +142,7 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
         .append_pair("skin", &settings.skin)
         .append_pair("custom_css", &settings.custom_css)
         .finish();
-    format!("{base}?{query}")
+    format!("{base}&{query}")
 }
 
 fn choice_url(domain: &str, target: &str) -> String {
@@ -327,6 +360,10 @@ impl SimpleHandler {
                 browser_list: Vec::new(),
                 chrome_browser_id: None,
                 chrome_view: None,
+                settings_view: None,
+                chat_panel: None,
+                settings_open: false,
+                chat_open: false,
                 tabs: Vec::new(),
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
@@ -342,12 +379,19 @@ impl SimpleHandler {
         debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
         let mut browser = browser.cloned();
-        if let Some(browser_view) = browser_view_get_for_browser(browser.as_mut()) {
-            if let Some(window) = browser_view.window() {
-                window.set_title(title);
+        // Only real tabs (and the chrome) own the main window title. Overlay
+        // settings/chat views and review windows must not rename the browser.
+        let owns_main_title = browser
+            .as_ref()
+            .is_some_and(|browser| self.tab_uid(browser.identifier()).is_some());
+        if owns_main_title {
+            if let Some(browser_view) = browser_view_get_for_browser(browser.as_mut()) {
+                if let Some(window) = browser_view.window() {
+                    window.set_title(title);
+                }
+            } else if self.is_alloy_style {
+                platform_title_change(browser.as_mut(), title);
             }
-        } else if self.is_alloy_style {
-            platform_title_change(browser.as_mut(), title);
         }
         if let Some(browser) = browser.as_ref() {
             if self.chrome_browser_id != Some(browser.identifier()) {
@@ -493,6 +537,137 @@ impl SimpleHandler {
             let mut view = View::from(&tab.view);
             view.set_bounds(Some(&bounds));
         }
+        self.layout_overlays(&window);
+    }
+
+    fn content_bounds(window: &Window) -> Rect {
+        let bounds = window.bounds();
+        Rect {
+            x: 0,
+            y: CHROME_HEIGHT.min(bounds.height.max(1)),
+            width: bounds.width.max(1),
+            height: (bounds.height - CHROME_HEIGHT).max(1),
+        }
+    }
+
+    fn chat_bounds(window: &Window) -> Rect {
+        let bounds = Self::content_bounds(window);
+        let width = CHAT_PANEL_WIDTH.min(bounds.width.max(1));
+        Rect {
+            x: (bounds.width - width).max(0),
+            y: bounds.y,
+            width,
+            height: bounds.height.max(1),
+        }
+    }
+
+    fn layout_overlays(&self, window: &Window) {
+        if let Some(view) = self.settings_view.as_ref() {
+            let mut view = View::from(view);
+            view.set_bounds(Some(&Self::content_bounds(window)));
+        }
+        if let Some(view) = self.chat_panel.as_ref() {
+            let mut view = View::from(view);
+            view.set_bounds(Some(&Self::chat_bounds(window)));
+        }
+    }
+
+    pub fn attach_settings_view(&mut self, view: BrowserView) {
+        let Some(window) = self.window.clone() else { return; };
+        if self.chat_open {
+            self.close_chat_panel();
+        }
+        self.settings_view = Some(view);
+        self.settings_open = true;
+        self.layout_overlays(&window);
+        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
+        if let Some(browser) = self.settings_view.as_ref().and_then(|view| view.browser()) {
+            if let Some(host) = browser.host() {
+                host.set_focus(1);
+            }
+        }
+    }
+
+    pub fn show_settings_view(&mut self) {
+        let Some(window) = self.window.clone() else { return; };
+        if self.chat_open {
+            self.close_chat_panel();
+        }
+        if let Some(view) = self.settings_view.as_ref() {
+            let mut view = View::from(view);
+            view.set_visible(1);
+        }
+        self.settings_open = true;
+        self.layout_overlays(&window);
+        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
+    }
+
+    pub fn close_settings_view(&mut self) {
+        if let Some(view) = self.settings_view.as_ref() {
+            let mut view = View::from(view);
+            view.set_visible(0);
+        }
+        self.settings_open = false;
+        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(false)");
+    }
+
+    pub fn attach_chat_panel(&mut self, view: BrowserView) {
+        let Some(window) = self.window.clone() else { return; };
+        if self.settings_open {
+            self.close_settings_view();
+        }
+        self.chat_panel = Some(view);
+        self.chat_open = true;
+        self.layout_overlays(&window);
+        self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
+        if let Some(browser) = self.chat_panel.as_ref().and_then(|view| view.browser()) {
+            if let Some(host) = browser.host() {
+                host.set_focus(1);
+            }
+            if let Some(frame) = browser.main_frame() {
+                let mut frame = frame;
+                frame.execute_java_script(Some(&CefString::from("window.fdbChatPanelOpen&&fdbChatPanelOpen()")), None, 0);
+            }
+        }
+    }
+
+    pub fn show_chat_panel(&mut self) {
+        let Some(window) = self.window.clone() else { return; };
+        if self.settings_open {
+            self.close_settings_view();
+        }
+        if let Some(view) = self.chat_panel.as_ref() {
+            let mut view = View::from(view);
+            view.set_visible(1);
+        }
+        self.chat_open = true;
+        self.layout_overlays(&window);
+        self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
+        if let Some(browser) = self.chat_panel.as_ref().and_then(|view| view.browser()) {
+            if let Some(host) = browser.host() {
+                host.set_focus(1);
+            }
+        }
+    }
+
+    pub fn close_chat_panel(&mut self) {
+        if let Some(view) = self.chat_panel.as_ref() {
+            if let Some(browser) = view.browser() {
+                if let Some(frame) = browser.main_frame() {
+                    let mut frame = frame;
+                    frame.execute_java_script(Some(&CefString::from("window.fdbPanelClose&&fdbPanelClose()")), None, 0);
+                }
+            }
+            let mut view = View::from(view);
+            view.set_visible(0);
+        }
+        self.chat_open = false;
+        self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(false)");
+    }
+
+    fn chrome_state(&self) {
+        self.chrome_execute(0, &format!("window.fdbSettingsOpen&&fdbSettingsOpen({})", self.settings_open));
+        self.chrome_execute(0, &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open));
     }
 
     fn switch_uid(&mut self, uid: u64) {
@@ -854,14 +1029,22 @@ impl SimpleHandler {
                     Some(BridgeAction::Navigate(target_id, url.to_string()))
                 }
             }
-            "settings" => Some(BridgeAction::Page(
-                target_id,
-                settings_page_url(&crate::settings::load()),
-            )),
+            "settings" => Some(BridgeAction::OpenSettings),
+            "close_settings" => Some(BridgeAction::CloseSettings),
             "save_settings" => {
                 crate::settings::Settings::from_value(&value).map(BridgeAction::SaveSettings)
             }
-            "chat" => Some(BridgeAction::Page(target_id, internal_page_url(CHAT_HTML))),
+            "chat" => Some(BridgeAction::ToggleChatPanel),
+            "close_chat_panel" => Some(BridgeAction::CloseChatPanel),
+            "about" => Some(BridgeAction::About),
+            "review" => {
+                let domain = value.get("domain")?.as_str()?.trim();
+                if domain.is_empty() {
+                    None
+                } else {
+                    Some(BridgeAction::Review(domain.to_string()))
+                }
+            }
             "new_tab" => {
                 let uid = value
                     .get("uid")
@@ -1142,6 +1325,30 @@ wrap_display_handler! {
             match action {
                 Some(BridgeAction::Navigate(target_id, url)) => spawn_navigation(target_id, url),
                 Some(BridgeAction::Page(target_id, url)) => post_page(target_id, url),
+                Some(BridgeAction::OpenSettings) => open_settings_overlay(),
+                Some(BridgeAction::CloseSettings) => {
+                    if let Some(instance) = SimpleHandler::instance() {
+                        instance.lock().expect("Failed to lock handler").close_settings_view();
+                    }
+                }
+                Some(BridgeAction::ToggleChatPanel) => toggle_chat_panel(),
+                Some(BridgeAction::Review(domain)) => open_review_window_async(domain),
+                Some(BridgeAction::About) => {
+                    if let Some(instance) = SimpleHandler::instance() {
+                        let version = env!("CARGO_PKG_VERSION");
+                        instance
+                            .lock()
+                            .expect("Failed to lock handler")
+                            .chrome_toast(&format!(
+                                "Free Domain Browser CEF {version} · CEF 156.0.26 · GPL-3.0-only"
+                            ));
+                    }
+                }
+                Some(BridgeAction::CloseChatPanel) => {
+                    if let Some(instance) = SimpleHandler::instance() {
+                        instance.lock().expect("Failed to lock handler").close_chat_panel();
+                    }
+                }
                 Some(BridgeAction::SaveSettings(settings)) => {
                     let _ = crate::settings::save(&settings);
                     if let Some(instance) = SimpleHandler::instance() {
@@ -1261,6 +1468,8 @@ wrap_keyboard_handler! {
                 return 1;
             } else if command && key == b'R' as i32 {
                 Some("window.fdbReload&&fdbReload()")
+            } else if command && key == b'Q' as i32 {
+                Some("window.fdbQuit&&fdbQuit()")
             } else if command && key == 188 {
                 Some("window.fdbOpenSettings&&fdbOpenSettings()")
             } else if (alt && key == 37) || (command && key == 219) {
@@ -1478,10 +1687,115 @@ wrap_request_handler! {
     }
 }
 
+fn open_review_window_async(domain: String) {
+    let Some(instance) = SimpleHandler::instance() else { return; };
+    let Some(inner) = instance.lock().ok().and_then(|handler| handler.weak_self.upgrade()) else {
+        return;
+    };
+    let mut url = url::Url::parse(
+        "https://free-domain-name.github.io/tauri-browser/stumble.html",
+    )
+    .expect("valid review URL");
+    url.query_pairs_mut().append_pair("domain", &domain);
+    if !open_review_window(inner, url.as_str()) {
+        if let Ok(handler) = instance.lock() {
+            handler.chrome_toast("Could not open review window");
+        }
+    }
+}
+
+fn parent_overlay_view(window: &Window, view: &BrowserView) {
+    let mut child = View::from(view);
+    window.add_child_view(Some(&mut child));
+    child.set_visible(1);
+}
+
+fn open_settings_overlay() {
+    let Some(instance) = SimpleHandler::instance() else { return; };
+    let (inner, exists) = {
+        let handler = instance.lock().expect("Failed to lock handler");
+        (handler.weak_self.upgrade(), handler.settings_view.is_some())
+    };
+    if exists {
+        instance.lock().expect("Failed to lock handler").show_settings_view();
+        return;
+    }
+    let Some(inner) = inner else { return; };
+    let url = settings_page_url(&crate::settings::load());
+    let Some(view) = create_content_view(inner, &url) else {
+        if let Ok(handler) = instance.lock() {
+            handler.chrome_toast("Could not open settings");
+        }
+        return;
+    };
+    let window = instance
+        .lock()
+        .expect("Failed to lock handler")
+        .window
+        .clone();
+    if let Some(window) = window {
+        parent_overlay_view(&window, &view);
+    }
+    instance
+        .lock()
+        .expect("Failed to lock handler")
+        .attach_settings_view(view);
+}
+
+fn toggle_chat_panel() {
+    let Some(instance) = SimpleHandler::instance() else { return; };
+    let (inner, exists, open) = {
+        let handler = instance.lock().expect("Failed to lock handler");
+        (
+            handler.weak_self.upgrade(),
+            handler.chat_panel.is_some(),
+            handler.chat_open,
+        )
+    };
+    if exists {
+        let mut handler = instance.lock().expect("Failed to lock handler");
+        if open {
+            handler.close_chat_panel();
+        } else {
+            handler.show_chat_panel();
+        }
+        return;
+    }
+    let Some(inner) = inner else { return; };
+    let url = format!("{}&panel=1", internal_page_url(CHAT_HTML));
+    let Some(view) = create_content_view(inner, &url) else {
+        if let Ok(handler) = instance.lock() {
+            handler.chrome_toast("Could not open chat panel");
+        }
+        return;
+    };
+    let window = instance
+        .lock()
+        .expect("Failed to lock handler")
+        .window
+        .clone();
+    if let Some(window) = window {
+        parent_overlay_view(&window, &view);
+    }
+    instance
+        .lock()
+        .expect("Failed to lock handler")
+        .attach_chat_panel(view);
+}
+
 fn handle_chat_command(browser_id: i32, message: &str) {
     let Some(payload) = message.strip_prefix("fdbchat:") else { return; };
     let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else { return; };
     let Some(cmd) = value.get("cmd").and_then(|cmd| cmd.as_str()).map(str::to_string) else { return; };
+    if cmd == "close_panel" {
+        if let Some(instance) = SimpleHandler::instance() {
+            instance
+                .lock()
+                .expect("Failed to lock handler")
+                .close_chat_panel();
+        }
+        return;
+    }
     let service = crate::chat::service().clone();
     // CEF has one chat panel per tab; key the service by the panel's browser
     // identifier so closing this tab does not leave another tab's room open.

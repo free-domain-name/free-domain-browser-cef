@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: desktop functionality is largely ported; three structural UI gaps and packaging/mobile work remain. See `MIGRATION.md`.
+Status: desktop functionality is ported, including settings/chat overlays, a dedicated review window and themed internal pages. Remaining work is packaging polish, density inside content pages, and platform-limited mobile support. See `MIGRATION.md`.
 
 ## Constraints
 
@@ -19,9 +19,10 @@ Status: desktop functionality is largely ported; three structural UI gaps and pa
 - Each tab owns a stable BrowserView, so switching preserves page state/history;
   tabs are created and destroyed dynamically with no fixed cap.
 - `fdn-core` resolves registry/public names; navigation post is on the CEF UI thread.
-- Settings and chat are internal `file://` pages; settings persist in `localStorage`.
-- Chat has a working iroh backend, profile cards, ignore/clear controls and per-tab enablement.
-- Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist.
+- Settings and chat are internal `file://` pages; settings persist in `localStorage`. Settings opens as a fixed overlay below the chrome and chat as a 420 px side panel.
+- Chat has a working iroh backend, profile cards, ignore/clear controls, per-tab enablement and a compact side-panel drawer.
+- Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
+- Reviews open in a dedicated CEF top-level window; system/light/dark theme and all seven skins reach the chrome and internal pages.
 - Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
 
 ## Phase 0 — stable dev loop (mostly done)

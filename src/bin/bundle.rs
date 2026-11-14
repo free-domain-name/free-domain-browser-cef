@@ -145,6 +145,10 @@ fn main() -> anyhow::Result<()> {
         info,
     )?;
     add_bundle_metadata(&app)?;
+    let license = app.join("Contents/Resources/LICENSE");
+    if std::path::Path::new("LICENSE").is_file() {
+        std::fs::copy("LICENSE", &license)?;
+    }
     adhoc_sign(&app)?;
 
     // `cargo run` should launch the app in this terminal (with logs), not just

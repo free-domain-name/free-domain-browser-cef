@@ -21,6 +21,13 @@ wrap_window_delegate! {
                 height: 820,
             }
         }
+
+        fn minimum_size(&self, _view: Option<&mut View>) -> Size {
+            Size {
+                width: 520,
+                height: 420,
+            }
+        }
     }
 
     impl PanelDelegate {}
@@ -72,6 +79,7 @@ wrap_window_delegate! {
             self.apply_bounds(chrome.as_mut(), &bounds);
 
             if self.initial_show_state != ShowState::HIDDEN {
+                window.center_window(Some(&Size { width: 1200, height: 820 }));
                 window.show();
             }
         }
@@ -347,4 +355,59 @@ wrap_browser_process_handler! {
             self.client.borrow().clone()
         }
     }
+}
+
+wrap_window_delegate! {
+    struct ReviewWindowDelegate {
+        view: RefCell<Option<BrowserView>>,
+        runtime_style: RuntimeStyle,
+    }
+
+    impl ViewDelegate {
+        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
+            Size { width: 1040, height: 760 }
+        }
+    }
+
+    impl PanelDelegate {}
+
+    impl WindowDelegate {
+        fn on_window_created(&self, window: Option<&mut Window>) {
+            let Some(window) = window else { return; };
+            let Some(view) = self.view.borrow().clone() else { return; };
+            window.set_title(Some(&CefString::from("Community reviews")));
+            let mut child = View::from(&view);
+            window.add_child_view(Some(&mut child));
+            child.set_visible(1);
+            let bounds = window.bounds();
+            child.set_bounds(Some(&Rect {
+                x: 0,
+                y: 0,
+                width: bounds.width.max(1),
+                height: bounds.height.max(1),
+            }));
+            window.show();
+        }
+
+        fn window_runtime_style(&self) -> RuntimeStyle {
+            self.runtime_style
+        }
+
+        fn with_standard_window_buttons(&self, _window: Option<&mut Window>) -> i32 {
+            1
+        }
+    }
+}
+
+/// Open a Tauri-style dedicated review window instead of replacing a tab.
+pub fn open_review_window(
+    inner: std::sync::Arc<std::sync::Mutex<SimpleHandler>>,
+    url: &str,
+) -> bool {
+    let Some(view) = create_content_view(inner, url) else {
+        return false;
+    };
+    let mut delegate = ReviewWindowDelegate::new(RefCell::new(Some(view)), RuntimeStyle::ALLOY);
+    window_create_top_level(Some(&mut delegate));
+    true
 }
