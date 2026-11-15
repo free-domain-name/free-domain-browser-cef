@@ -60,7 +60,7 @@ pub fn start() {
     };
     let http = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(45))
+        .timeout(Duration::from_secs(8))
         .user_agent(concat!(
             "FreeDomainBrowser/",
             env!("CARGO_PKG_VERSION"),
@@ -249,7 +249,7 @@ async fn handle(mut stream: TcpStream, state: Arc<ProxyState>) -> io::Result<()>
     };
     let response = match fetch(&state, domain, &request).await {
         Ok(response) => response,
-        Err(error) => simple_error(502, "Bad Gateway", &html_escape(&error)),
+        Err(error) => unreachable_page(domain, &error),
     };
     write_response(&mut stream, response).await
 }
@@ -511,6 +511,31 @@ fn rewrite_location(value: &str, target: &str, domain: &str, port: u16) -> Strin
 
 async fn write_response(stream: &mut TcpStream, response: Vec<u8>) -> io::Result<()> {
     stream.write_all(&response).await
+}
+
+/// A 502 for an upstream the registry record points at. Dead targets used to
+/// hang the tab for the full client timeout (45s) with no feedback; this page
+/// is served fast (the client times out in 8s) and offers only a MANUAL retry
+/// — nothing ever reloads on its own.
+fn unreachable_page(domain: &str, error: &str) -> Vec<u8> {
+    let escaped_domain = html_escape(domain);
+    let body = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{d} is unreachable</title></head>\
+<body style=\"font:15px/1.55 system-ui;background:#10151f;color:#e8edf7;padding:48px;max-width:640px;margin:0 auto\">\
+<h1 style=\"font-size:22px\">Registry site unreachable</h1>\
+<p>The registry record for <strong>{d}</strong> points at an origin that did not respond in time, so it cannot be served right now.</p>\
+<p style=\"color:#9aa8c0;font-size:13px\">{e}</p>\
+<p style=\"margin-top:22px\"><a href=\"/\">Try again</a> &middot; nothing retries on its own; you choose when to try.</p>\
+</body></html>",
+        d = escaped_domain,
+        e = html_escape(error)
+    );
+    format!(
+        "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+    .into_bytes()
 }
 
 fn simple_error(status: u16, title: &str, detail: &str) -> Vec<u8> {

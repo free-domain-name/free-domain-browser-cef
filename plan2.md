@@ -574,3 +574,13 @@ are required for any of them.
   only feed the chrome tab strip, truncated to the first 34 chars with an
   ellipsis so long headlines don't stretch the strip. Removed the unused
   platform_title_change helpers; tests 29/29.
+- **Item 25 (2026-11-15) — insecure.fdn "forever reload" = 45s proxy hang
+  (no retry loop existed).** The registry record for insecure.fdn points at
+  http://203.0.113.10:8080 (unroutable TEST-NET); the loopback proxy client
+  waited 45s before failing, so the tab spun with an empty page that only
+  reads as a reload loop (verified: zero frameNavigated in 20s). Client
+  timeout cut to 8s and failed upstream fetches now serve a friendly 502
+  "Registry site unreachable" page naming the domain and upstream, with a
+  MANUAL "Try again" link only — nothing auto-retries anywhere. Verified:
+  curl through the proxy answers in 8.0s; the tab renders READYSTATE
+  complete with the unreachable page. No popups are spawned by this flow.
