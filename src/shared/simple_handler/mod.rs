@@ -436,20 +436,8 @@ impl SimpleHandler {
         debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
         let mut browser = browser.cloned();
-        // Only real tabs (and the chrome) own the main window title. Overlay
-        // settings/chat views and review windows must not rename the browser.
-        let owns_main_title = browser
-            .as_ref()
-            .is_some_and(|browser| self.tab_uid(browser.identifier()).is_some());
-        if owns_main_title {
-            if let Some(browser_view) = browser_view_get_for_browser(browser.as_mut()) {
-                if let Some(window) = browser_view.window() {
-                    window.set_title(title);
-                }
-            } else if self.is_alloy_style {
-                platform_title_change(browser.as_mut(), title);
-            }
-        }
+        // The window title stays static (the browser's own name); site titles
+        // belong to the tab strip only, so every view feeds update_chrome.
         if let Some(browser) = browser.as_ref() {
             if self.chrome_browser_id != Some(browser.identifier()) {
                 let title = title.map(CefString::to_string).unwrap_or_default();

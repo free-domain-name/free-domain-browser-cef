@@ -3,6 +3,4 @@
 //! and are intentionally no-ops.
 use cef::{Browser, CefString};
 
-pub fn platform_title_change(_browser: Option<&mut Browser>, _title: Option<&CefString>) {}
-
 pub fn platform_show_window(_browser: Option<&mut Browser>) {}

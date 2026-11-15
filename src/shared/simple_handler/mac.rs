@@ -10,16 +10,6 @@ fn window_from_browser(browser: Option<&mut Browser>) -> Option<Retained<NSWindo
     view.window()
 }
 
-pub fn platform_title_change(browser: Option<&mut Browser>, title: Option<&CefString>) {
-    let Some(window) = window_from_browser(browser) else {
-        return;
-    };
-
-    let title = title.map(CefString::to_string).unwrap_or_default();
-    let title = NSString::from_str(&title);
-    window.setTitle(&title);
-}
-
 pub fn platform_show_window(browser: Option<&mut Browser>) {
     let Some(window) = window_from_browser(browser) else {
         return;

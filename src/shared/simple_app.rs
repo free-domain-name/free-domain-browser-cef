@@ -41,6 +41,9 @@ wrap_window_delegate! {
             // Add the chrome bar and the page view. CEF clips child views, so the
             // page cannot paint over the chrome.
             let Some(window) = window else { return; };
+            // The OS window keeps the browser's own name; site titles only
+            // appear in the chrome's tab strip.
+            window.set_title(Some(&CefString::from("Free Domain Browser")));
             let chrome_view = self.chrome_view.borrow();
             let content_views = self.content_views.borrow();
             let mut chrome = chrome_view.as_ref().map(View::from);

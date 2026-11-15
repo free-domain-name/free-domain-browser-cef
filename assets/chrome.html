@@ -70,7 +70,7 @@ function render(){
     b.title=t.url;
     b.dataset.source=sourceKind(t.url);
     var dot=document.createElement('span');dot.className='tab-dot';b.appendChild(dot);
-    var label=document.createElement('span');label.textContent=t.label||t.url||'New Tab';b.appendChild(label);
+    var label=document.createElement('span');var text=(t.label||t.url||'New Tab').trim();if(text.length>34)text=text.slice(0,34).trimEnd()+'…';label.textContent=text;b.appendChild(label);
     var close=document.createElement('span');close.className='close';close.textContent='×';close.title='Close tab';
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
     b.onclick=function(){active=i;render();send({cmd:'select_tab',uid:t.uid})};

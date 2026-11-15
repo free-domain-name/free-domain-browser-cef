@@ -568,3 +568,9 @@ are required for any of them.
   to the active tab's view under the lock and attaches visible when active.
   Verified: newtab page docHidden=false/visible, heading + samples paint
   (terminal skin gives green-on-black by design). Tests 29/29.
+- **Item 24 (2026-11-15) — static window title, truncated tab titles.**
+  on_title_change renamed the OS window to the site title; now the main
+  window is titled "Free Domain Browser" once at creation and site titles
+  only feed the chrome tab strip, truncated to the first 34 chars with an
+  ellipsis so long headlines don't stretch the strip. Removed the unused
+  platform_title_change helpers; tests 29/29.
