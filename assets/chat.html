@@ -1,5 +1,6 @@
 <html><head><meta charset="utf-8"><title>Free Domain Chat</title><style>
 *{box-sizing:border-box}body{margin:0;background:#0f131a;color:#e8edf7;font:14px -apple-system,system-ui;height:100vh;display:flex;overflow:hidden}
+
 aside{width:280px;background:#151b25;border-right:1px solid #263042;padding:20px 16px;display:flex;flex-direction:column;gap:14px;overflow:auto}
 aside h1{font-size:15px;margin:0;color:#fff}.sub{color:#8290a8;font-size:12px;line-height:1.45}
 .card{background:#111722;border:1px solid #263042;border-radius:10px;padding:12px}
@@ -11,7 +12,7 @@ aside h1{font-size:15px;margin:0;color:#fff}.sub{color:#8290a8;font-size:12px;li
 main{flex:1;display:flex;flex-direction:column;min-width:0}
 header{padding:16px 24px;border-bottom:1px solid #263042;display:flex;align-items:center;gap:12px}
 header h2{font-size:15px;margin:0}header .pill{font-size:11px;color:#9dbcff;background:#22304a;border-radius:999px;padding:3px 9px}
-header .spacer{flex:1}header button{background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer}
+header .spacer{flex:1}
 #connection{padding:6px 24px;color:#8290a8;font-size:11px;border-bottom:1px solid #1d2635;min-height:26px}
 .messages{flex:1;padding:22px 24px;overflow:auto}
 .msg{max-width:72%;margin-bottom:14px;padding:10px 13px;border-radius:10px;background:#1b2331;line-height:1.45;word-wrap:break-word}
@@ -29,45 +30,44 @@ body.panel #panelMenu{display:inline-block}
 body.panel #panelClose{display:inline-block;position:fixed;top:8px;right:8px;z-index:30}
 #panelMenu,#panelClose{display:none}
 body.panel aside #panelMenuClose{display:block;margin-bottom:8px}
-#panelMenuClose{display:none;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
+#panelMenuClose{display:none}
 footer .count{font-size:11px;color:#8290a8;white-space:nowrap}
 footer{display:flex;gap:10px;padding:14px 24px;border-top:1px solid #263042}
 #text{flex:1;background:#111722;border:1px solid #334055;border-radius:9px;color:#fff;padding:11px 13px;font:inherit;outline:none}#text:focus{border-color:#4f7cff}
 footer button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:11px 18px;font:inherit;cursor:pointer}footer button:disabled{opacity:.45;cursor:default}
 #age{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:5}
 #age .box{max-width:460px;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:28px}#age h2{margin:0 0 8px}#age p{color:#aebbd0;line-height:1.55;font-size:13px}
-#age label{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c6d0e2;font-size:13px}#age button{background:#4f7cff;border:0;border-radius:9px;color:#fff;padding:10px 16px;font:inherit;cursor:pointer}#age button:disabled{opacity:.45;cursor:default}
+#age label{display:flex;gap:10px;align-items:flex-start;margin:18px 0;color:#c6d0e2;font-size:13px}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow-wrap:anywhere}
-#clearData{margin-top:8px;background:#5a2630;color:#ffd9df;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer}
 #ignoreList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}#ignoreList li{display:flex;align-items:center;gap:6px;font-size:12px}#ignoreList li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#ignoreList button{background:none;border:0;color:#9dbcff;font:inherit;font-size:11px;cursor:pointer}
 #profileView[hidden]{display:none}#profileView{position:fixed;inset:0;background:rgba(6,9,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:6}
-#profileView .box{max-width:480px;width:100%;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:26px}#profileView h2{margin:0 0 14px}#profileView dl{margin:0}#profileView dt{color:#8290a8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:10px}#profileView dd{margin:2px 0 0;color:#e8edf7;font-size:13px;overflow-wrap:anywhere}#profileView button{margin-top:16px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+#profileView .box{max-width:480px;width:100%;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:26px}#profileView h2{margin:0 0 14px}#profileView dl{margin:0}#profileView dt{color:#8290a8;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-top:10px}#profileView dd{margin:2px 0 0;color:#e8edf7;font-size:13px;overflow-wrap:anywhere}#profileView button{margin-top:16px}
 </style></head><body>
 <aside>
-<h1>Free Domain Chat</h1><button id="panelMenuClose" type="button">Close menu</button><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
+<h1>Free Domain Chat</h1><button id="panelMenuClose" class="btn ghost" type="button">Close menu</button><div class="sub">Peer-to-peer rooms over iroh gossip. Messages are local to this app session.</div>
 <div class="card"><h2>Room</h2><div id="room" style="color:#c6d0e2">fdn:general:v1</div><div class="sub" id="relay" style="margin-top:6px"></div></div>
-<div class="card"><h2>You</h2><input id="nickname" maxlength="32" placeholder="Nickname" style="width:100%;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px 10px;font:inherit"><button id="saveNick" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save nickname</button></div>
+<div class="card"><h2>You</h2><input id="nickname" maxlength="32" class="field" placeholder="Nickname"><button id="saveNick" class="btn primary btnBlock" type="button">Save nickname</button></div>
 <details class="card" id="profileCard"><summary>Profile</summary>
-<textarea id="profileDescription" maxlength="160" placeholder="About you (optional)" style="width:100%;min-height:58px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit;resize:vertical"></textarea>
-<input id="profileGender" maxlength="32" placeholder="Gender" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
-<select id="profileAge" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit"><option value="">Age band</option><option>18-24</option><option>25-34</option><option>35-44</option><option>45-54</option><option>55-64</option><option>65+</option><option>prefer not to say</option></select>
-<input id="profileCountry" maxlength="2" placeholder="Country (ISO)" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
-<input id="profileCity" maxlength="48" placeholder="City" style="width:100%;margin-top:6px;background:#0b1018;border:1px solid #334055;border-radius:8px;color:#fff;padding:8px;font:inherit">
-<label style="display:flex;gap:8px;align-items:center;margin-top:8px;color:#aebbd0;font-size:12px"><input id="profileShow" type="checkbox"> Show profile in rooms</label>
-<button id="saveProfile" style="margin-top:8px;background:#2a3446;color:#dce6f7;border:0;border-radius:8px;padding:7px 10px;font:inherit;font-size:12px;cursor:pointer">Save profile</button><div id="profileStatus" class="sub" style="margin-top:6px"></div></details>
-<details class="card" id="identityCard"><summary>Identity</summary><div class="sub" style="margin-top:8px">Fingerprint</div><div id="fingerprint" class="mono">—</div><div class="sub" style="margin-top:8px">Node</div><div id="nodeId" class="mono">—</div><button id="clearData" type="button">Clear local chat data</button><div id="clearHint" class="sub" style="margin-top:6px"></div></details>
+<textarea id="profileDescription" maxlength="160" class="field" style="min-height:58px" placeholder="About you (optional)"></textarea>
+<input id="profileGender" maxlength="32" placeholder="Gender" class="field">
+<select id="profileAge" class="field"><option value="">Age band</option><option>18-24</option><option>25-34</option><option>35-44</option><option>45-54</option><option>55-64</option><option>65+</option><option>prefer not to say</option></select>
+<input id="profileCountry" maxlength="2" placeholder="Country (ISO)" class="field">
+<input id="profileCity" maxlength="48" placeholder="City" class="field">
+<label class="check"><input id="profileShow" type="checkbox"> Show profile in rooms</label>
+<button id="saveProfile" class="btn primary btnBlock" type="button">Save profile</button><div id="profileStatus" class="sub" style="margin-top:6px"></div></details>
+<details class="card" id="identityCard"><summary>Identity</summary><div class="sub" style="margin-top:8px">Fingerprint</div><div id="fingerprint" class="mono">—</div><div class="sub" style="margin-top:8px">Node</div><div id="nodeId" class="mono">—</div><button id="clearData" class="btn danger btnBlock" type="button">Clear local chat data</button><div id="clearHint" class="sub" style="margin-top:6px"></div></details>
 <details class="card" id="ignoreCard"><summary>Ignored <span id="ignoreCount">0</span></summary><ul id="ignoreList"></ul><div id="ignoreEmpty" class="sub">Nobody is ignored.</div></details>
 <div class="card"><h2>Online <span id="onlineCount">0</span></h2><ul id="users"></ul></div>
 </aside>
-<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="panelMenu" type="button">Menu</button><button id="join">Join chat</button><button id="disable">Leave</button><button id="panelClose" type="button">Close</button></header>
+<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="panelMenu" class="btn ghost" type="button">Menu</button><button id="join" class="btn primary" type="button">Join chat</button><button id="disable" class="btn ghost" type="button">Leave</button><button id="panelClose" class="btn ghost" type="button">Close</button></header>
 <div id="connection">Connecting to the community relay…</div>
 <div class="messages" id="messages"><div class="empty">Join the room to load messages.</div></div>
 <footer><input id="text" maxlength="500" placeholder="Message #general" disabled><span id="count" class="count">0 / 500</span><button id="send" disabled>Send</button></footer></main>
-<div id="age"><div class="box"><h2>Before you join</h2><p>This is an unmoderated community chat. Messages can contain mature language or links from strangers. You must be 18 or older to continue.</p><label><input id="ageCheck" type="checkbox"> I am 18 or older and understand this room is unmoderated.</label><button id="ageContinue" disabled>Continue</button></div></div>
-<div id="profileView" hidden><div class="box"><h2 id="profileTitle">Profile</h2><dl id="profileFacts"></dl><div id="profileEmpty" class="sub" hidden>This person has not shared a profile.</div><button id="profileClose" type="button">Close</button></div></div>
+<div id="age"><div class="box"><h2>Before you join</h2><p>This is an unmoderated community chat. Messages can contain mature language or links from strangers. You must be 18 or older to continue.</p><label><input id="ageCheck" type="checkbox"> I am 18 or older and understand this room is unmoderated.</label><button id="ageContinue" class="btn primary" type="button" disabled>Continue</button></div></div>
+<div id="profileView" hidden><div class="box"><h2 id="profileTitle">Profile</h2><dl id="profileFacts"></dl><div id="profileEmpty" class="sub" hidden>This person has not shared a profile.</div><button id="profileClose" class="btn" type="button">Close</button></div></div>
 <script>
 var PANEL=/[?&]panel=1/.test(location.search);if(PANEL)document.body.classList.add('panel');
-var state={enabled:false,age_confirmed:false,snapshot:null,cooldownUntil:0,clearArmed:false,clearTimer:null,profileSender:null};
+var state={enabled:false,age_confirmed:false,snapshot:null,cooldownUntil:0,clearArmed:false,clearTimer:null,clearing:false,profileSender:null,dirty:{},pendingNick:false,pendingProfile:false,sending:false,usersKey:null};
 function send(cmd){console.log('fdbchat:'+JSON.stringify(cmd))}
 function $(id){return document.getElementById(id)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -104,18 +104,44 @@ function renderIgnored(users){
 function tickCooldown(){
   var left=Math.max(0,state.cooldownUntil-Date.now());
   var button=$('send');
-  if(button){button.disabled=!state.enabled||left>0;button.textContent=left>0?('Wait '+Math.ceil(left/1000)+'s'):'Send'}
+  var connected=!!(state.snapshot&&state.snapshot.connected);
+  var blocked=!state.enabled||!connected||left>0||state.sending;
+  if(button){
+    button.textContent=state.sending?'Sending…':left>0?('Wait '+Math.ceil(left/1000)+'s'):'Send';
+    button.disabled=blocked;
+  }
   if(left>0){clearTimeout(state.cooldownTimer);state.cooldownTimer=setTimeout(tickCooldown,250)}
+}
+function setIfUnfocused(id,value){
+  var el=document.getElementById(id);
+  if(!el||document.activeElement===el)return;
+  el.value=value==null?'':value;
 }
 function render(s){
   if(!s)return;
   state.snapshot=s;state.enabled=!!s.enabled;state.age_confirmed=!!s.age_confirmed;
-  state.cooldownUntil=Date.now()+(Number(s.cooldown_ms)||0);
+  // Cooldown is remaining-ms; a stale snapshot must never shorten it
+  // (Tauri keeps the deadline client-side and only ever extends it).
+  state.cooldownUntil=Math.max(state.cooldownUntil||0,Date.now()+(Number(s.cooldown_ms)||0));
   $('age').style.display=state.age_confirmed?'none':'flex';
-  $('count').textContent=($('text').value||'').length+' / 500';
-  $('nickname').value=s.nickname||'';
+  // The Rust limit counts chars (code points); [...str] matches with emoji.
+  $('count').textContent=[...($('text').value||'')].length+' / 500';
+  // Two-layer input guard, mirroring the Tauri chat panel: (1) never touch a
+  // focused control, (2) never sync over an unsaved draft — the dirty flag
+  // clears only when the corresponding save response lands.
+  var sync=function(id,value){
+    var el=document.getElementById(id);
+    if(!el||document.activeElement===el||state.dirty[id])return;
+    el.value=value==null?'':value;
+  };
+  sync('nickname',s.nickname);
   var p=s.profile||{};
-  $('profileDescription').value=p.description||'';$('profileGender').value=p.gender||'';$('profileAge').value=p.age_band||'';$('profileCountry').value=p.country||'';$('profileCity').value=p.city||'';$('profileShow').checked=!!s.show_profile_in_rooms;
+  sync('profileDescription',p.description);
+  sync('profileGender',p.gender);
+  sync('profileAge',p.age_band);
+  sync('profileCountry',p.country);
+  sync('profileCity',p.city);
+  if(document.activeElement!==$('profileShow')&&!state.dirty.profileShow)$('profileShow').checked=!!s.show_profile_in_rooms;
   $('room').textContent=s.room||'fdn:general:v1';
   $('relay').textContent=s.relay_url||'';
   $('fingerprint').textContent=s.fingerprint||s.node_id||'—';
@@ -126,7 +152,10 @@ function render(s){
   $('statePill').textContent=s.enabled?(s.connected?'connected':'joining'):'offline';
   $('join').style.display=state.enabled?'none':'inline-block';
   $('disable').style.display=state.enabled?'inline-block':'none';
-  renderUsers(s.users||[]);renderIgnored(s.users||[]);
+  // Rebuild the lists only when the data actually changed: rebuilding on every
+  // 3 s poll can swallow clicks mid-press and resets hover/focus.
+  var usersKey=JSON.stringify((s.users||[]).map(function(u){return [u.sender,u.nickname,u.ignored,u.is_me,u.online]}));
+  if(usersKey!==state.usersKey){state.usersKey=usersKey;renderUsers(s.users||[]);renderIgnored(s.users||[])}
   var box=$('messages');box.textContent='';
   if(!(s.messages||[]).length){var empty=document.createElement('div');empty.className='empty';empty.textContent='No messages yet.';box.appendChild(empty)}
   (s.messages||[]).forEach(function(m){
@@ -135,10 +164,17 @@ function render(s){
     meta.textContent=(m.nickname||m.sender||'?')+' · '+new Date(Number(m.timestamp)||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+(m.ignored?' · ignored':'');
     d.appendChild(meta);d.appendChild(document.createTextNode(m.text||''));box.appendChild(d);
   });
-  box.scrollTop=box.scrollHeight;
-  var input=$('text');input.disabled=!state.enabled;input.placeholder='Message '+(s.room||'#general');
+  // Autoscroll when the reader is at the bottom, or when the newest message is
+  // the user's own (Tauri parity): reading history must not get yanked.
+  var nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<48;
+  var lastMine=(s.messages||[]).length>0&&(s.messages[s.messages.length-1]||{}).mine;
+  if(nearBottom||lastMine)box.scrollTop=box.scrollHeight;
+  // Send stays off until the room is actually joined — sending during
+  // "joining" fails with NotEnabled and used to swallow the text.
+  var input=$('text');input.disabled=!state.enabled||!s.connected;input.placeholder='Message '+(s.room||'#general');
   tickCooldown();
-  setConnection(s.error?('Chat: '+s.error):(state.enabled?(s.connected?'Connected · '+s.online+' online':'Joining room…'):'Not connected. Join the room to start.'));
+  var degraded=s.identity_ephemeral?'Temporary identity for this session (OS keychain unavailable) · ':'';
+  setConnection(degraded+(s.error?'Chat: '+s.error:(state.enabled?(s.connected?'Connected · '+s.online+' online':'Joining room…'):'Not connected. Join the room to start.')));
 }
 function openProfile(sender){
   var user=(state.snapshot&&state.snapshot.users||[]).filter(function(u){return u.sender===sender})[0];
@@ -155,18 +191,59 @@ function openProfile(sender){
 }
 function closeProfile(){state.profileSender=null;$('profileView').style.display='none'}
 function refresh(){send({cmd:'snapshot'})}
+var lastStateSeq=null;
 window.fdbChatResult=function(r){
   if(!r)return;
-  if(!r.ok){var msg=r.error||'unavailable';setConnection('Chat: '+msg);$('profileStatus').textContent=msg;$('clearData').textContent='Clear local chat data';return}
-  if(r.data&&r.data.room!==undefined)render(r.data);
-  else if(r.data===null)refresh();
+  if(!r.ok){
+    var msg=r.error||'unavailable';
+    setConnection('Chat: '+msg);$('profileStatus').textContent=msg;
+    $('clearData').textContent='Clear local chat data';state.clearArmed=false;
+    // A failed send keeps the draft (and stops "Sending…").
+    state.sending=false;tickCooldown();
+    return;
+  }
+  var d=r.data;
+  if(d&&d.room!==undefined){
+    // Snapshot payloads carry a monotonic capture seq. A poll snapshot that
+    // started BEFORE a save committed can arrive AFTER the save response;
+    // without this guard it would revert the UI to pre-save state.
+    if(typeof d.seq==='number'){
+      if(lastStateSeq!=null&&d.seq<lastStateSeq)return;
+      lastStateSeq=d.seq;
+    }
+    if(state.pendingNick){state.pendingNick=false;delete state.dirty.nickname}
+    if(state.pendingProfile){state.pendingProfile=false;['profileDescription','profileGender','profileAge','profileCountry','profileCity','profileShow'].forEach(function(id){delete state.dirty[id]})}
+    if(state.clearing){state.clearing=false;$('clearData').textContent='Clear local chat data';$('clearHint').textContent=''}
+    render(d);
+  }
+  else if(d===null){
+    // Only the send command responds with data:null. Clear the draft only on
+    // success, and floor the cooldown like the Tauri UI so a fast follow-up
+    // fails cleanly instead of racing the room policy.
+    state.sending=false;
+    $('text').value='';
+    $('count').textContent='0 / 500';
+    state.cooldownUntil=Math.max(state.cooldownUntil||0,Date.now()+5000);
+    tickCooldown();
+    refresh();
+  }
 };
 $('ageCheck').onchange=function(){$('ageContinue').disabled=!this.checked};
 $('ageContinue').onclick=function(){send({cmd:'confirm_age'});setTimeout(function(){send({cmd:'enable'})},150)};
 $('join').onclick=function(){send({cmd:'enable'})};
 $('disable').onclick=function(){send({cmd:'disable'})};
-$('saveNick').onclick=function(){var value=$('nickname').value.trim();if(value)send({cmd:'set_nickname',nickname:value})};
-$('saveProfile').onclick=function(){send({cmd:'set_profile',description:$('profileDescription').value,gender:$('profileGender').value,age_band:$('profileAge').value,country:$('profileCountry').value,city:$('profileCity').value,show:$('profileShow').checked})};
+// Dirty tracking: unsaved edits in these fields are never overwritten by
+// background renders; the flag clears when the save response lands.
+['nickname'].forEach(function(id){var el=document.getElementById(id);if(!el)return;['input','change'].forEach(function(ev){el.addEventListener(ev,function(){state.dirty[id]=true})})});
+// Pressing Enter inside the nickname field saves it — without this the only
+// save affordance was the small button and it looked like "nothing happened".
+$('nickname').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();$('saveNick').click()}});
+['profileDescription','profileGender','profileAge','profileCountry','profileCity','profileShow'].forEach(function(id){
+  var el=document.getElementById(id);if(!el)return;
+  ['input','change'].forEach(function(ev){el.addEventListener(ev,function(){state.dirty[id]=true})})
+});
+$('saveNick').onclick=function(){var value=$('nickname').value.trim();if(value){state.pendingNick=true;send({cmd:'set_nickname',nickname:value})}};
+$('saveProfile').onclick=function(){state.pendingProfile=true;send({cmd:'set_profile',description:$('profileDescription').value,gender:$('profileGender').value,age_band:$('profileAge').value,country:$('profileCountry').value,city:$('profileCity').value,show:$('profileShow').checked})};
 $('clearData').onclick=function(){
   if(!state.clearArmed){
     state.clearArmed=true;this.textContent='Click again to erase everything';
@@ -175,13 +252,20 @@ $('clearData').onclick=function(){
     state.clearTimer=setTimeout(function(){state.clearArmed=false;$('clearData').textContent='Clear local chat data';$('clearHint').textContent=''},6000);
     return;
   }
-  clearTimeout(state.clearTimer);state.clearArmed=false;this.textContent='Clearing…';$('clearHint').textContent='';
+  clearTimeout(state.clearTimer);state.clearArmed=false;this.textContent='Clearing…';state.clearing=true;$('clearHint').textContent='';
   send({cmd:'clear_local_data'});
 };
 $('profileClose').onclick=closeProfile;
-$('send').onclick=function(){var input=$('text');var text=input.value.trim();if(!text||!state.enabled||Date.now()<state.cooldownUntil)return;send({cmd:'send',text:text});input.value='';$('count').textContent='0 / 500'};
+$('send').onclick=function(){
+  var input=$('text');var text=input.value.trim();
+  var connected=!!(state.snapshot&&state.snapshot.connected);
+  if(!text||!state.enabled||!connected||Date.now()<state.cooldownUntil||state.sending)return;
+  state.sending=true;tickCooldown();
+  // The draft is kept until the send response: failures no longer eat it.
+  send({cmd:'send',text:text});
+};
 $('text').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}});
-$('text').addEventListener('input',function(){$('count').textContent=$('text').value.length+' / 500'});
+$('text').addEventListener('input',function(){$('count').textContent=[...$('text').value].length+' / 500'});
 setInterval(function(){if(state.enabled)refresh()},3000);
 $('panelMenu').onclick=function(){document.body.classList.toggle('showAside')};
 $('panelMenuClose').onclick=function(){document.body.classList.remove('showAside')};

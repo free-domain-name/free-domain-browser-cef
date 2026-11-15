@@ -1,0 +1,190 @@
+/* Free Domain Browser — shared UI kit.
+ *
+ * ONE stylesheet for every internal page (chat, chrome, newtab, settings,
+ * claim, conflict, unavailable, error). Material Design 3-flavored:
+ * a token layer (color roles, shape, type, elevation) that themes and skins
+ * remap, plus component classes built only from tokens. Pages adopt the
+ * component classes and stop carrying their own copies of theme CSS.
+ * The `!important` legacy block at the bottom keeps the pre-kit pages
+ * theming correctly until they adopt the kit.
+ *
+ * Structure:
+ *   1. Tokens (dark default, light theme, skins)
+ *   2. Base + typography + elevation
+ *   3. Components (.btn/.field/.card/.pill/.dialog/.mono)
+ *   4. Legacy theme/skin/density overrides (pre-kit pages)
+ */
+
+/* ---------- 1. Tokens ---------- */
+:root {
+  --bg: #171b24;
+  --chrome: #1f2430;
+  --text: #fff;
+  --muted: #9aa4b8;
+  --button: #2a3040;
+  --button-hover: #343c4e;
+  --field: #fff;
+  --field-text: #111;
+  --accent: #4f7cff;
+  --accent-hover: #5c88ff;
+  --on-accent: #fff;
+  --border: #334055;
+  --status: #111722;
+  --danger: #5a2630;
+  --danger-hover: #6d2f3c;
+  --on-danger: #ffd9df;
+  --radius-control: 8px;
+  --radius-card: 10px;
+  --radius-dialog: 16px;
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, .35);
+  --shadow-3: 0 3px 14px rgba(0, 0, 0, .4);
+  --font: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+html[data-theme=light]{
+  --bg: #eef1f6;
+  --chrome: #f8f9fb;
+  --text: #141821;
+  --muted: #5d687c;
+  --button: #e4e8ef;
+  --button-hover: #d8dee8;
+  --field: #fff;
+  --field-text: #111;
+  --accent: #2563eb;
+  --accent-hover: #1d4fd8;
+  --on-accent: #fff;
+  --border: #c8d1df;
+  --status: #e7ebf2;
+  --danger: #f5d5da;
+  --danger-hover: #eec3ca;
+  --on-danger: #7a2733;
+  --shadow-1: 0 1px 3px rgba(20, 24, 33, .12);
+  --shadow-3: 0 3px 14px rgba(20, 24, 33, .14);
+}
+html[data-skin=high-tech] {
+  --bg: #0c1114; --chrome: #11181d; --text: #d8f7ff; --muted: #78a6b2;
+  --button: #18262c; --button-hover: #22353d; --field: #071014; --field-text: #d8f7ff;
+  --accent: #22d3ee; --accent-hover: #3ddcf2; --on-accent: #052a30; --border: #1d3a42; --status: #071014;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+html[data-skin=futuristic] {
+  --bg: #120b24; --chrome: #1b1033; --text: #f3e8ff; --muted: #b39ddb;
+  --button: #2a1a4d; --button-hover: #392369; --field: #0c0618; --field-text: #f3e8ff;
+  --accent: #a855f7; --accent-hover: #b76ef9; --on-accent: #160a26; --border: #4c2a7a; --status: #0c0618;
+}
+html[data-skin=historic] {
+  --bg: #e8dcc3; --chrome: #f3ead6; --text: #3b2a18; --muted: #7a644c;
+  --button: #ddceb1; --button-hover: #d1c09f; --field: #fffaf0; --field-text: #2b1d10;
+  --accent: #8b5e34; --accent-hover: #9c6d3e; --on-accent: #fff7ec; --border: #c4ae8b; --status: #e0d1b4;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+html[data-skin=victorian] {
+  --bg: #2a1820; --chrome: #3a2029; --text: #f4e6d0; --muted: #c9a98d;
+  --button: #4d2a35; --button-hover: #603643; --field: #1d1016; --field-text: #f4e6d0;
+  --accent: #b8860b; --accent-hover: #cf980e; --on-accent: #241703; --border: #6e4350; --status: #1d1016;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+html[data-skin=amazon] {
+  --bg: #10251b; --chrome: #173326; --text: #e8f5e9; --muted: #9cc3a8;
+  --button: #204734; --button-hover: #2a5a43; --field: #0a1a12; --field-text: #e8f5e9;
+  --accent: #e07a3f; --accent-hover: #e88b52; --on-accent: #2b1305; --border: #2f5e45; --status: #0a1a12;
+}
+html[data-skin=terminal] {
+  --bg: #050805; --chrome: #071007; --text: #b8ffb8; --muted: #5f9f5f;
+  --button: #0d1f0d; --button-hover: #143014; --field: #020402; --field-text: #b8ffb8;
+  --accent: #22c55e; --accent-hover: #3fdc74; --on-accent: #02180a; --border: #1f4a1f; --status: #020402;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------- 2. Base + type ---------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--chrome);
+  color: var(--text);
+  font: 14px/1.45 var(--font);
+}
+h1 { font-size: 15px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 8px; }
+.fdb-sub, .sub, .note, .fineprint { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.mono { font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+
+/* ---------- 3. Components ---------- */
+/* Buttons — filled (primary), tonal (default), outlined (ghost), danger. */
+.fdb-btn, .btn {
+  border: 0;
+  border-radius: var(--radius-control);
+  padding: 8px 14px;
+  font: 13px var(--font);
+  cursor: pointer;
+  background: var(--button);
+  color: var(--text);
+  box-shadow: none;
+}
+.fdb-btn:hover, .btn:hover { background: var(--button-hover); }
+.fdb-btn.primary, .btn.primary { background: var(--accent); color: var(--on-accent); }
+.fdb-btn.primary:hover, .btn.primary:hover { background: var(--accent-hover); }
+.fdb-btn.ghost, .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.fdb-btn.ghost:hover, .btn.ghost:hover { background: var(--button-hover); }
+.fdb-btn.danger, .btn.danger { background: var(--danger); color: var(--on-danger); }
+.fdb-btn.danger:hover, .btn.danger:hover { background: var(--danger-hover); }
+.fdb-btn:disabled, .btn:disabled { opacity: .45; cursor: default; }
+.fdb-btnBlock, .btnBlock { width: 100%; margin-top: 8px; display: inline-block; }
+
+/* Fields — MD3-style outlined inputs with an accent focus ring. Note: the
+ * legacy block below still forces var(--field) on inputs for skins; the
+ * neutral default here keeps dark-theme form fields dark. */
+.fdb-field, .field {
+  width: 100%;
+  background: var(--status);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 8px 10px;
+  font: inherit;
+  outline: none;
+  margin-top: 6px;
+  resize: vertical;
+}
+.fdb-field:focus, .field:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Cards, pills, dialogs. */
+.fdb-card, .card {
+  background: var(--status);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 12px;
+  box-shadow: var(--shadow-1);
+}
+.pill {
+  font-size: 11px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.fdb-dialog-scrim, #age, #profileView {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 5;
+}
+.fdb-dialog, #age .box, #profileView .box {
+  max-width: 460px;
+  background: var(--status);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-dialog);
+  padding: 26px;
+  box-shadow: var(--shadow-3);
+}
+.check { display: flex; gap: 8px; align-items: center; margin-top: 8px; color: var(--text); font-size: 12px; }
+
+/* ---------- 4. Legacy theme/skin/density overrides ----------
+ * Keeps the pre-kit pages (newtab, settings, claim, conflict, unavailable,
+ * error) theming without touching their markup; harmless for kit pages
+ * because kit components already use the same values via variables. */
+html[data-theme=light] body{background:#eef2f8!important;color:#182131!important}html[data-theme=light] aside,html[data-theme=light] header,html[data-theme=light] .card,html[data-theme=light] .box,html[data-theme=light] .search{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] .sub,html[data-theme=light] .note,html[data-theme=light] .fineprint,html[data-theme=light] .meta,html[data-theme=light] .empty,html[data-theme=light] .kind{color:#5d687c!important}html[data-theme=light] input,html[data-theme=light] textarea,html[data-theme=light] select{background:#fff!important;color:#111!important;border-color:#c8d1df!important}html[data-theme=light] button{background:#e4e9f1!important;color:#182131!important;border-color:#c8d1df!important}html[data-theme=light] #send,html[data-theme=light] .primary,html[data-theme=light] #ageContinue,html[data-theme=light] .go{background:#2563eb!important;color:#fff!important}html[data-theme=light] .messages,html[data-theme=light] #connection{background:#f7f9fc!important;border-color:#d6deea!important}html[data-theme=light] .msg{background:#fff!important;color:#182131!important;border:1px solid #d6deea}html[data-theme=light] .msg.me{background:#dbe7ff!important}html[data-theme=light] .sample{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] pre,html[data-theme=light] code{background:#f3f5f9!important;color:#182131!important}html[data-theme=light] #age,html[data-theme=light] #profileView{background:rgba(238,242,248,.85)!important}html[data-skin]:not([data-skin=default]) body{background:var(--bg)!important;color:var(--text)!important}html[data-skin]:not([data-skin=default]) aside,html[data-skin]:not([data-skin=default]) header,html[data-skin]:not([data-skin=default]) .card,html[data-skin]:not([data-skin=default]) .box,html[data-skin]:not([data-skin=default]) .search{background:var(--chrome)!important;border-color:var(--border)!important;color:var(--text)!important}html[data-skin]:not([data-skin=default]) .sub,html[data-skin]:not([data-skin=default]) .note,html[data-skin]:not([data-skin=default]) .fineprint,html[data-skin]:not([data-skin=default]) .meta,html[data-skin]:not([data-skin=default]) .empty{color:var(--muted)!important}html[data-skin]:not([data-skin=default]) input,html[data-skin]:not([data-skin=default]) textarea,html[data-skin]:not([data-skin=default]) select{background:var(--field)!important;color:var(--field-text)!important;border-color:var(--border)!important}html[data-skin]:not([data-skin=default]) button{background:var(--button)!important;color:var(--text)!important;border-color:var(--border)!important}html[data-skin]:not([data-skin=default]) #send,html[data-skin]:not([data-skin=default]) .primary,html[data-skin]:not([data-skin=default]) #ageContinue,html[data-skin]:not([data-skin=default]) .go{background:var(--accent)!important;color:var(--on-accent)!important}html[data-density=compact] body{font-size:13px}html[data-density=compact] .card,html[data-density=compact] .box{padding:14px!important;margin-bottom:10px!important}html[data-density=compact] header,html[data-density=compact] footer{padding-top:8px!important;padding-bottom:8px!important}html[data-density=compact] .messages{padding:10px!important;gap:8px!important}html[data-density=compact] input,html[data-density=compact] textarea,html[data-density=compact] select,html[data-density=compact] button{padding-top:7px!important;padding-bottom:7px!important}html[data-density=compact] h1{font-size:24px!important}html[data-density=compact] h2{font-size:16px!important}

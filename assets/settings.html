@@ -49,7 +49,12 @@ function preview(){var t=fields.theme.value;var dark=t==='dark'||(t==='system'&&
 function apply(silent){preview();send(payload());if(!silent)document.getElementById('status').textContent='Saved'}
 ['theme','density','skin'].forEach(function(id){fields[id].addEventListener('change',function(){showHint();apply(true)})});
 fields.custom_css.addEventListener('change',function(){apply(true)});
-document.getElementById('reset').onclick=function(){fields.theme.value='system';fields.density.value='comfortable';fields.skin.value='default';fields.custom_css.value='';showHint();apply(false)};
+document.getElementById('reset').onclick=function(){
+  // Tauri confirms before wiping a customized appearance (M2127-2138).
+  var customized=(fields.skin.value&&fields.skin.value!=='default')||(fields.custom_css.value||'').trim()!=='';
+  if(customized&&!window.confirm('Reset appearance to defaults? Your skin and custom CSS will be lost.'))return;
+  fields.theme.value='system';fields.density.value='comfortable';fields.skin.value='default';fields.custom_css.value='';showHint();apply(false)
+};
 document.getElementById('save').onclick=function(){apply(false)};
 document.getElementById('close').onclick=function(){send({cmd:'close_settings'})};
 showHint();

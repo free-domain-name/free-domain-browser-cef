@@ -30,7 +30,17 @@ code{color:#8fb3ff}.path{color:#c8d4ea;background:#111722;border:1px solid #2b35
 {{public_row}}
 <script>
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
-document.querySelectorAll('[data-external]').forEach(function(el){el.onclick=function(){send({cmd:'external',url:el.getAttribute('data-external')})}});
+document.querySelectorAll('[data-external]').forEach(function(el){el.onclick=function(){
+  // GitHub sometimes flattens the encoded claim in its editor, so the
+  // formatted JSON is copied alongside the open (Tauri claimRegister parity).
+  var isRegister=el.getAttribute('data-external')==={{register_url_js}};
+  if(isRegister){
+    var text=document.getElementById('json').textContent;
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).catch(function(){})}
+    document.getElementById('status').textContent='Opening GitHub — formatted JSON copied too';
+  }
+  send({cmd:'external',url:el.getAttribute('data-external')});
+}});
 document.getElementById('copy').onclick=function(){
   var text=document.getElementById('json').textContent;
   function done(ok){document.getElementById('status').textContent=ok?'Copied':'Copy failed'}

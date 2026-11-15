@@ -1,13 +1,4 @@
 <html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Free Domain Browser</title><style>
-:root{--bg:#171b24;--chrome:#1f2430;--text:#fff;--muted:#9aa4b8;--button:#2a3040;--button-hover:#343c4e;--field:#fff;--field-text:#111;--accent:#4f7cff;--border:#334055;--status:#111722}
-:where(html[data-theme=light]){--bg:#eef1f6;--chrome:#f8f9fb;--text:#141821;--muted:#5d687c;--button:#e4e8ef;--button-hover:#d8dee8;--field:#fff;--field-text:#111;--accent:#2563eb;--border:#c8d1df;--status:#e7ebf2}
-
-:where(html[data-skin=high-tech]){--bg:#0c1114;--chrome:#11181d;--text:#d8f7ff;--muted:#78a6b2;--button:#18262c;--button-hover:#22353d;--field:#071014;--field-text:#d8f7ff;--accent:#22d3ee;--border:#1d3a42;--status:#071014;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-:where(html[data-skin=futuristic]){--bg:#120b24;--chrome:#1b1033;--text:#f3e8ff;--muted:#b39ddb;--button:#2a1a4d;--button-hover:#392369;--field:#0c0618;--field-text:#f3e8ff;--accent:#a855f7;--border:#4c2a7a;--status:#0c0618}
-:where(html[data-skin=historic]){--bg:#e8dcc3;--chrome:#f3ead6;--text:#3b2a18;--muted:#7a644c;--button:#ddceb1;--button-hover:#d1c09f;--field:#fffaf0;--field-text:#2b1d10;--accent:#8b5e34;--border:#c4ae8b;--status:#e0d1b4;font-family:Georgia,'Times New Roman',serif}
-:where(html[data-skin=victorian]){--bg:#2a1820;--chrome:#3a2029;--text:#f4e6d0;--muted:#c9a98d;--button:#4d2a35;--button-hover:#603643;--field:#1d1016;--field-text:#f4e6d0;--accent:#b8860b;--border:#6e4350;--status:#1d1016;font-family:Georgia,'Times New Roman',serif}
-:where(html[data-skin=amazon]){--bg:#10251b;--chrome:#173326;--text:#e8f5e9;--muted:#9cc3a8;--button:#204734;--button-hover:#2a5a43;--field:#0a1a12;--field-text:#e8f5e9;--accent:#e07a3f;--border:#2f5e45;--status:#0a1a12}
-:where(html[data-skin=terminal]){--bg:#050805;--chrome:#071007;--text:#b8ffb8;--muted:#5f9f5f;--button:#0d1f0d;--button-hover:#143014;--field:#020402;--field-text:#b8ffb8;--accent:#22c55e;--border:#1f4a1f;--status:#020402;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--chrome);color:var(--text);font:13px -apple-system,system-ui;overflow:hidden}
 #tabs{height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--bg);overflow-x:auto;overflow-y:hidden}
 #tabs button{border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:220px}
@@ -44,7 +35,7 @@ body.loading #url{opacity:.85}
   <button id="home" aria-label="Home" class="icon" title="Home">⌂</button>
   <span id="sec" title="Connection">🔒</span>
   <input id="url" value="https://yahoo.com/" autocomplete="off" spellcheck="false" placeholder="Search or enter a domain — try hello.fdn">
-  <span id="review" style="display:none;gap:2px;align-items:center"><button id="reviewUp" class="icon" title="Open the community review thread">👍 <span id="reviewUpCount">0</span></button><button id="reviewDown" class="icon" title="Open the community review thread">👎 <span id="reviewDownCount">0</span></button></span>
+  <span id="review" style="display:none;gap:2px;align-items:center"><button id="reviewUp" class="icon" title="Open the review thread in your default browser">👍 <span id="reviewUpCount">0</span></button><button id="reviewDown" class="icon" title="Open the review thread in your default browser">👎 <span id="reviewDownCount">0</span></button></span>
   <button id="external" aria-label="Open in system browser" class="icon" title="Open in system browser">↗</button>
   <button id="clearCache" aria-label="Clear registry cache" class="icon" title="Clear registry cache">⌫</button>
   <button id="chat" aria-label="Community chat" class="icon" title="Community chat">💬</button>
@@ -155,6 +146,12 @@ function loadReviewIndex(){
 }
 function syncReview(){
   if(!reviewIndex){loadReviewIndex();return}
+  // The 👍/👎 control belongs to registry-sourced (fdn://) tabs only, like the
+  // Tauri UI; public-DNS sites never show it.
+  if(sourceKind(current().url)!=='registry'){
+    var idle=document.getElementById('review');if(idle)idle.style.display='none';
+    reviewDomain=null;return;
+  }
   var domain=reviewHost();var entry=domain?reviewIndex[domain]:null;
   var box=document.getElementById('review');if(!box)return;
   if(!entry){reviewDomain=null;box.style.display='none';return}
@@ -164,7 +161,17 @@ function syncReview(){
 }
 function openReview(){if(!reviewDomain)return;send({cmd:'review',domain:reviewDomain})}
 window.fdbNewTab=function(){newTab('')};
-window.fdbNewTabUrl=function(url){if(!url)return;newTab('');setTimeout(function(){send({cmd:'navigate',url:url})},250)};
+// Popup-originated tab: create it with the target already active and navigate
+// IT (by uid) — no focus_chrome steal, no 250 ms "whatever tab is active by
+// then" race (Tauri activates and navigates immediately, focusing the page).
+window.fdbNewTabUrl=function(url){
+  if(!url)return;
+  var uid=nextUid++;
+  tabs.push({uid:uid,url:url,label:'New Tab'});active=tabs.length-1;
+  render();
+  send({cmd:'new_tab',uid:uid,url:''});
+  send({cmd:'navigate',url:url,uid:uid});
+};
 window.fdbRestoreTab=function(){if(!lastClosed)return;var u=lastClosed.url;lastClosed=null;newTab(u||'')};
 window.fdbCloseActive=function(){closeTab(active)};
 window.fdbFocusUrl=function(){document.getElementById('url').focus();document.getElementById('url').select()};
@@ -177,6 +184,17 @@ window.fdbSettingsOpen=function(open){var b=document.getElementById('settings');
 window.fdbChatPanel=function(open){var b=document.getElementById('chat');if(b){b.classList.toggle('active',!!open);b.setAttribute('aria-expanded',open?'true':'false')}};
 window.fdbCycleTab=function(delta){if(!tabs.length)return;active=(active+(delta||1)+tabs.length)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})};
 window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active=index;render();send({cmd:'select_tab',uid:current().uid})};
+// Full tab-strip resync after an F5 reload of this page: reclaims uids and
+// labels from the handler instead of resetting to a single placeholder tab.
+window.fdbTabs=function(list,activeUid){
+  if(!Array.isArray(list)||!list.length)return;
+  tabs=list.map(function(t){return {uid:t.uid||0,url:t.url||'',label:t.label||'New Tab'}});
+  nextUid=0;
+  for(var i=0;i<tabs.length;i++)nextUid=Math.max(nextUid,tabs[i].uid+1);
+  active=0;
+  for(var j=0;j<tabs.length;j++){if(activeUid!=null&&tabs[j].uid===activeUid)active=j}
+  render();
+};
 // Modern-browser behavior: no persistent status bar. Hover targets, engine
 // statuses and toasts land in a transient bottom-left bubble that hides
 // itself ~3 s after the last update (an empty message hides it immediately,
@@ -234,6 +252,7 @@ document.addEventListener('keydown',function(e){
   else if(mod&&e.key.toLowerCase()==='w'){e.preventDefault();closeTab(active)}
   else if(mod&&e.key.toLowerCase()==='l'){e.preventDefault();document.getElementById('url').focus();document.getElementById('url').select()}
   else if(mod&&e.key.toLowerCase()==='r'){e.preventDefault();send({cmd:'reload'})}
+  else if(e.key==='F5'){e.preventDefault();send({cmd:'reload'})}
   else if(mod&&e.key.toLowerCase()==='q'){e.preventDefault();quit()}
   else if(mod&&e.key===','){e.preventDefault();settings()}
   else if((e.altKey&&e.key==='ArrowLeft')||(mod&&e.key==='[')){e.preventDefault();send({cmd:'back'})}
