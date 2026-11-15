@@ -2,7 +2,7 @@ use cef::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use crate::shared::simple_app::{create_content_view, open_review_window};
+use crate::shared::simple_app::create_content_view;
 
 pub fn get_data_uri(data: &[u8], mime_type: &str) -> String {
     let data = CefString::from(&base64_encode(Some(data)));
@@ -63,7 +63,7 @@ struct Tab {
 // Chrome page layout: tab strip (32) + toolbar (64). The status bar strip is
 // gone, so the content view starts right below the address bar.
 const CHROME_HEIGHT: i32 = 79;
-const CHAT_PANEL_WIDTH: i32 = 420;
+const CHAT_PANEL_WIDTH: i32 = 390;
 
 pub struct SimpleHandler {
     is_alloy_style: bool,
@@ -77,6 +77,14 @@ pub struct SimpleHandler {
     chat_panel_uid: Option<u64>,
     chat_tabs: HashSet<u64>,
     tabs: Vec<Tab>,
+    /// Horizontal container under the chrome bar holding the tab views plus
+    /// the chat/settings overlays. Tauri parity: the site keeps a flex slot
+    /// LEFT of the chat strip, so the chat never covers the page.
+    content_panel: Option<Panel>,
+    /// True while the chat/settings views are children of `content_panel`
+    /// (the tail slots of its box; tabs are always inserted before them).
+    panel_chat_child: bool,
+    panel_settings_child: bool,
     pending_uids: VecDeque<u64>,
     pending_views: Vec<(u64, BrowserView)>,
     active_uid: Option<u64>,
@@ -92,14 +100,54 @@ const CLAIM_HTML: &str = include_str!("../../../assets/claim.html");
 const UNAVAILABLE_HTML: &str = include_str!("../../../assets/unavailable.html");
 const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
 const ERROR_HTML: &str = include_str!("../../../assets/error.html");
+/// Shared styles for every internal page (Material-flavored tokens +
+/// components + the legacy theme/skin/density overrides). Materialized once
+/// next to the page files and linked from them; inlined for the data:-origin
+/// chrome page.
+pub(crate) const UI_KIT_CSS: &str = include_str!("../../../assets/ui-kit.css");
+const APPEARANCE_JS_TEMPLATE: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var skin=q.get('skin')||'default';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=skin;root.dataset.density=density}catch(e){}})();</script>"#;
+/// The appearance bootstrap script: reads theme/skin/density from the page
+/// query string, sets the dataset attributes, and links the shared kit. The
+/// kit URL carries a content hash so a changed stylesheet is never served
+/// from CEF's file:// cache after an upgrade.
+fn appearance_bootstrap_script() -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    UI_KIT_CSS.hash(&mut hasher);
+    let version = hasher.finish();
+    format!(
+        r#"<link rel="stylesheet" href="ui-kit.css?v={version:x}">{}"#,
+        APPEARANCE_JS_TEMPLATE
+    )
+}
 
-const APPEARANCE_JS: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var skin=q.get('skin')||'default';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=skin;root.dataset.density=density;var style=document.createElement('style');style.textContent='html[data-theme=light] body{background:#eef2f8!important;color:#182131!important}html[data-theme=light] aside,html[data-theme=light] header,html[data-theme=light] .card,html[data-theme=light] .box,html[data-theme=light] .search{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] .sub,html[data-theme=light] .note,html[data-theme=light] .fineprint,html[data-theme=light] .meta,html[data-theme=light] .empty,html[data-theme=light] .kind{color:#5d687c!important}html[data-theme=light] input,html[data-theme=light] textarea,html[data-theme=light] select{background:#fff!important;color:#111!important;border-color:#c8d1df!important}html[data-theme=light] button{background:#e4e9f1!important;color:#182131!important;border-color:#c8d1df!important}html[data-theme=light] #send,html[data-theme=light] .primary,html[data-theme=light] #ageContinue,html[data-theme=light] .go{background:#2563eb!important;color:#fff!important}html[data-theme=light] .messages,html[data-theme=light] #connection{background:#f7f9fc!important;border-color:#d6deea!important}html[data-theme=light] .msg{background:#fff!important;color:#182131!important;border:1px solid #d6deea}html[data-theme=light] .msg.me{background:#dbe7ff!important}html[data-theme=light] .sample{background:#fff!important;border-color:#d6deea!important;color:#182131!important}html[data-theme=light] pre,html[data-theme=light] code{background:#f3f5f9!important;color:#182131!important}html[data-theme=light] #age,html[data-theme=light] #profileView{background:rgba(238,242,248,.85)!important}html[data-skin=high-tech]{--skin-bg:#0c1114;--skin-panel:#11181d;--skin-line:#1d3a42;--skin-ink:#d8f7ff;--skin-muted:#78a6b2;--skin-accent:#22d3ee;--skin-input:#071014}html[data-skin=futuristic]{--skin-bg:#120b24;--skin-panel:#1b1033;--skin-line:#4c2a7a;--skin-ink:#f3e8ff;--skin-muted:#b39ddb;--skin-accent:#a855f7;--skin-input:#0c0618}html[data-skin=historic]{--skin-bg:#e8dcc3;--skin-panel:#f3ead6;--skin-line:#c4ae8b;--skin-ink:#3b2a18;--skin-muted:#7a644c;--skin-accent:#8b5e34;--skin-input:#fffaf0}html[data-skin=victorian]{--skin-bg:#2a1820;--skin-panel:#3a2029;--skin-line:#6e4350;--skin-ink:#f4e6d0;--skin-muted:#c9a98d;--skin-accent:#b8860b;--skin-input:#1d1016}html[data-skin=amazon]{--skin-bg:#10251b;--skin-panel:#173326;--skin-line:#2f5e45;--skin-ink:#e8f5e9;--skin-muted:#9cc3a8;--skin-accent:#e07a3f;--skin-input:#0a1a12}html[data-skin=terminal]{--skin-bg:#050805;--skin-panel:#071007;--skin-line:#1f4a1f;--skin-ink:#b8ffb8;--skin-muted:#5f9f5f;--skin-accent:#22c55e;--skin-input:#020402}html[data-skin]:not([data-skin=default]) body{background:var(--skin-bg)!important;color:var(--skin-ink)!important}html[data-skin]:not([data-skin=default]) aside,html[data-skin]:not([data-skin=default]) header,html[data-skin]:not([data-skin=default]) .card,html[data-skin]:not([data-skin=default]) .box,html[data-skin]:not([data-skin=default]) .search{background:var(--skin-panel)!important;border-color:var(--skin-line)!important;color:var(--skin-ink)!important}html[data-skin]:not([data-skin=default]) .sub,html[data-skin]:not([data-skin=default]) .note,html[data-skin]:not([data-skin=default]) .fineprint,html[data-skin]:not([data-skin=default]) .meta,html[data-skin]:not([data-skin=default]) .empty{color:var(--skin-muted)!important}html[data-skin]:not([data-skin=default]) input,html[data-skin]:not([data-skin=default]) textarea,html[data-skin]:not([data-skin=default]) select{background:var(--skin-input)!important;color:var(--skin-ink)!important;border-color:var(--skin-line)!important}html[data-skin]:not([data-skin=default]) button{background:var(--skin-panel)!important;color:var(--skin-ink)!important;border-color:var(--skin-line)!important}html[data-skin]:not([data-skin=default]) #send,html[data-skin]:not([data-skin=default]) .primary,html[data-skin]:not([data-skin=default]) #ageContinue,html[data-skin]:not([data-skin=default]) .go{background:var(--skin-accent)!important;color:#fff!important}html[data-density=compact] body{font-size:13px}html[data-density=compact] .card,html[data-density=compact] .box{padding:14px!important;margin-bottom:10px!important}html[data-density=compact] header,html[data-density=compact] footer{padding-top:8px!important;padding-bottom:8px!important}html[data-density=compact] .messages{padding:10px!important;gap:8px!important}html[data-density=compact] input,html[data-density=compact] textarea,html[data-density=compact] select,html[data-density=compact] button{padding-top:7px!important;padding-bottom:7px!important}html[data-density=compact] h1{font-size:24px!important}html[data-density=compact] h2{font-size:16px!important}';document.head.appendChild(style)}catch(e){}})();</script>"#;
+/// Live-update helper for pages already open (settings overlay, chat panel,
+/// newtab): re-applies the appearance attributes and the user's custom CSS.
+fn appearance_live_script(settings: &crate::settings::Settings) -> String {
+    let payload = serde_json::json!({
+        "theme": settings.theme,
+        "skin": settings.skin,
+        "density": settings.density,
+        "compact_tabs": settings.compact_tabs,
+        "custom_css": settings.custom_css,
+    });
+    format!(
+        r#"(function(){{try{{var s={payload};var dark=s.theme==='dark'||(s.theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=s.skin||'default';root.dataset.density=s.density||'comfortable';var style=document.getElementById('fdb-appearance');if(!style){{style=document.createElement('style');style.id='fdb-appearance';document.head.appendChild(style)}}style.textContent=s.custom_css||'';}}catch(e){{}}}})();"#
+    )
+}
+
 
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
 fn internal_page_url(html: &str) -> String {
     let dir = std::env::temp_dir().join("free-domain-browser-cef-ui");
     let _ = std::fs::create_dir_all(&dir);
+    // Every internal page links the shared kit; materialize it once beside
+    // them so the relative <link> resolves on the file:// origin.
+    let kit = dir.join("ui-kit.css");
+    if std::fs::read(&kit).ok().as_deref() != Some(UI_KIT_CSS.as_bytes()) {
+        let _ = std::fs::write(&kit, UI_KIT_CSS);
+    }
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     html.hash(&mut hasher);
@@ -108,9 +156,10 @@ fn internal_page_url(html: &str) -> String {
     // carries theme/skin/density from the Rust settings store.
     let themed = match html.find("</head>") {
         Some(index) => {
-            let mut value = String::with_capacity(html.len() + APPEARANCE_JS.len());
+            let boot = appearance_bootstrap_script();
+            let mut value = String::with_capacity(html.len() + boot.len());
             value.push_str(&html[..index]);
-            value.push_str(APPEARANCE_JS);
+            value.push_str(&boot);
             value.push_str(&html[index..]);
             value
         }
@@ -247,9 +296,11 @@ fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
         )
     };
     let domain_js = serde_json::to_string(&outcome.domain).unwrap_or_else(|_| "\"\"".into());
+    let register_url_js = serde_json::to_string(&register_url).unwrap_or_else(|_| "\"\"".into());
     CLAIM_HTML
         .replace("{{domain}}", &html_escape(&outcome.domain))
         .replace("{{domain_js}}", &domain_js)
+        .replace("{{register_url_js}}", &register_url_js)
         .replace("{{badge}}", badge)
         .replace(
             "{{message}}",
@@ -368,6 +419,9 @@ impl SimpleHandler {
                 chat_panel_uid: None,
                 chat_tabs: HashSet::new(),
                 tabs: Vec::new(),
+                content_panel: None,
+                panel_chat_child: false,
+                panel_settings_child: false,
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
                 active_uid: None,
@@ -449,6 +503,29 @@ impl SimpleHandler {
         });
         let script = format!("window.fdbSettings&&fdbSettings({payload})");
         self.chrome_execute(0, &script);
+        // Live appearance: overlays (settings overlay, chat panel) and tabs on
+        // internal pages keep their creation-time theme otherwise (Tauri
+        // applies appearance document-wide). Public web content is untouched.
+        let appearance = appearance_live_script(&settings);
+        let internal_prefix = std::env::temp_dir()
+            .join("free-domain-browser-cef-ui")
+            .to_string_lossy()
+            .to_string();
+        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        for browser in self.browser_list.iter() {
+            if browser.identifier() == chrome_id {
+                continue;
+            }
+            let Some(frame) = browser.main_frame() else { continue; };
+            let url = CefString::from(&frame.url()).to_string();
+            if !url.starts_with("file://") || !url.contains(&internal_prefix) {
+                continue;
+            }
+            let mut frame = browser.main_frame();
+            if let Some(frame) = frame.as_mut() {
+                frame.execute_java_script(Some(&CefString::from(appearance.as_str())), None, 0);
+            }
+        }
     }
 
     pub(crate) fn chrome_execute(&self, source_id: i32, script: &str) {
@@ -506,10 +583,16 @@ impl SimpleHandler {
         if self.tabs.iter().any(|tab| tab.uid == uid) {
             return;
         }
-        let Some(browser) = view.browser() else { return; };
+        // A freshly created tab view is not visible yet, so CEF has not
+        // realized its browser at registration time. browser_id stays
+        // unrealized (-1) until on_after_created reports the browser.
+        let browser_id = view
+            .browser()
+            .map(|browser| browser.identifier())
+            .unwrap_or(-1);
         self.tabs.push(Tab {
             uid,
-            browser_id: browser.identifier(),
+            browser_id,
             view,
         });
     }
@@ -522,14 +605,67 @@ impl SimpleHandler {
         self.chrome_view = Some(View::from(&view));
     }
 
-    fn tab_bounds(window: &Window) -> Rect {
+    /// The hbox container under the chrome bar: tabs left (flex), chat strip
+    /// right, settings full-width while open. The window layout gives this
+    /// panel flex 1; this store only parents children into it.
+    pub fn set_content_panel(&mut self, panel: Panel) {
+        self.content_panel = Some(panel);
+    }
+
+    /// Insert a tab view into the content panel, always BEFORE the trailing
+    /// overlay children (chat/settings) so the chat strip stays the rightmost
+    /// child. Falls back to no-op when the panel does not exist yet; the
+    /// window-creation path parents the initial tabs itself.
+    pub fn attach_tab_view(&mut self, view: &BrowserView) {
+        if self.content_panel.is_none() {
+            return;
+        }
+        // Mutating the panel (add/flex/layout) can run a synchronous layout
+        // pass that would re-enter the handler lock. The panel mutation runs
+        // inside the posted PanelAddChild task instead.
+        let child_view = view.clone();
+        let mut task = PanelAddChild::new(child_view, 1);
+        std::thread::spawn(move || {
+            post_task(ThreadId::UI, Some(&mut task));
+        });
+    }
+
+    /// Append an overlay view (chat strip or settings) as the last child of
+    /// the content panel with the given flex, and lay the panel out.
+    fn attach_overlay_view(&mut self, view: &BrowserView, flex: i32, is_chat: bool) {
+        if self.content_panel.is_none() {
+            return;
+        }
+        if is_chat {
+            self.panel_chat_child = true;
+        } else {
+            self.panel_settings_child = true;
+        }
+        let child_view = view.clone();
+        let mut task = PanelAddChild::new(child_view, flex);
+        std::thread::spawn(move || {
+            post_task(ThreadId::UI, Some(&mut task));
+        });
+    }
+
+    /// Area of the content panel, relative to that panel. The panel spans the
+    /// full window width below the chrome bar, so a window-derived estimate
+    /// stays correct even before the first layout pass.
+    fn panel_bounds(window: &Window) -> Rect {
         let bounds = window.bounds();
         Rect {
             x: 0,
-            y: CHROME_HEIGHT.min(bounds.height.max(1)),
+            y: 0,
             width: bounds.width.max(1),
             height: (bounds.height - CHROME_HEIGHT).max(1),
         }
+    }
+
+    fn tab_bounds(window: &Window) -> Rect {
+        // Tab views live inside the content panel; their bounds are panel
+        // relative (the box layout normally owns them, this is only the
+        // placeholder before the first layout pass).
+        Self::panel_bounds(window)
     }
 
     pub fn resize_tabs(&mut self, _bounds: &Rect) {
@@ -553,11 +689,11 @@ impl SimpleHandler {
     }
 
     fn chat_bounds(window: &Window) -> Rect {
-        let bounds = Self::content_bounds(window);
+        let bounds = Self::panel_bounds(window);
         let width = CHAT_PANEL_WIDTH.min(bounds.width.max(1));
         Rect {
             x: (bounds.width - width).max(0),
-            y: bounds.y,
+            y: 0,
             width,
             height: bounds.height.max(1),
         }
@@ -566,21 +702,44 @@ impl SimpleHandler {
     fn layout_overlays(&self, window: &Window) {
         if let Some(view) = self.settings_view.as_ref() {
             let mut view = View::from(view);
-            view.set_bounds(Some(&Self::content_bounds(window)));
+            // Settings covers the whole content panel.
+            view.set_bounds(Some(&Self::panel_bounds(window)));
         }
         if let Some(view) = self.chat_panel.as_ref() {
             let mut view = View::from(view);
             view.set_bounds(Some(&Self::chat_bounds(window)));
+        }
+        if self.content_panel.is_some() {
+            post_panel_layout();
+        }
+    }
+
+    /// Tauri parity: the site keeps its flex slot while the chat strip is
+    /// open, so the page stays visible left of the chat. Settings covers the
+    /// full content area, so while it is open the tabs hide beneath it.
+    fn set_all_tabs_visible(&self, visible: i32) {
+        for tab in &self.tabs {
+            let mut view = View::from(&tab.view);
+            view.set_visible(visible);
         }
     }
 
     pub fn attach_settings_view(&mut self, view: BrowserView) {
         let Some(window) = self.window.clone() else { return; };
         if self.chat_open {
-            self.close_chat_panel();
+            // Visibility only: the chat session stays enabled (Tauri never
+            // leaves the room when its settings menu opens).
+            self.hide_chat_panel();
         }
         self.settings_view = Some(view);
         self.settings_open = true;
+        let settings_view = self.settings_view.clone();
+        if settings_view.is_some() {
+            self.attach_overlay_view(settings_view.as_ref().unwrap(), 1, false);
+        }
+        // Tauri parity: settings is a full-viewport sheet, so the page hides
+        // beneath it (the tabs) instead of fighting the box layout.
+        self.set_all_tabs_visible(0);
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
         if let Some(browser) = self.settings_view.as_ref().and_then(|view| view.browser()) {
@@ -593,13 +752,19 @@ impl SimpleHandler {
     pub fn show_settings_view(&mut self) {
         let Some(window) = self.window.clone() else { return; };
         if self.chat_open {
-            self.close_chat_panel();
+            self.hide_chat_panel();
         }
         if let Some(view) = self.settings_view.as_ref() {
             let mut view = View::from(view);
             view.set_visible(1);
         }
+        if !self.panel_settings_child {
+            if let Some(view) = self.settings_view.clone() {
+                self.attach_overlay_view(&view, 1, false);
+            }
+        }
         self.settings_open = true;
+        self.set_all_tabs_visible(0);
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
     }
@@ -610,6 +775,15 @@ impl SimpleHandler {
             view.set_visible(0);
         }
         self.settings_open = false;
+        if self.active_uid.is_some() {
+            self.set_all_tabs_visible(0);
+            if let Some(uid) = self.active_uid {
+                if let Some(tab) = self.tab(uid) {
+                    let mut view = View::from(&tab.view);
+                    view.set_visible(1);
+                }
+            }
+        }
         self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(false)");
     }
 
@@ -624,6 +798,9 @@ impl SimpleHandler {
             self.chat_tabs.insert(uid);
         }
         self.chat_open = true;
+        if let Some(chat) = self.chat_panel.clone() {
+            self.attach_overlay_view(&chat, 0, true);
+        }
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
         if let Some(browser) = self.chat_panel.as_ref().and_then(|view| view.browser()) {
@@ -645,6 +822,11 @@ impl SimpleHandler {
         if let Some(view) = self.chat_panel.as_ref() {
             let mut view = View::from(view);
             view.set_visible(1);
+        }
+        if self.chat_panel.is_some() && !self.panel_chat_child {
+            if let Some(chat) = self.chat_panel.clone() {
+                self.attach_overlay_view(&chat, 0, true);
+            }
         }
         self.chat_panel_uid = self.active_uid;
         if let Some(uid) = self.active_uid {
@@ -709,9 +891,36 @@ impl SimpleHandler {
         browsers
     }
 
-    fn chrome_state(&self) {
+    fn chrome_state(&mut self) {
         self.chrome_execute(0, &format!("window.fdbSettingsOpen&&fdbSettingsOpen({})", self.settings_open));
         self.chrome_execute(0, &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open));
+        // Full tab-strip resync: after an F5 reload of the chrome page its JS
+        // state is gone; without this the strip resets to one placeholder tab.
+        let tabs: Vec<serde_json::Value> = self
+            .tabs
+            .iter()
+            .map(|tab| {
+                // Tabs on internal pages (newtab/claim/conflict) have no public
+                // URL; they sync as empty "New Tab" entries so every handler
+                // tab still has a strip entry after the reload.
+                let url = tab
+                    .view
+                    .browser()
+                    .and_then(|b| b.main_frame().map(|frame| CefString::from(&frame.url()).to_string()))
+                    .unwrap_or_default();
+                let display = if url.starts_with("file://") || url.starts_with("data:") {
+                    String::new()
+                } else {
+                    crate::proxy::display_url(&url).unwrap_or(url)
+                };
+                serde_json::json!({"uid": tab.uid, "url": display})
+            })
+            .collect();
+        let active = self.active_uid.map(|uid| uid.to_string()).unwrap_or_else(|| "null".to_string());
+        if !tabs.is_empty() {
+            let script = format!("window.fdbTabs&&fdbTabs({},{})", serde_json::to_string(&tabs).unwrap_or_default(), active);
+            self.chrome_execute(0, &script);
+        }
     }
 
     fn switch_uid(&mut self, uid: u64) {
@@ -725,6 +934,18 @@ impl SimpleHandler {
         for tab in &self.tabs {
             let mut view = View::from(&tab.view);
             view.set_visible(i32::from(tab.uid == uid));
+        }
+        // Tauri parity (activateTab): the selected page takes keyboard focus so
+        // keystrokes land in the content, not the chrome strip — unless an
+        // overlay owns focus or the chat panel is about to take it.
+        if !self.chat_open && !self.settings_open {
+            if let Some(tab) = self.tab(uid) {
+                if let Some(browser) = tab.view.browser() {
+                    if let Some(host) = browser.host() {
+                        host.set_focus(1);
+                    }
+                }
+            }
         }
         if !self.chat_open && !self.settings_open && self.chat_tabs.contains(&uid) {
             self.show_chat_panel();
@@ -756,7 +977,11 @@ impl SimpleHandler {
     fn on_status_message(&mut self, browser: Option<&mut Browser>, value: Option<&CefString>) {
         let Some(browser) = browser else { return; };
         let source_id = browser.identifier();
-        if self.tab_uid(source_id).is_none() { return; }
+        // The status bubble is global chrome chrome; a background tab's hover
+        // status must not overwrite what the active tab is showing.
+        if self.tab_uid(source_id) != self.active_uid {
+            return;
+        }
         let text = value.map(CefString::to_string).unwrap_or_default();
         let script = format!(
             "window.fdbStatus&&fdbStatus({})",
@@ -834,8 +1059,28 @@ impl SimpleHandler {
             return;
         }
 
-        // Initial tab. The browser may not exist while `on_window_created` runs,
-        // so register the first page browser as soon as CEF reports it.
+        // A registered-but-not-yet-realized tab gets its browser_id here.
+        if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
+            let mut as_view = View::from(&view);
+            for tab in self.tabs.iter_mut() {
+                if tab.browser_id < 0 {
+                    let mut tab_view = View::from(&tab.view);
+                    if tab_view.is_same(Some(&mut as_view)) != 0 {
+                        tab.browser_id = browser.identifier();
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(uid) = self.pending_uids.front().copied() {
+            if let Some(position) = self.pending_views.iter().position(|(pending, _)| *pending == uid) {
+                let (_, view) = self.pending_views.remove(position);
+                self.pending_uids.pop_front();
+                self.register_tab(uid, view);
+                self.switch_uid(uid);
+            }
+            return;
+        }
         if self.tabs.is_empty() {
             if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
                 self.register_tab(0, view);
@@ -967,6 +1212,9 @@ impl SimpleHandler {
             return;
         }
         self.apply_settings();
+        // After an F5 reload of the chrome page the ⚙/💬 active states and the
+        // tab strip must be re-synced (chrome_state was previously dead code).
+        self.chrome_state();
     }
 
     fn on_load_error(
@@ -1085,6 +1333,22 @@ impl SimpleHandler {
                 let url = value.get("url")?.as_str()?.trim();
                 if url.is_empty() {
                     None
+                } else if let Some(uid) = value.get("uid").and_then(|uid| uid.as_u64()) {
+                    // Popup-originated navigations target the tab that was
+                    // created for them, not whichever tab is active later.
+                    match self
+                        .tabs
+                        .iter()
+                        .find(|tab| tab.uid == uid)
+                        .map(|tab| tab.browser_id)
+                    {
+                        Some(target) => {
+                            Some(BridgeAction::Navigate(target, url.to_string()))
+                        }
+                        // Unknown tab: drop the command (the default fallthrough
+                        // for console messages would do nothing anyway).
+                        None => None,
+                    }
                 } else {
                     Some(BridgeAction::Navigate(target_id, url.to_string()))
                 }
@@ -1390,7 +1654,7 @@ wrap_display_handler! {
                     }
                 }
                 Some(BridgeAction::ToggleChatPanel) => toggle_chat_panel(),
-                Some(BridgeAction::Review(domain)) => open_review_window_async(domain),
+                Some(BridgeAction::Review(domain)) => open_review_in_system_browser(domain),
                 Some(BridgeAction::About) => {
                     if let Some(instance) = SimpleHandler::instance() {
                         let version = env!("CARGO_PKG_VERSION");
@@ -1752,27 +2016,22 @@ wrap_request_handler! {
     }
 }
 
-fn open_review_window_async(domain: String) {
-    let Some(instance) = SimpleHandler::instance() else { return; };
-    let Some(inner) = instance.lock().ok().and_then(|handler| handler.weak_self.upgrade()) else {
-        return;
-    };
-    let mut url = url::Url::parse(
-        "https://free-domain-name.github.io/tauri-browser/stumble.html",
-    )
-    .expect("valid review URL");
+/// Upvote/downvote opens the community review page in the user's default
+/// browser: the page embeds giscus and GitHub OAuth, which only work
+/// reliably outside the app's own windows — mirrors the review buttons'
+/// purpose without the embedded login flow.
+fn open_review_in_system_browser(domain: String) {
+    let mut url = url::Url::parse("https://free-domain-name.github.io/tauri-browser/stumble.html")
+        .expect("valid review URL");
     url.query_pairs_mut().append_pair("domain", &domain);
-    if !open_review_window(inner, url.as_str(), &domain) {
-        if let Ok(handler) = instance.lock() {
-            handler.chrome_toast("Could not open review window");
-        }
+    if let Err(error) = open_external_http(url.as_str()) {
+        let script = format!(
+            "window.fdbStatus&&fdbStatus({})",
+            serde_json::to_string(&format!("Could not open reviews: {error}")).unwrap_or_default()
+        );
+        let mut task = ChromeScript::new(script);
+        post_task(ThreadId::UI, Some(&mut task));
     }
-}
-
-fn parent_overlay_view(window: &Window, view: &BrowserView) {
-    let mut child = View::from(view);
-    window.add_child_view(Some(&mut child));
-    child.set_visible(1);
 }
 
 fn open_settings_overlay() {
@@ -1793,18 +2052,10 @@ fn open_settings_overlay() {
         }
         return;
     };
-    let window = instance
-        .lock()
-        .expect("Failed to lock handler")
-        .window
-        .clone();
-    if let Some(window) = window {
-        parent_overlay_view(&window, &view);
-    }
-    instance
-        .lock()
-        .expect("Failed to lock handler")
-        .attach_settings_view(view);
+    let mut handler = instance.lock().expect("Failed to lock handler");
+    // Parenting happens inside attach_settings_view: the view becomes a
+    // full-width child of the content panel while the tabs hide beneath it.
+    handler.attach_settings_view(view);
 }
 
 fn toggle_chat_panel() {
@@ -1834,18 +2085,10 @@ fn toggle_chat_panel() {
         }
         return;
     };
-    let window = instance
-        .lock()
-        .expect("Failed to lock handler")
-        .window
-        .clone();
-    if let Some(window) = window {
-        parent_overlay_view(&window, &view);
-    }
-    instance
-        .lock()
-        .expect("Failed to lock handler")
-        .attach_chat_panel(view);
+    let mut handler = instance.lock().expect("Failed to lock handler");
+    // Parenting happens inside attach_chat_panel: the view becomes the
+    // rightmost child of the content panel (Tauri-style chat strip).
+    handler.attach_chat_panel(view);
 }
 
 /// Bridge chat events from the async service into the CEF UI. The chat
@@ -1965,30 +2208,12 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
         handler.pending_uids.retain(|pending| *pending != uid);
         return;
     };
-    let window = {
+    {
         let mut handler = inner.lock().expect("Failed to lock inner");
         handler.pending_views.push((uid, view.clone()));
-        handler.window.clone()
-    };
-    if let Some(window) = window {
-        // Parent the view before its browser exists. CEF creates the browser
-        // once the view is in the view hierarchy, then calls `on_after_created`.
-        //
-        // Append, never insert at index 0: the window runs a vertical box
-        // layout where child order is layout order, so child 0 is the top
-        // slot owned by the chrome view. Inserting at 0 made every new tab
-        // take that slot and push the address bar below the page content.
-        let mut child = View::from(&view);
-        window.add_child_view(Some(&mut child));
-        // New tabs need the same flex as the initial tab. Without this the box
-        // layout squeezes the chrome bar when a second tab is opened.
-        if let Some(mut layout) = window.get_layout().and_then(|layout| layout.as_box_layout()) {
-            layout.set_flex_for_view(Some(&mut child), 1);
-            window.layout();
-        }
-        let bounds = SimpleHandler::tab_bounds(&window);
-        child.set_bounds(Some(&bounds));
-        child.set_visible(0);
+        // Parent into the content panel (window-level parenting is done by
+        // the app during creation; new tabs arrive here).
+        handler.attach_tab_view(&view);
     }
     let mut handler = inner.lock().expect("Failed to lock inner");
     if handler.tab(uid).is_none() {
@@ -2002,13 +2227,12 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
 }
 
 fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
-    let (removed, window) = {
+    let removed = {
         let mut handler = inner.lock().expect("Failed to lock inner");
         if handler.chat_panel_uid == Some(uid) {
             handler.close_chat_panel();
         }
-        let removed = handler.take_tab(uid);
-        (removed, handler.window.clone())
+        handler.take_tab(uid)
     };
     let Some((view, browser)) = removed else {
         return;
@@ -2022,10 +2246,12 @@ fn close_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64) {
             let _ = service.set_enabled(tab_id, false).await;
         });
     }
-    if let Some(window) = window {
-        let mut view = View::from(&view);
-        window.remove_child_view(Some(&mut view));
-    }
+    // Tab views are children of the content panel now. Remove the view in a
+    // posted UI task (panel mutations must run on the UI thread, unlocked).
+    let mut task = PanelRemoveChild::new(View::from(&view));
+    std::thread::spawn(move || {
+        post_task(ThreadId::UI, Some(&mut task));
+    });
     let mut handler = inner.lock().expect("Failed to lock inner");
     if let Some(uid) = handler.active_uid {
         handler.switch_uid(uid);
@@ -2048,6 +2274,22 @@ fn open_external(raw: &str) -> Result<(), String> {
     // A registry page has no public URL of its own. Resolve its fdn:// URL to
     // the registry target (or public fallback) before handing it to the OS.
     if raw.starts_with("fdn://") {
+        // The conflict page choice for this name is the deterministic target:
+        // re-resolving here would ignore the user's pick (a Conflict outcome
+        // carries no source, so the resolver falls back to the public mirror
+        // even when the tab being viewed is the registry site).
+        let name = raw.trim_start_matches("fdn://").to_string();
+        let domain_key = name.split('/').next().unwrap_or("").to_string();
+        let domain_key = domain_key.trim_end_matches(".fdn").to_string();
+        if let Some(target) = remembered_choice(&domain_key) {
+            if let Ok(parsed) = url::Url::parse(&target) {
+                if matches!(parsed.scheme(), "http" | "https")
+                    && parsed.host_str().is_some_and(|host| host != "fdb.invalid")
+                {
+                    return open_external_http(&target);
+                }
+            }
+        }
         let raw = raw.to_string();
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -2072,8 +2314,21 @@ fn open_external(raw: &str) -> Result<(), String> {
                 }),
                 Err(_) => None,
             };
-            if let Some(url) = url {
-                let _ = open_external_http(&url);
+            match url {
+                Some(url) => {
+                    let _ = open_external_http(&url);
+                }
+                None => {
+                    // Nothing is openable for this name (unregistered or
+                    // unavailable); surface it instead of failing silently.
+                    let script = format!(
+                        "window.fdbStatus&&fdbStatus({})",
+                        serde_json::to_string(&format!("Nothing to open for {name}"))
+                            .unwrap_or_default()
+                    );
+                    let mut task = ChromeScript::new(script);
+                    post_task(ThreadId::UI, Some(&mut task));
+                }
             }
         });
         return Ok(());
@@ -2104,6 +2359,11 @@ fn open_external_http(raw: &str) -> Result<(), String> {
 }
 
 fn spawn_navigation(target_id: i32, target: String) {
+    // Navigation ordering guard (Tauri contentChain + per-tab generation): a
+    // slow fdn resolve must not land AFTER a later, faster navigation. Every
+    // navigation bumps the target's generation; a resolve that completes with
+    // a stale generation is dropped instead of hijacking the page.
+    let generation = bump_nav_generation(target_id);
     // `fdn://name/path` is a convenience alias. The resolver below owns the
     // registry/public decision, so strip the scheme and treat the rest as input.
     let target = target
@@ -2160,9 +2420,33 @@ fn spawn_navigation(target_id: i32, target: String) {
             }),
             Err(_) => target,
         };
-        let mut task = ResolveNavigation::new(target_id, url);
+        let mut task = ResolveNavigation::new(target_id, url, generation);
         post_task(ThreadId::UI, Some(&mut task));
     });
+}
+
+/// Per-target navigation generation. Bumped by every navigation request so a
+/// resolve started earlier can be dropped when the user navigates elsewhere
+/// first (last click wins, matching the Tauri UI's per-tab generation).
+fn nav_generations() -> &'static std::sync::Mutex<HashMap<i32, u64>> {
+    static NAV_GEN: std::sync::OnceLock<std::sync::Mutex<HashMap<i32, u64>>> =
+        std::sync::OnceLock::new();
+    NAV_GEN.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+fn bump_nav_generation(target_id: i32) -> u64 {
+    let mut map = nav_generations().lock().expect("nav gen lock");
+    let entry = map.entry(target_id).or_insert(0);
+    *entry += 1;
+    *entry
+}
+
+fn nav_generation(target_id: i32) -> u64 {
+    nav_generations()
+        .lock()
+        .ok()
+        .and_then(|map| map.get(&target_id).copied())
+        .unwrap_or(0)
 }
 
 fn post_browser_command(target_id: i32, kind: BrowserCommandKind) {
@@ -2175,8 +2459,9 @@ fn post_browser_command(target_id: i32, kind: BrowserCommandKind) {
 fn post_page(target_id: i32, url: String) {
     // Always post from another thread: this function may be called while the
     // handler mutex is held, and CEF can execute a posted task synchronously.
+    let generation = bump_nav_generation(target_id);
     std::thread::spawn(move || {
-        let mut task = ResolveNavigation::new(target_id, url);
+        let mut task = ResolveNavigation::new(target_id, url, generation);
         post_task(ThreadId::UI, Some(&mut task));
     });
 }
@@ -2208,14 +2493,157 @@ wrap_task! {
     }
 }
 
+/// Runs a full layout pass of the content panel. Must execute AFTER the
+/// handler lock is released: CEF can re-enter `on_window_bounds_changed`,
+/// which locks the same mutex.
 wrap_task! {
-    struct ResolveNavigation {
-        target_id: i32,
-        url: String,
+    struct PanelLayout;
+
+    impl Task {
+        fn execute(&self) {
+            let panel = {
+                let Some(instance) = SimpleHandler::instance() else { return; };
+                let handler = instance.lock().expect("Failed to lock handler");
+                handler.content_panel.clone()
+            };
+            let Some(mut panel) = panel else { return };
+            panel.layout();
+        }
+    }
+}
+
+/// Post a content-panel layout pass. Safe to call while the handler mutex is
+/// held: the post happens through a fresh thread the way the other UI tasks
+/// in this file do (a synchronous CefPostTask can run the task inline, which
+/// would deadlock against our own lock).
+
+/// Add a view to the content panel, on the UI thread and without holding
+/// the handler lock. Every piece of context is re-read inside the task:
+/// wrappers created in this posted-task context are the live CEF objects
+/// (stored clones read from other threads report an empty view tree).
+/// flex 1 = active tab, flex 0 = chat strip.
+wrap_task! {
+    struct PanelAddChild {
+        view: BrowserView,
+        flex: i32,
     }
 
     impl Task {
         fn execute(&self) {
+            let is_tab = self.flex == 1;
+            let (chrome_view, overlays) = {
+                let Some(instance) = SimpleHandler::instance() else { return };
+                let handler = instance.lock().expect("Failed to lock handler");
+                let chrome_view = handler.chrome_view.clone();
+                let overlays = usize::from(handler.panel_chat_child)
+                    + usize::from(handler.panel_settings_child);
+                (chrome_view, overlays)
+            };
+            let Some(chrome_view) = chrome_view else { return };
+            let Some(panel) = live_panel(&chrome_view) else { return };
+            let panel_rect = panel.bounds();
+            let mut child = View::from(&self.view);
+            if is_tab {
+                let index = panel.child_view_count().saturating_sub(overlays);
+                panel.add_child_view_at(Some(&mut child), index as i32);
+            } else {
+                panel.add_child_view_at(Some(&mut child), panel.child_view_count() as i32);
+            }
+            if let Some(mut layout) =
+                panel.get_layout().and_then(|layout| layout.as_box_layout())
+            {
+                layout.set_flex_for_view(Some(&mut child), self.flex);
+            }
+            let bounds = if is_tab {
+                panel_rect
+            } else {
+                let width = CHAT_PANEL_WIDTH.min(panel_rect.width.max(1));
+                Rect {
+                    x: (panel_rect.width - width).max(0),
+                    y: 0,
+                    width,
+                    height: panel_rect.height.max(1),
+                }
+            };
+            child.set_bounds(Some(&bounds));
+            child.set_visible(!is_tab as i32);
+            panel.layout();
+        }
+    }
+}
+
+/// Remove a view from the content panel, on the UI thread and unlocked
+/// (see PanelAddChild for the wrapper-staleness rationale).
+wrap_task! {
+    struct PanelRemoveChild {
+        view: View,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let chrome_view = {
+                let Some(instance) = SimpleHandler::instance() else { return };
+                let handler = instance.lock().expect("Failed to lock handler");
+                handler.chrome_view.clone()
+            };
+            let Some(chrome_view) = chrome_view else { return };
+            let Some(mut panel) = live_panel(&chrome_view) else {
+                return;
+            };
+            let mut view = self.view.clone();
+            panel.remove_child_view(Some(&mut view));
+            panel.layout();
+        }
+    }
+}
+
+/// Resolve the content panel from a live source. Stored Window/Panel clones
+/// go stale after the event that created them (reads then report an empty
+/// view tree), but BrowserView wrappers stay valid, so derive the panel
+/// through the chrome bar's own window: [chrome, panel].
+fn live_panel(chrome_view: &View) -> Option<Panel> {
+    let mut view = chrome_view.clone();
+    let window = view.window()?;
+    let mut panel_child = window.child_view_at(1)?;
+    panel_child.as_panel()
+}
+
+fn post_panel_layout() {
+    std::thread::spawn(move || {
+        let mut task = PanelLayout::new();
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+wrap_task! {
+    struct ChromeScript {
+        script: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let Some(inner) = SimpleHandler::instance() else { return; };
+            let inner = inner.lock().expect("Failed to lock inner");
+            inner.chrome_execute(0, &self.script);
+        }
+    }
+}
+
+wrap_task! {
+    struct ResolveNavigation {
+        target_id: i32,
+        url: String,
+        generation: u64,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            // A newer navigation for this target already happened; this
+            // resolve is stale and must not hijack the page (see
+            // bump_nav_generation).
+            if nav_generation(self.target_id) != self.generation {
+                return;
+            }
             // Never hold the handler lock across load_url: CEF invokes
             // on_before_browse synchronously for some schemes and that handler
             // locks the same mutex.

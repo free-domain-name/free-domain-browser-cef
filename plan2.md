@@ -345,3 +345,218 @@ are required for any of them.
   chrome view `innerHeight=96`, content view `innerHeight=724`, sum = 820 =
   window height — the webview now sticks directly to the address bar.
 
+- **Item 16 (post-plan2, 2026-11-14) — chat could not join; two root causes
+  fixed.** Reported: panel opens, Join does nothing, send stays disabled.
+  1. *Missing bootstrap*: `DEFAULT_LOBBY_NODE_ID` compiled in empty on the CEF
+     side while the Tauri reference bakes in the production lobby key — so
+     `enable` failed with "chat bootstrap is not configured". Ported the
+     production key (`chat/config.rs`, same as the reference; the old
+     not-configured test now asserts the production default). This is what the
+     plan2 audit mislabeled "chat config parity".
+  2. *Keychain refusal*: after (1) `enable` failed with
+     "chat storage error: keychain error: Platform secure storage fail" — the
+     OS keychain refuses the unsigned CLI-hosted process. `start_session` now
+     degrades to a session-local identity instead of failing chat
+     (`identity_ephemeral` flag on the service + Snapshot field; `chat.html`
+     prefixes "Temporary identity for this session (OS keychain unavailable)"
+     on the connection line; Clear-data skips the keychain delete when
+     emphemeral). Persistent identity still used when the keychain grants
+     access. Verified live via CDP driving the real Join flow: pill flips to
+     `connected` in ~2 s, 29/29 tests pass.
+
+
+- **Item 17 (post-plan2, 2026-11-14) — nickname revert + cross-screen
+  interaction-parity round.** User report: connecting to chat now works, but
+  changing the nickname "reverted it" — asked to scan tauri-browser for the
+  same bug class on every screen and fix the CEF side.
+
+  *Diagnosis (verified, not guessed).* `set_nickname` was correct (store +
+  live state, byte-identical to the Tauri twin). The revert came from two
+  stacked UI races: (a) the 3 s poll grabbed a snapshot *before* the save
+  committed and its response landed *after* the save response — last response
+  wins, so the field visually reverted; Tauri avoids this because it receives
+  in-order pushed events instead of racing fetches; (b) every `render()`
+  unconditionally overwrote the nickname input and all profile fields —
+  same class as the address-bar clobber (item 5).
+
+  *Core fixes.*
+  1. Monotonic snapshot sequences: every snapshot is stamped with `seq` at
+     capture time (service-wide counter shared with pushed state events,
+     `chat/mod.rs`); `chat.html` drops any response whose `seq` is older than
+     the last applied — capture-order monotonicity guarantees post-mutation
+     snapshots always win.
+  2. Focus guards in `render()` for nickname + all five profile fields + the
+     show-profile checkbox (Tauri's `document.activeElement` pattern).
+  3. Dirty-flag upgrade (Tauri `profileDirty` parity): unsaved drafts in those
+     fields survive every render; the flag clears when the matching save
+     response lands (`pendingNick`/`pendingProfile`).
+  4. Verified live: instrumented run showed save response + all subsequent
+     polls carrying the new nickname with no revert; deterministic active-
+     element test: focused field kept `USER_TYPING_DRAFT`, profile draft kept,
+     blur → resync, all true; `cargo check` clean, 29/29 tests.
+     (A red herring while probing: sandboxed dev runs correctly fall back to
+     `$TMPDIR/free-domain-browser-cef-chat/` when the real config dir write
+     probe fails — persistence logic unaffected in normal unbundled runs.)
+
+  *Cross-screen scan (subagent audit vs ui/main.js) — 20 findings; F1-F4 were
+  the core fixes above; implemented the rest:*
+  - F5: cooldown can only ever extend (`Math.max`), 5 s floor after a send
+    response (raw "wait N ms" LimitError no longer reachable from stale
+    snapshots re-enabling Send).
+  - F6: composer disabled until `connected`; send shows "Sending…"; the draft
+    is cleared only on the send's own success response (failures keep it).
+  - F7: opening Settings hides the chat panel instead of closing it — the
+    session stays enabled (verified live: `enabled:true connected:true` under
+    the overlay; previously the room was left and auto-show broke).
+  - F8: per-target navigation generations — a slow fdn resolve that completes
+    after a later navigation is dropped instead of hijacking the page
+    (stale-last-writer at page level).
+  - F9: popup tabs (`fdbNewTabUrl`) create+navigate by explicit uid — no
+    `focus_chrome` steal, no 250 ms "whatever tab is active" race; `navigate`
+    accepts a `uid` in the bridge.
+  - F10: the status bubble only receives the active tab's hover statuses.
+  - F11: the review 👍/👎 box shows only on registry (`fdn://`) tabs, like the
+    Tauri UI — no more review box on google.com.
+  - F12: "Open in system browser" on an fdn name first honors the user's
+    conflict-page choice (`remembered_choice`) instead of re-resolving to the
+    public mirror, and a transient toast reports unopenable names instead of
+    failing silently.
+  - F13: theme/skin/density + custom CSS push live (new appearance live-update
+    script built from a shared `APPEARANCE_CSS`) into the settings overlay,
+    chat panel and tabs on internal pages; public web content is untouched.
+  - F14: F5 in chrome reloads the ACTIVE TAB (bound same as Cmd+R) instead of
+    wiping the strip; after a chrome-page reload the handler pushes a full
+    `fdbTabs` resync (uids reclaimed, ⚙/💬 states re-synced via chrome_state
+    on load end).
+  - F15: selecting a tab focuses its page (unless an overlay/chat owns focus).
+  - F16: "Clearing…" label is restored on the clear response; the armed state
+    resets on errors.
+  - F17: settings "Reset appearance" confirms when skin/custom CSS are
+    non-default.
+  - F18: claim page copies the formatted claim JSON before opening GitHub.
+  - F19: users/ignored lists rebuild only when their data actually changed
+    (no more click-swallowing rebuilds every 3 s).
+  - F20: the 500-char counter counts code points (`[...str].length`), matching
+    the Rust `chars().count()` limit for emoji.
+  Verified-OK in the scan (no fix needed): settings.html has no push-back
+  clobber path, newtab/claim/conflict templates are one-shot, fdbLoad cannot
+  flip active-tab buttons, tab strip rebuild matches Tauri parity.
+  All pages `node --check` clean; `cargo check` clean; 29/29 tests.
+
+- **Item 18 (post-plan2, 2026-11-14) — keychain prompts, cross-browser chat
+  dead, nickname UX.** User report after testing cross-browser: a
+  password/authorization dialog on connect from both browsers; cross-browser
+  messages never arrive; nickname change appeared to have no effect and did
+  not survive reconnect.
+
+  *Root cause (single poison).* Both builds stored the chat signing identity
+  in the OS keychain under the SAME service/entry
+  (`org.free-domain.browser.chat` / `identity-v1`). Consequences:
+  (a) macOS demands authorization when a second binary touches a keychain item
+      another binary created → the reported password dialogs;
+  (b) both browsers ended up with the SAME signing key → the SAME node id →
+      the relay saw one user, and each client filtered all cross-browser
+      traffic as "my own" messages → "chat does not seem to come";
+  (c) the nickname flow itself was correct, but the missing Enter binding on
+      the nickname field made a typed change + Enter do nothing (only the
+      small save button worked), reinforcing "it did not work".
+
+  *Fix.* `chat/identity.rs` rewritten to plain-file storage: the 32-byte
+  Ed25519 key lives in `chat-identity.json` next to `chat-settings.json`
+  (chmod 0600 on Unix; temp-dir fallback like the settings store). No OS
+  keychain anywhere → no prompts (Tauri only ever touched its own item; once
+  CEF stops using the keychain there is nothing left to authorize; the
+  orphaned item can be deleted once via `security delete-generic-password
+  -s org.free-domain.browser.chat`). `keyring` dependency removed from
+  Cargo.toml. `chat.html` now saves the nickname on Enter. Distinct
+  per-app identities are also the correct behavior for two browsers testing
+  together (two users in the room).
+
+  *Verified — real relay end-to-end:* two hidden instances with separate
+  `FDB_CACHE_DIR`s and distinct identities joined the production room
+  (`connected:true`, node ids `c7f28c2b` vs `2decb3bc`); B sent a message and
+  it arrived on A (`mine:false`); A renamed to `ZZAlpha` and B's presence
+  list showed the new nickname within one 15 s heartbeat. `cargo check`
+  clean, 29/29 tests. Note: the CEF-side fingerprint shown in the chat panel
+  changes once because the identity moved to a new storage location —
+  intentional.
+
+- **Item 19 (post-plan2, 2026-11-14) — chat controls looked like plain
+  text.** The nickname/profile/clear/menu buttons carried inline styles that
+  (a) blended into the card background and (b) outranked the theme/skin
+  appearance CSS, so on light/skinned setups they rendered as text-colored
+  blobs. Inline styles stripped; chat.html now ships a small `.btn` kit
+  (primary/ghost/danger, plus a matched `.field` input style) consistent with
+  the rest of the app. MUI/React was deliberately NOT introduced: internal
+  pages are static Rust-templated HTML with no React runtime or bundler, so
+  adding MUI would require a whole new build pipeline. Verified visually via
+  CDP screenshots in dark and light themes ("Save nickname" renders as a
+  proper blue button in both; skin colors now actually reach these controls).
+- **Item 20 (2026-11-14) — shared `assets/ui-kit.css` (Material-flavored),
+  skins silently dead.** User asked to reuse MUI styling without React.
+  Answer: Material Design is CSS tokens, not React — shipped ONE shared
+  stylesheet (tokens + components + theme/skin/density overrides) linked by
+  every internal page via `internal_page_url` (sibling file, `<link>` with a
+  content-hash query to defeat CEF's file:// cache), and inlined for the
+  data:-URI chrome page (simple_app.rs). Chat html kit block and chrome's
+  duplicated token block removed. Rust APPEARANCE_CSS blob deleted
+  (dataset bootstrap + custom-CSS live node remain). **Found and fixed a
+  pre-existing bug**: skin blocks used `:where(html[data-skin=…])`
+  (zero specificity) while `:root` (0,1,0) always won the custom properties —
+  every skin was silently rendering as the dark palette on ALL pages. Real
+  selectors now. Verified by computed-style probes (terminal bodyBg #050805,
+  light bodyBg #eef2f8) and CDP screenshots of chat+chrome in dark, light,
+  and terminal. Not yet migrated to kit classes: newtab/settings/claim/
+  conflict/unavailable/error (still themed by the legacy !important block,
+  unchanged behavior); compact density spot-checked only via settings flow.
+- **Item 21 (2026-11-14) — CEF chat strip: the site no longer disappears
+  (tauri-browser parity).** User: opening chat in CEF covered the site;
+  tauri keeps the site visible beside a 390px right chat strip.
+  Reworked CEF window structure to the same shape: window (vertical box)
+  = [chrome bar (flex 0), content panel (flex 1)], panel (horizontal box)
+  = [active tab (flex 1), chat strip (flex 0), settings (flex 1)];
+  chat_bounds = panel-relative right strip; CHAT_PANEL_WIDTH 420→390.
+  Root causes found along the way (all fixes verified by CDP probes +
+  screencast frames):
+  1) cef-rs wrapper staleness: Panel/Window clones kept in fields stop
+     reporting the real view tree (child_view_count → 0, adds no-op) once
+     the event that created them ends; BrowserView clones stay valid. All
+     panel structure changes now run inside `wrap_task!` tasks posted to
+     the UI thread (PanelAddChild / PanelRemoveChild / PanelLayout) which
+     re-derive the live panel *in the task context* from the chrome view
+     (View::window → child 1 → as_panel); every CEF mutation runs
+     UNLOCKED with handler-lock snapshots inside the task (deadlock:
+     panel mutation → child SetBounds → CEF bounds-changed callback →
+     SimpleHandler lock on the same thread).
+  2) BoxLayout::SetFlexForView silently ignores views that are not
+     children yet — the site's flex 1 must be set AFTER add_child_view
+     (that was why the site kept its 1200px preferred size and the chat
+     overlapped instead of splitting; visible in run30: site 780 +
+     chat 420 side-by-side only after the reorder).
+  3) The panel delegate wrapper must be retained (RefCell in the app
+     delegate) — a dropped delegate turns the panel into a zombie.
+  4) register_tab silently dropped tabs whose CEF browser was not yet
+     realized (invisible new tabs never realized, so no browser, no
+     close) — registration now accepts browserless views with
+     browser_id = -1 and on_after_created patches it by view identity.
+  5) apply_bounds sets panel-relative placeholder bounds for tab views
+     (hidden windows never run a layout pass; site was 0x0 before).
+  Evidence: site innerWidth 1200 → 810 with chat 390 open, site
+  visibilityState visible, chat frame shows the chat UI (#general, join
+  button, input); new tab activates (old tab hidden), close tab removes
+  its panel child (delegate counts 3→2), chat persists across tab
+  switches via chat_tabs, toggle-off reclaims 1200 instantly; no freeze
+  in any sequence; cargo test 29/29.
+- **Item 22 (2026-11-14) — upvote/downvote opens the system browser.**
+  User: voting inside the CEF app didn't work; asked for votes to happen
+  in a regular browser. The 👍/👎 review buttons (chrome bar, registry
+  tabs only) still send the `review` bridge command, but the Rust side now
+  builds the stumble.html URL with the domain query and hands it to
+  `open_external_http` (mac `open` / linux `xdg-open` / windows `start`)
+  instead of creating the embedded review popup window. The dedicated
+  review-window machinery (ReviewWindowDelegate, REVIEW_SLOT,
+  open_review_window) was removed; site popups (on_popup_browser_view_
+  created) are unrelated and untouched. Button title updated to "Open the
+  review thread in your default browser". Verified by bridge probe: the
+  cmd resolves and is dispatched to the OS opener; no CEF window created;
+  cargo test 29/29.

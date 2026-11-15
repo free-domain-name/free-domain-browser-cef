@@ -12,6 +12,8 @@ wrap_window_delegate! {
     struct SimpleWindowDelegate {
         chrome_view: RefCell<Option<BrowserView>>,
         content_views: RefCell<Vec<BrowserView>>,
+        content_panel: RefCell<Option<Panel>>,
+        panel_delegate: RefCell<Option<PanelDelegate>>,
         runtime_style: RuntimeStyle,
         initial_show_state: ShowState,
     }
@@ -58,16 +60,79 @@ wrap_window_delegate! {
                 }
                 handler.set_window(window.clone());
             }
+
+            // Content structure, Tauri parity:
+            //   window (vertical box) = [ chrome bar (flex 0), content panel (flex 1) ]
+            //   content panel (horizontal box) = [ active tab (flex 1), chat strip (flex 0), settings (flex 1) ]
+            // The site keeps its flex slot left of the chat, so the chat must
+            // never cover the page. Popup windows (review) have no chrome bar
+            // and keep the simple window-children path.
+            let is_main_window = chrome.is_some();
+
             // Add the chrome first so the vertical box layout places it above
-            // the page. The page is still clipped to its own bounds below it.
+            // the content panel. The page is still clipped below the bar.
             if let Some(chrome) = chrome.as_mut() {
                 window.add_child_view(Some(chrome));
             }
-            for (index, content) in content_views.iter().enumerate() {
-                let mut content = View::from(content);
-                window.add_child_view(Some(&mut content));
-                content.set_visible(if index == 0 { 1 } else { 0 });
+
+            let mut content_panel: Option<Panel> = None;
+            let mut panel_delegate_holder: Option<PanelDelegate> = None;
+            if is_main_window {
+                // The delegate wrapper must outlive this function: keep it in
+                // `panel_delegate`; cef-rs does not add a reference for us
+                // here, and a dropped delegate turns the panel into a zombie
+                // (adds and child counts silently stop working).
+                let mut panel_delegate = SimplePanelDelegate::new();
+                let panel = panel_create(Some(&mut panel_delegate));
+                panel_delegate_holder = Some(panel_delegate);
+                if let Some(panel) = panel.as_ref() {
+                    if let Some(handler) = SimpleHandler::instance() {
+                        handler
+                            .lock()
+                            .expect("Failed to lock handler")
+                            .set_content_panel(panel.clone());
+                    }
+                }
+                if let Some(panel) = panel.as_ref() {
+                    // Parent the panel first, THEN install its box layout:
+                    // the layout manager only survives if the panel is part
+                    // of a window-rooted tree when it is set.
+                    let mut panel_child = View::from(panel);
+                    window.add_child_view(Some(&mut panel_child));
+                    let panel_settings = BoxLayoutSettings {
+                        horizontal: 1,
+                        between_child_spacing: 0,
+                        ..Default::default()
+                    };
+                    let mut panel = panel.clone();
+                    panel.set_to_box_layout(Some(&panel_settings));
+                    // BoxLayout::SetFlexForView silently ignores views that
+                    // are not children yet — set flex AFTER add_child_view.
+                    for (index, content) in content_views.iter().enumerate() {
+                        let mut content = View::from(content);
+                        panel.add_child_view(Some(&mut content));
+                        if let Some(mut layout) =
+                            panel.get_layout().and_then(|layout| layout.as_box_layout())
+                        {
+                            layout.set_flex_for_view(Some(&mut content), 1);
+                        }
+                        content.set_visible(if index == 0 { 1 } else { 0 });
+                    }
+                    panel.layout();
+                }
+                if chrome.is_some() {
+                    *self.content_panel.borrow_mut() = panel.clone();
+                }
+                content_panel = panel;
+            } else {
+                for (index, content) in content_views.iter().enumerate() {
+                    let mut content = View::from(content);
+                    window.add_child_view(Some(&mut content));
+                    content.set_visible(if index == 0 { 1 } else { 0 });
+                }
             }
+            *self.panel_delegate.borrow_mut() = panel_delegate_holder;
+
             // A vertical box layout gives both BrowserViews a real layout pass.
             // Without it CEF can leave the chrome browser at the full window
             // height, hiding the page behind an opaque toolbar view.
@@ -80,9 +145,9 @@ wrap_window_delegate! {
                 if let Some(first) = chrome.as_mut() {
                     layout.set_flex_for_view(Some(first), 0);
                 }
-                for content in content_views.iter() {
-                    let mut content = View::from(content);
-                    layout.set_flex_for_view(Some(&mut content), 1);
+                if let Some(panel) = content_panel.as_ref() {
+                    let mut panel_child = View::from(panel);
+                    layout.set_flex_for_view(Some(&mut panel_child), 1);
                 }
                 window.layout();
             }
@@ -104,6 +169,7 @@ wrap_window_delegate! {
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
             *self.chrome_view.borrow_mut() = None;
             self.content_views.borrow_mut().clear();
+            *self.content_panel.borrow_mut() = None;
         }
 
         fn on_window_bounds_changed(
@@ -161,17 +227,50 @@ impl SimpleWindowDelegate {
                 height: CHROME_HEIGHT.min(height),
             }));
         }
-        let content_bounds = Rect {
-            x: 0,
-            y: CHROME_HEIGHT.min(height),
-            width,
-            height: (height - CHROME_HEIGHT).max(1),
-        };
-        for content in self.content_views.borrow().iter() {
-            let mut content = View::from(content);
-            content.set_bounds(Some(&content_bounds));
+        // The content panel gets the full area below the chrome bar; its own
+        // horizontal box layout arranges the tab views inside it. Tab views
+        // also get explicit panel-relative placeholder bounds: with a hidden
+        // window no layout pass ever runs, and without them the site would
+        // stay at zero size.
+        let panel = self.content_panel.borrow();
+        if let Some(panel) = panel.as_ref() {
+            let mut panel_view = View::from(panel);
+            panel_view.set_bounds(Some(&Rect {
+                x: 0,
+                y: CHROME_HEIGHT.min(height),
+                width,
+                height: (height - CHROME_HEIGHT).max(1),
+            }));
+            let tab_bounds = Rect {
+                x: 0,
+                y: 0,
+                width,
+                height: (height - CHROME_HEIGHT).max(1),
+            };
+            for content in self.content_views.borrow().iter() {
+                let mut content = View::from(content);
+                content.set_bounds(Some(&tab_bounds));
+            }
         }
     }
+}
+
+wrap_panel_delegate! {
+    // A plain container: its own preferred size is irrelevant because the
+    // window box gives the panel a flex slot.
+    struct SimplePanelDelegate {}
+
+    impl ViewDelegate {
+        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
+            Size { width: 0, height: 0 }
+        }
+
+        fn minimum_size(&self, _view: Option<&mut View>) -> Size {
+            Size { width: 0, height: 0 }
+        }
+    }
+
+    impl PanelDelegate {}
 }
 
 wrap_browser_view_delegate! {
@@ -201,6 +300,8 @@ wrap_browser_view_delegate! {
             let mut window_delegate = SimpleWindowDelegate::new(
                 RefCell::new(None),
                 RefCell::new(popup_browser_view.cloned().into_iter().collect()),
+                RefCell::new(None),
+                RefCell::new(None),
                 self.runtime_style,
                 ShowState::NORMAL,
             );
@@ -299,7 +400,10 @@ wrap_browser_process_handler! {
                 let initial_page_json = serde_json::to_string(&initial_page_url)
                     .unwrap_or_else(|_| "\"\"".to_string());
                 let chrome_html = include_str!("../../assets/chrome.html")
-                    .replace("__FDB_INITIAL_URL__", &initial_page_json);
+                    .replace("__FDB_INITIAL_URL__", &initial_page_json)
+                    // data: origins cannot resolve a relative stylesheet;
+                    // inline the shared kit for the chrome page only.
+                    .replace("</head>", &format!("<style>{}</style></head>", UI_KIT_CSS));
 
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());
@@ -342,6 +446,8 @@ wrap_browser_process_handler! {
                 let mut delegate = SimpleWindowDelegate::new(
                     RefCell::new(chrome_view),
                     RefCell::new(content_views),
+                    RefCell::new(None),
+                    RefCell::new(None),
                     runtime_style,
                     initial_show_state,
                 );
@@ -374,98 +480,4 @@ wrap_browser_process_handler! {
     }
 }
 
-static REVIEW_SLOT: OnceLock<Arc<Mutex<Option<BrowserView>>>> = OnceLock::new();
 
-fn review_slot() -> &'static Arc<Mutex<Option<BrowserView>>> {
-    REVIEW_SLOT.get_or_init(|| Arc::new(Mutex::new(None)))
-}
-
-wrap_window_delegate! {
-    struct ReviewWindowDelegate {
-        view: RefCell<Option<BrowserView>>,
-        slot: Arc<Mutex<Option<BrowserView>>>,
-        runtime_style: RuntimeStyle,
-        title: String,
-    }
-
-    impl ViewDelegate {
-        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
-            Size { width: 1040, height: 760 }
-        }
-    }
-
-    impl PanelDelegate {}
-
-    impl WindowDelegate {
-        fn on_window_created(&self, window: Option<&mut Window>) {
-            let Some(window) = window else { return; };
-            let Some(view) = self.view.borrow().clone() else { return; };
-            window.set_title(Some(&CefString::from(self.title.as_str())));
-            let mut child = View::from(&view);
-            window.add_child_view(Some(&mut child));
-            child.set_visible(1);
-            let bounds = window.bounds();
-            child.set_bounds(Some(&Rect {
-                x: 0,
-                y: 0,
-                width: bounds.width.max(1),
-                height: bounds.height.max(1),
-            }));
-            window.show();
-        }
-
-        fn on_window_destroyed(&self, _window: Option<&mut Window>) {
-            if let Ok(mut slot) = self.slot.lock() {
-                *slot = None;
-            }
-        }
-
-        fn window_runtime_style(&self) -> RuntimeStyle {
-            self.runtime_style
-        }
-
-        fn with_standard_window_buttons(&self, _window: Option<&mut Window>) -> i32 {
-            1
-        }
-    }
-}
-
-/// Open a Tauri-style dedicated review window instead of replacing a tab.
-pub fn open_review_window(
-    inner: std::sync::Arc<std::sync::Mutex<SimpleHandler>>,
-    url: &str,
-    domain: &str,
-) -> bool {
-    let slot = review_slot();
-    if let Some(existing) = slot.lock().ok().and_then(|slot| slot.clone()) {
-        if let Some(browser) = existing.browser() {
-            if let Some(frame) = browser.main_frame() {
-                let mut frame = frame;
-                frame.load_url(Some(&CefString::from(url)));
-                if let Some(window) = View::from(&existing).window() {
-                    let title = format!("Review — {domain}");
-                    window.set_title(Some(&CefString::from(title.as_str())));
-                    window.show();
-                    return true;
-                }
-            }
-        }
-        if let Ok(mut slot) = slot.lock() {
-            *slot = None;
-        }
-    }
-    let Some(view) = create_content_view(inner, url) else {
-        return false;
-    };
-    if let Ok(mut slot) = slot.lock() {
-        *slot = Some(view.clone());
-    }
-    let mut delegate = ReviewWindowDelegate::new(
-        RefCell::new(Some(view)),
-        slot.clone(),
-        RuntimeStyle::ALLOY,
-        format!("Review — {domain}"),
-    );
-    window_create_top_level(Some(&mut delegate));
-    true
-}
