@@ -2531,13 +2531,20 @@ wrap_task! {
     impl Task {
         fn execute(&self) {
             let is_tab = self.flex == 1;
-            let (chrome_view, overlays) = {
+            let (chrome_view, overlays, is_active_tab) = {
                 let Some(instance) = SimpleHandler::instance() else { return };
                 let handler = instance.lock().expect("Failed to lock handler");
                 let chrome_view = handler.chrome_view.clone();
                 let overlays = usize::from(handler.panel_chat_child)
                     + usize::from(handler.panel_settings_child);
-                (chrome_view, overlays)
+                // switch_uid already made this tab active before the posted
+                // task ran; a brand-new tab must attach VISIBLE, or the whole
+                // panel paints empty when it and the previous tab are hidden.
+                let is_active_tab = is_tab && handler.tabs.iter().any(|tab| {
+                    tab.uid == handler.active_uid.unwrap_or(u64::MAX)
+                        && View::from(&tab.view).is_same(Some(&mut View::from(&self.view))) != 0
+                });
+                (chrome_view, overlays, is_active_tab)
             };
             let Some(chrome_view) = chrome_view else { return };
             let Some(panel) = live_panel(&chrome_view) else { return };
@@ -2566,7 +2573,7 @@ wrap_task! {
                 }
             };
             child.set_bounds(Some(&bounds));
-            child.set_visible(!is_tab as i32);
+            child.set_visible(if is_tab && !is_active_tab { 0 } else { 1 });
             panel.layout();
         }
     }

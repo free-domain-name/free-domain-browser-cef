@@ -560,3 +560,11 @@ are required for any of them.
   review thread in your default browser". Verified by bridge probe: the
   cmd resolves and is dispatched to the OS opener; no CEF window created;
   cargo test 29/29.
+- **Item 23 (2026-11-15) — new tabs opened black.** The Posted PanelAddChild
+  task set every tab child set_visible(0); switch_uid had already activated
+  the new tab before the task ran, so the re-add re-hid the ACTIVE tab and
+  the whole panel painted empty (old code attached tabs without touching
+  visibility, which is why it used to render). Task now compares the child
+  to the active tab's view under the lock and attaches visible when active.
+  Verified: newtab page docHidden=false/visible, heading + samples paint
+  (terminal skin gives green-on-black by design). Tests 29/29.
