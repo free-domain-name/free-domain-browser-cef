@@ -218,6 +218,12 @@ pub struct Snapshot {
     pub relay_url: String,
     pub profile: ProfileView,
     pub show_profile_in_rooms: bool,
+    /// The signing identity lives in memory only this session because the OS
+    /// keychain refused persistence; the UI should say so.
+    pub identity_ephemeral: bool,
+    /// Monotonic capture counter; responses with a lower seq are stale and
+    /// must not overwrite newer state in the UI.
+    pub seq: u64,
 }
 
 struct Shared {
@@ -226,6 +232,10 @@ struct Shared {
     relay_url: String,
     nickname: Mutex<String>,
     profile: Mutex<Option<ProfileView>>,
+    identity_ephemeral: AtomicBool,
+    /// Clone of the service capture counter, so pushed state events get the
+    /// same monotonic stamp as command/poll responses.
+    next_seq: StdArc<std::sync::atomic::AtomicU64>,
     show_profile: AtomicBool,
     profile_version: AtomicU32,
     connected: AtomicBool,
@@ -258,6 +268,14 @@ pub struct ChatService {
     lifecycle: tokio::sync::Mutex<()>,
     settings: SettingsStore,
     bootstrap: BootstrapConfig,
+    /// True when the OS keychain refused persistence this process and the
+    /// session fell back to a memory-only identity.
+    identity_ephemeral: std::sync::atomic::AtomicBool,
+    /// Monotonic capture counter for every snapshot produced by this service.
+    /// Responses (poll + command results) and pushed state events carry it so
+    /// the UI can drop stale snapshots that would otherwise revert newer
+    /// state (last-mutation wins, not last-response).
+    next_seq: StdArc<std::sync::atomic::AtomicU64>,
 }
 
 impl ChatService {
@@ -292,6 +310,8 @@ impl ChatService {
             lifecycle: tokio::sync::Mutex::new(()),
             settings,
             bootstrap,
+            identity_ephemeral: std::sync::atomic::AtomicBool::new(false),
+            next_seq: StdArc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -360,10 +380,30 @@ impl ChatService {
         let identity = if ephemeral_identity() {
             Identity::generate()
         } else {
-            tokio::task::spawn_blocking(Identity::load_or_create)
-                .await
-                .map_err(|error| ChatError::Storage(error.to_string()))?
-                .map_err(|error| ChatError::Storage(error.to_string()))?
+            // Plain file identity (chat-identity.json next to the settings):
+            // the OS keychain caused per-binary authorization prompts on macOS
+            // and made both browser builds share one signing identity, so the
+            // relay treated the two browsers as the same user.
+            let path = identity::identity_file_path(self.settings.dir());
+            let loaded = match tokio::task::spawn_blocking(move || {
+                Identity::load_or_create(Some(path.as_path()))
+            })
+            .await
+            {
+                Ok(result) => result.map_err(|error| ChatError::Storage(error.to_string())),
+                Err(error) => Err(ChatError::Storage(error.to_string())),
+            };
+            match loaded {
+                Ok(identity) => identity,
+                Err(_error) => {
+                    // Unwritable config dir: degrade to a session-local
+                    // identity instead of failing chat entirely; the snapshot
+                    // flags it as ephemeral so the UI can tell.
+                    self.identity_ephemeral
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    Identity::generate()
+                }
+            }
         };
         let identity = Arc::new(identity);
 
@@ -395,6 +435,11 @@ impl ChatService {
             policy: Mutex::new(Policy::new(settings.ignored.clone())),
             last_noise_ms: AtomicI64::new(0),
             last_profile_ms: AtomicI64::new(0),
+            identity_ephemeral: AtomicBool::new(
+                self.identity_ephemeral
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            ),
+            next_seq: StdArc::clone(&self.next_seq),
         });
 
         let me = UserView {
@@ -472,9 +517,14 @@ impl ChatService {
     pub async fn snapshot(&self) -> Snapshot {
         let settings = self.settings.get();
         let inner = self.inner.lock().await;
+        // Stamp while holding the session lock so a snapshot captured after a
+        // mutation always carries a higher seq than one captured before it.
+        let seq = self
+            .next_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let enabled = !inner.enabled_tabs.is_empty();
         match &inner.session {
-            Some(session) => snapshot_from(&session.shared, &settings, enabled),
+            Some(session) => snapshot_from(&session.shared, &settings, enabled, seq),
             None => Snapshot {
                 enabled,
                 connected: false,
@@ -492,6 +542,10 @@ impl ChatService {
                 relay_url: self.bootstrap.relay_url.clone(),
                 profile: ProfileView::from_profile(&settings.profile),
                 show_profile_in_rooms: settings.show_profile_in_rooms,
+                identity_ephemeral: self
+                    .identity_ephemeral
+                    .load(std::sync::atomic::Ordering::Relaxed),
+                seq,
             },
         }
     }
@@ -742,8 +796,12 @@ impl ChatService {
     pub async fn clear_local_data(&self) -> Result<Snapshot, ChatError> {
         let _lifecycle = self.lifecycle.lock().await;
         self.stop_session().await;
-        if !ephemeral_identity() {
-            tokio::task::spawn_blocking(identity::delete)
+        // Nothing was written to disk when the session ran with a fallback
+        // identity, so skip the delete entirely in that case.
+        if !ephemeral_identity() && !self.identity_ephemeral.load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let path = identity::identity_file_path(self.settings.dir());
+            tokio::task::spawn_blocking(move || identity::delete(Some(path.as_path())))
                 .await
                 .map_err(|error| ChatError::Storage(error.to_string()))?
                 .map_err(|error| ChatError::Storage(error.to_string()))?;
@@ -1078,7 +1136,8 @@ fn profile_cooldown_ms(shared: &Shared) -> u64 {
 }
 
 fn emit_state(app: &AppHandle, shared: &Shared, settings: &Settings, enabled: bool) {
-    let snapshot = snapshot_from(shared, settings, enabled);
+    let seq = shared.next_seq.fetch_add(1, Ordering::Relaxed);
+    let snapshot = snapshot_from(shared, settings, enabled, seq);
     let _ = app.emit(EVENT_STATE, snapshot);
 }
 
@@ -1086,7 +1145,12 @@ fn emit_error(app: &AppHandle, message: &str) {
     let _ = app.emit(EVENT_ERROR, serde_json::json!({ "message": message }));
 }
 
-fn snapshot_from(shared: &Shared, settings: &Settings, enabled: bool) -> Snapshot {
+fn snapshot_from(
+    shared: &Shared,
+    settings: &Settings,
+    enabled: bool,
+    seq: u64,
+) -> Snapshot {
     let users = sorted_users(shared);
     let online = users.iter().filter(|user| !user.is_me).count();
     let messages = shared
@@ -1117,6 +1181,8 @@ fn snapshot_from(shared: &Shared, settings: &Settings, enabled: bool) -> Snapsho
         relay_url: shared.relay_url.clone(),
         profile: ProfileView::from_profile(&settings.profile),
         show_profile_in_rooms: settings.show_profile_in_rooms,
+        identity_ephemeral: shared.identity_ephemeral.load(Ordering::Relaxed),
+        seq,
     }
 }
 

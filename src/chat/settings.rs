@@ -116,6 +116,11 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
+    /// Parent directory of `chat-settings.json`; other chat files (identity,
+    /// bootstrap overrides) live next to it.
+    pub fn dir(&self) -> Option<&std::path::Path> {
+        self.path.parent()
+    }
     pub fn load(app_config_dir: Option<&Path>) -> Self {
         let path = app_config_dir
             .map(|dir| dir.join("chat-settings.json"))
