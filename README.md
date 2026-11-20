@@ -57,6 +57,18 @@ No window (for CI/screenshot work; macOS only):
 cargo run -- --initial-show-state=hidden
 ```
 
+Build and smoke-test the Linux build in a container, without a Linux
+machine:
+
+```sh
+docker build -f Dockerfile.linux -t fdb-cef-linux .
+docker run --rm --shm-size=1g fdb-cef-linux
+```
+
+The image builds the browser, the helper and the packaging binary, then runs
+the browser on a virtual display and checks that it opens its page and its
+chrome bar. The same two steps run in CI on every push.
+
 Hidden smoke test (launches, checks DevTools/targets, kills the app):
 
 ```sh

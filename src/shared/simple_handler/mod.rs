@@ -25,6 +25,15 @@ mod linux;
 #[cfg(target_os = "linux")]
 use linux::*;
 
+/// The platform specific OS event the keyboard handler receives. macOS passes
+/// a raw `NSEvent` pointer, Linux an `XEvent` and Windows a `MSG`.
+#[cfg(target_os = "macos")]
+type OsEvent<'a> = *mut u8;
+#[cfg(target_os = "linux")]
+type OsEvent<'a> = Option<&'a mut cef::sys::XEvent>;
+#[cfg(target_os = "windows")]
+type OsEvent<'a> = Option<&'a mut cef::sys::MSG>;
+
 static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock::new();
 
 enum BridgeAction {
@@ -1742,7 +1751,9 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: *mut u8,
+            // The OS event type is platform specific: macOS hands over a raw
+            // NSEvent pointer, Linux an XEvent and Windows a MSG.
+            _os_event: OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else {
