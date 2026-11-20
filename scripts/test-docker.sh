@@ -44,8 +44,10 @@ sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///out/chrome.html > target/docker-out/chrome.dom
 grep -q 'id="menu"' target/docker-out/chrome.dom
 grep -q 'New tab (Cmd/Ctrl+T)' target/docker-out/chrome.dom
-grep -q 'id="statusbar"' target/docker-out/chrome.dom
-grep -q 'id="source"' target/docker-out/chrome.dom
+# The persistent status bar was replaced by a transient bubble, and the
+# resolution source is a per-tab dot rather than its own element.
+grep -q 'id="statusBubble"' target/docker-out/chrome.dom
+grep -q 'data-source="' target/docker-out/chrome.dom
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/assets:/assets:ro" \
   free-domain-browser-cef-web-test \

@@ -14,6 +14,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p fdn-core
 
+  web-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render the chrome pages in a Linux container
+        run: ./scripts/test-docker.sh
+
   macos-smoke:
     runs-on: macos-14
     timeout-minutes: 45
