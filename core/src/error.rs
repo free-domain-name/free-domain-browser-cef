@@ -26,7 +26,6 @@ pub enum AppError {
 
     #[error("invalid URL: {0}")]
     Url(#[from] url::ParseError),
-
 }
 
 impl Serialize for AppError {

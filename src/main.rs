@@ -48,7 +48,7 @@ fn main() -> Result<(), &'static str> {
         cmd_line.init_from_argv(main_args.argc, main_args.argv.cast());
 
         shared::run_main(&main_args, &cmd_line, std::ptr::null_mut());
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]

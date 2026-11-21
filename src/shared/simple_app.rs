@@ -1,7 +1,6 @@
 use cef::*;
 use std::cell::RefCell;
 
-
 use super::simple_handler::*;
 
 /// Height of the fixed HTML chrome bar, in DIP.
@@ -47,14 +46,13 @@ wrap_window_delegate! {
             let chrome_view = self.chrome_view.borrow();
             let content_views = self.content_views.borrow();
             let mut chrome = chrome_view.as_ref().map(View::from);
-            if let Some(browser) = chrome_view.as_ref().and_then(|view| view.browser()) {
-                if let Some(handler) = SimpleHandler::instance() {
+            if let Some(browser) = chrome_view.as_ref().and_then(|view| view.browser())
+                && let Some(handler) = SimpleHandler::instance() {
                     handler
                         .lock()
                         .expect("Failed to lock handler")
                         .mark_chrome_browser(browser.identifier());
                 }
-            }
             if let Some(handler) = SimpleHandler::instance() {
                 let mut handler = handler.lock().expect("Failed to lock handler");
                 handler.register_initial_tabs(&content_views);
@@ -88,14 +86,13 @@ wrap_window_delegate! {
                 let mut panel_delegate = SimplePanelDelegate::new();
                 let panel = panel_create(Some(&mut panel_delegate));
                 panel_delegate_holder = Some(panel_delegate);
-                if let Some(panel) = panel.as_ref() {
-                    if let Some(handler) = SimpleHandler::instance() {
+                if let Some(panel) = panel.as_ref()
+                    && let Some(handler) = SimpleHandler::instance() {
                         handler
                             .lock()
                             .expect("Failed to lock handler")
                             .set_content_panel(panel.clone());
                     }
-                }
                 if let Some(panel) = panel.as_ref() {
                     // Parent the panel first, THEN install its box layout:
                     // the layout manager only survives if the panel is part
@@ -107,14 +104,14 @@ wrap_window_delegate! {
                         between_child_spacing: 0,
                         ..Default::default()
                     };
-                    let mut panel = panel.clone();
+                    let panel = panel.clone();
                     panel.set_to_box_layout(Some(&panel_settings));
                     // BoxLayout::SetFlexForView silently ignores views that
                     // are not children yet — set flex AFTER add_child_view.
                     for (index, content) in content_views.iter().enumerate() {
                         let mut content = View::from(content);
                         panel.add_child_view(Some(&mut content));
-                        if let Some(mut layout) =
+                        if let Some(layout) =
                             panel.get_layout().and_then(|layout| layout.as_box_layout())
                         {
                             layout.set_flex_for_view(Some(&mut content), 1);
@@ -144,7 +141,7 @@ wrap_window_delegate! {
                 default_flex: 0,
                 ..Default::default()
             };
-            if let Some(mut layout) = window.set_to_box_layout(Some(&settings)) {
+            if let Some(layout) = window.set_to_box_layout(Some(&settings)) {
                 if let Some(first) = chrome.as_mut() {
                     layout.set_flex_for_view(Some(first), 0);
                 }
@@ -237,7 +234,7 @@ impl SimpleWindowDelegate {
         // stay at zero size.
         let panel = self.content_panel.borrow();
         if let Some(panel) = panel.as_ref() {
-            let mut panel_view = View::from(panel);
+            let panel_view = View::from(panel);
             panel_view.set_bounds(Some(&Rect {
                 x: 0,
                 y: CHROME_HEIGHT.min(height),
@@ -251,7 +248,7 @@ impl SimpleWindowDelegate {
                 height: (height - CHROME_HEIGHT).max(1),
             };
             for content in self.content_views.borrow().iter() {
-                let mut content = View::from(content);
+                let content = View::from(content);
                 content.set_bounds(Some(&tab_bounds));
             }
         }
@@ -482,5 +479,3 @@ wrap_browser_process_handler! {
         }
     }
 }
-
-

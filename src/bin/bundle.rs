@@ -62,10 +62,7 @@ fn add_bundle_metadata(app: &std::path::Path) -> anyhow::Result<()> {
     for (key, value) in [
         ("CFBundleDisplayName", "Free Domain Browser"),
         ("CFBundleName", "Free Domain Browser"),
-        (
-            "LSApplicationCategoryType",
-            "public.app-category.utilities",
-        ),
+        ("LSApplicationCategoryType", "public.app-category.utilities"),
         (
             "NSHumanReadableCopyright",
             "Copyright © Free Domain Browser contributors",
@@ -107,7 +104,7 @@ fn add_bundle_metadata(app: &std::path::Path) -> anyhow::Result<()> {
 
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
-    use cef::build_util::mac::{bundle, BundleInfo};
+    use cef::build_util::mac::{BundleInfo, bundle};
     use semver::Version;
     use std::path::Path;
 

@@ -45,36 +45,35 @@ impl BootstrapConfig {
     pub fn load(app_config_dir: Option<&Path>) -> Self {
         let mut config = Self::default();
 
-        if let Some(path) = app_config_dir.map(|dir| dir.join("chat-bootstrap.json")) {
-            if let Ok(text) = std::fs::read_to_string(path) {
-                if let Ok(file) = serde_json::from_str::<Self>(&text) {
-                    if !file.relay_url.is_empty() {
-                        config.relay_url = file.relay_url;
-                    }
-                    if !file.lobby_node_id.is_empty() {
-                        config.lobby_node_id = file.lobby_node_id;
-                    }
-                    if !file.lobby_room.is_empty() {
-                        config.lobby_room = file.lobby_room;
-                    }
-                }
+        if let Some(path) = app_config_dir.map(|dir| dir.join("chat-bootstrap.json"))
+            && let Ok(text) = std::fs::read_to_string(path)
+            && let Ok(file) = serde_json::from_str::<Self>(&text)
+        {
+            if !file.relay_url.is_empty() {
+                config.relay_url = file.relay_url;
+            }
+            if !file.lobby_node_id.is_empty() {
+                config.lobby_node_id = file.lobby_node_id;
+            }
+            if !file.lobby_room.is_empty() {
+                config.lobby_room = file.lobby_room;
             }
         }
 
-        if let Ok(value) = std::env::var("FDN_CHAT_RELAY_URL") {
-            if !value.is_empty() {
-                config.relay_url = value;
-            }
+        if let Ok(value) = std::env::var("FDN_CHAT_RELAY_URL")
+            && !value.is_empty()
+        {
+            config.relay_url = value;
         }
-        if let Ok(value) = std::env::var("FDN_CHAT_LOBBY_ID") {
-            if !value.is_empty() {
-                config.lobby_node_id = value;
-            }
+        if let Ok(value) = std::env::var("FDN_CHAT_LOBBY_ID")
+            && !value.is_empty()
+        {
+            config.lobby_node_id = value;
         }
-        if let Ok(value) = std::env::var("FDN_CHAT_LOBBY_ROOM") {
-            if !value.is_empty() {
-                config.lobby_room = value;
-            }
+        if let Ok(value) = std::env::var("FDN_CHAT_LOBBY_ROOM")
+            && !value.is_empty()
+        {
+            config.lobby_room = value;
         }
 
         config

@@ -264,7 +264,10 @@ async fn read_request(stream: &mut TcpStream) -> Result<Option<ParsedRequest>, S
         if buffer.len() > MAX_HEADER_BYTES {
             return Err("request headers are too large".to_string());
         }
-        let read = stream.read(&mut chunk).await.map_err(|error| error.to_string())?;
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             if buffer.is_empty() {
                 return Ok(None);
@@ -293,7 +296,10 @@ async fn read_request(stream: &mut TcpStream) -> Result<Option<ParsedRequest>, S
     }
     let mut body = buffer[header_end + 4..].to_vec();
     while body.len() < content_length {
-        let read = stream.read(&mut chunk).await.map_err(|error| error.to_string())?;
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             return Err("incomplete request body".to_string());
         }
@@ -326,13 +332,13 @@ async fn fetch(
         target.clone()
     };
     let parsed_target = url::Url::parse(&target).map_err(|error| error.to_string())?;
-    let upstream_host = if parsed_target.host_str().is_some_and(|host| host.parse::<std::net::IpAddr>().is_ok()) {
+    let upstream_host = if parsed_target
+        .host_str()
+        .is_some_and(|host| host.parse::<std::net::IpAddr>().is_ok())
+    {
         domain.to_string()
     } else {
-        parsed_target
-            .host_str()
-            .unwrap_or_default()
-            .to_string()
+        parsed_target.host_str().unwrap_or_default().to_string()
     };
 
     let method = reqwest::Method::from_bytes(request.method.as_bytes())
@@ -467,18 +473,25 @@ fn sanitize_cookie(value: &str) -> String {
 fn rewrite_html(body: &[u8], target: &str, domain: &str, port: u16) -> String {
     let proxy = format!("http://{domain}{PROXY_SUFFIX}:{port}");
     let mut text = String::from_utf8_lossy(body).into_owned();
-    if let Ok(parsed) = url::Url::parse(target) {
-        if let Some(host) = parsed.host_str() {
-            text = text.replace(
-                &format!("{}://{host}", parsed.scheme()),
-                &proxy,
-            );
-            text = text.replace(
-                &format!("{}://{host}", if parsed.scheme() == "https" { "http" } else { "https" }),
-                &proxy,
-            );
-            text = text.replace(&format!("//{host}"), &format!("//{domain}{PROXY_SUFFIX}:{port}"));
-        }
+    if let Ok(parsed) = url::Url::parse(target)
+        && let Some(host) = parsed.host_str()
+    {
+        text = text.replace(&format!("{}://{host}", parsed.scheme()), &proxy);
+        text = text.replace(
+            &format!(
+                "{}://{host}",
+                if parsed.scheme() == "https" {
+                    "http"
+                } else {
+                    "https"
+                }
+            ),
+            &proxy,
+        );
+        text = text.replace(
+            &format!("//{host}"),
+            &format!("//{domain}{PROXY_SUFFIX}:{port}"),
+        );
     }
     text = text.replace(target.trim_end_matches('/'), &proxy);
     text
@@ -496,15 +509,15 @@ fn rewrite_location(value: &str, target: &str, domain: &str, port: u16) -> Strin
     if let Some(rest) = value.strip_prefix(target) {
         return format!("{proxy}{rest}");
     }
-    if let Ok(parsed) = url::Url::parse(value) {
-        if parsed.host_str().is_some_and(|host| target.contains(host)) {
-            let mut rewritten = format!("{proxy}{}", parsed.path());
-            if let Some(query) = parsed.query() {
-                rewritten.push('?');
-                rewritten.push_str(query);
-            }
-            return rewritten;
+    if let Ok(parsed) = url::Url::parse(value)
+        && parsed.host_str().is_some_and(|host| target.contains(host))
+    {
+        let mut rewritten = format!("{proxy}{}", parsed.path());
+        if let Some(query) = parsed.query() {
+            rewritten.push('?');
+            rewritten.push_str(query);
         }
+        return rewritten;
     }
     value.to_string()
 }
@@ -577,7 +590,10 @@ mod tests {
     #[test]
     fn proxy_url_round_trips_to_a_display_url() {
         let url = proxy_url_for_port("hello.fdn", "/path?q=1", 4567).unwrap();
-        assert_eq!(display_url(&url).as_deref(), Some("fdn://hello.fdn/path?q=1"));
+        assert_eq!(
+            display_url(&url).as_deref(),
+            Some("fdn://hello.fdn/path?q=1")
+        );
     }
 
     #[test]
@@ -590,7 +606,10 @@ mod tests {
     fn normalizes_paths_and_cookies() {
         assert_eq!(normalize_path(""), "/");
         assert_eq!(normalize_path("a"), "/a");
-        assert_eq!(sanitize_cookie("a=1; Domain=x; Secure; Path=/"), "a=1; Path=/");
+        assert_eq!(
+            sanitize_cookie("a=1; Domain=x; Secure; Path=/"),
+            "a=1; Path=/"
+        );
     }
 
     // Every proxy request is same-origin, so `Cookie` must survive the proxy

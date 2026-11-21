@@ -120,8 +120,7 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
         } else {
             root.clone()
         };
-        settings.resources_dir_path =
-            CefString::from(resources.to_string_lossy().as_ref());
+        settings.resources_dir_path = CefString::from(resources.to_string_lossy().as_ref());
         settings.locales_dir_path =
             CefString::from(root.join("locales").to_string_lossy().as_ref());
         eprintln!(

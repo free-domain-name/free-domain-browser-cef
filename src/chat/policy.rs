@@ -127,10 +127,10 @@ impl Policy {
         }
 
         let now = Instant::now();
-        if let Some(last) = self.last_received.get(&sender) {
-            if now.saturating_duration_since(*last) < PEER_COOLDOWN {
-                return Err(LimitError::PeerRate);
-            }
+        if let Some(last) = self.last_received.get(&sender)
+            && now.saturating_duration_since(*last) < PEER_COOLDOWN
+        {
+            return Err(LimitError::PeerRate);
         }
 
         let normalized = normalize(text);

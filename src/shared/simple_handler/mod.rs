@@ -145,7 +145,6 @@ fn appearance_live_script(settings: &crate::settings::Settings) -> String {
     )
 }
 
-
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
 fn internal_page_url(html: &str) -> String {
@@ -216,12 +215,11 @@ fn navigation_key(input: &str) -> String {
     let mut value = input.trim().to_ascii_lowercase();
     if let Some(rest) = value.strip_prefix("fdn://") {
         value = rest.to_string();
-    } else if let Ok(parsed) = url::Url::parse(&value) {
-        if matches!(parsed.scheme(), "http" | "https" | "fdn") {
-            if let Some(host) = parsed.host_str() {
-                value = host.to_string();
-            }
-        }
+    } else if let Ok(parsed) = url::Url::parse(&value)
+        && matches!(parsed.scheme(), "http" | "https" | "fdn")
+        && let Some(host) = parsed.host_str()
+    {
+        value = host.to_string();
     }
     value
         .trim_end_matches('/')
@@ -286,11 +284,13 @@ fn claim_page(outcome: &fdn_core::NavigationOutcome) -> String {
         .append_pair("filename", &path)
         .append_pair("value", &json)
         .finish();
-    let register_url = format!(
-        "https://github.com/free-domain-name/registry/new/main?{query}"
-    );
+    let register_url = format!("https://github.com/free-domain-name/registry/new/main?{query}");
     let free_namespace = outcome.domain == "fdn" || outcome.domain.ends_with(".fdn");
-    let badge = if free_namespace { "Available" } else { "Unregistered" };
+    let badge = if free_namespace {
+        "Available"
+    } else {
+        "Unregistered"
+    };
     let public_row = if free_namespace {
         String::new()
     } else {
@@ -336,9 +336,8 @@ fn unavailable_page(outcome: &fdn_core::NavigationOutcome) -> String {
     let public_button = if free_namespace || public_url.is_empty() {
         String::new()
     } else {
-        format!(
-            r#"<button id="public" class="secondary" type="button">Continue to public web</button>"#
-        )
+        r#"<button id="public" class="secondary" type="button">Continue to public web</button>"#
+            .to_string()
     };
     let domain_js = serde_json::to_string(&outcome.domain).unwrap_or_else(|_| "\"\"".into());
     let public_js = serde_json::to_string(&public_url).unwrap_or_else(|_| "\"\"".into());
@@ -444,33 +443,41 @@ impl SimpleHandler {
     fn on_title_change(&mut self, browser: Option<&mut Browser>, title: Option<&CefString>) {
         debug_assert_ne!(currently_on(ThreadId::UI), 0);
 
-        let mut browser = browser.cloned();
+        let browser = browser.cloned();
         // The window title stays static (the browser's own name); site titles
         // belong to the tab strip only, so every view feeds update_chrome.
-        if let Some(browser) = browser.as_ref() {
-            if self.chrome_browser_id != Some(browser.identifier()) {
-                let title = title.map(CefString::to_string).unwrap_or_default();
-                self.update_chrome(browser.identifier(), None, Some(&title));
-            }
+        if let Some(browser) = browser.as_ref()
+            && self.chrome_browser_id != Some(browser.identifier())
+        {
+            let title = title.map(CefString::to_string).unwrap_or_default();
+            self.update_chrome(browser.identifier(), None, Some(&title));
         }
     }
 
     fn update_chrome(&mut self, source_id: i32, url: Option<&str>, title: Option<&str>) {
-        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        let Some(chrome_id) = self.chrome_browser_id else {
+            return;
+        };
         if source_id == chrome_id {
             return;
         }
         if url.is_some_and(|value| value.starts_with("file://") || value.starts_with("data:")) {
             return;
         }
-        let Some(uid) = self.tab_uid(source_id) else { return; };
+        let Some(uid) = self.tab_uid(source_id) else {
+            return;
+        };
         let mut chrome = self
             .browser_list
             .iter()
             .find(|browser| browser.identifier() == chrome_id)
             .cloned();
-        let Some(chrome) = chrome.as_mut() else { return; };
-        let Some(frame) = chrome.main_frame() else { return; };
+        let Some(chrome) = chrome.as_mut() else {
+            return;
+        };
+        let Some(frame) = chrome.main_frame() else {
+            return;
+        };
         let url = url.map(|value| serde_json::to_string(value).unwrap_or_default());
         let title = title.map(|value| serde_json::to_string(value).unwrap_or_default());
         let script = match (url, title) {
@@ -479,7 +486,7 @@ impl SimpleHandler {
             (None, Some(title)) => format!("window.fdbUpdate&&fdbUpdate(null,{title},{uid})"),
             (None, None) => return,
         };
-        let mut frame = frame;
+        let frame = frame;
         frame.execute_java_script(Some(&CefString::from(script.as_str())), None, 0);
     }
 
@@ -508,12 +515,16 @@ impl SimpleHandler {
             .join("free-domain-browser-cef-ui")
             .to_string_lossy()
             .to_string();
-        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        let Some(chrome_id) = self.chrome_browser_id else {
+            return;
+        };
         for browser in self.browser_list.iter() {
             if browser.identifier() == chrome_id {
                 continue;
             }
-            let Some(frame) = browser.main_frame() else { continue; };
+            let Some(frame) = browser.main_frame() else {
+                continue;
+            };
             let url = CefString::from(&frame.url()).to_string();
             if !url.starts_with("file://") || !url.contains(&internal_prefix) {
                 continue;
@@ -526,32 +537,44 @@ impl SimpleHandler {
     }
 
     pub(crate) fn chrome_execute(&self, source_id: i32, script: &str) {
-        let Some(chrome_id) = self.chrome_browser_id else { return; };
-        if source_id == chrome_id { return; }
+        let Some(chrome_id) = self.chrome_browser_id else {
+            return;
+        };
+        if source_id == chrome_id {
+            return;
+        }
         let mut chrome = self
             .browser_list
             .iter()
             .find(|browser| browser.identifier() == chrome_id)
             .cloned();
-        let Some(chrome) = chrome.as_mut() else { return; };
-        let Some(frame) = chrome.main_frame() else { return; };
-        let mut frame = frame;
+        let Some(chrome) = chrome.as_mut() else {
+            return;
+        };
+        let Some(frame) = chrome.main_frame() else {
+            return;
+        };
+        let frame = frame;
         frame.execute_java_script(Some(&CefString::from(script)), None, 0);
     }
 
     pub(crate) fn chrome_focus(&self, script: &str) {
-        let Some(chrome_id) = self.chrome_browser_id else { return; };
+        let Some(chrome_id) = self.chrome_browser_id else {
+            return;
+        };
         let mut chrome = self
             .browser_list
             .iter()
             .find(|browser| browser.identifier() == chrome_id)
             .cloned();
-        let Some(chrome) = chrome.as_mut() else { return; };
+        let Some(chrome) = chrome.as_mut() else {
+            return;
+        };
         if let Some(host) = chrome.host() {
             host.set_focus(1);
         }
         if let Some(frame) = chrome.main_frame() {
-            let mut frame = frame;
+            let frame = frame;
             frame.execute_java_script(Some(&CefString::from(script)), None, 0);
         }
     }
@@ -666,23 +689,15 @@ impl SimpleHandler {
     }
 
     pub fn resize_tabs(&mut self, _bounds: &Rect) {
-        let Some(window) = self.window.clone() else { return; };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         let bounds = Self::tab_bounds(&window);
         for tab in &self.tabs {
-            let mut view = View::from(&tab.view);
+            let view = View::from(&tab.view);
             view.set_bounds(Some(&bounds));
         }
         self.layout_overlays(&window);
-    }
-
-    fn content_bounds(window: &Window) -> Rect {
-        let bounds = window.bounds();
-        Rect {
-            x: 0,
-            y: CHROME_HEIGHT.min(bounds.height.max(1)),
-            width: bounds.width.max(1),
-            height: (bounds.height - CHROME_HEIGHT).max(1),
-        }
     }
 
     fn chat_bounds(window: &Window) -> Rect {
@@ -698,12 +713,12 @@ impl SimpleHandler {
 
     fn layout_overlays(&self, window: &Window) {
         if let Some(view) = self.settings_view.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             // Settings covers the whole content panel.
             view.set_bounds(Some(&Self::panel_bounds(window)));
         }
         if let Some(view) = self.chat_panel.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             view.set_bounds(Some(&Self::chat_bounds(window)));
         }
         if self.content_panel.is_some() {
@@ -716,13 +731,15 @@ impl SimpleHandler {
     /// full content area, so while it is open the tabs hide beneath it.
     fn set_all_tabs_visible(&self, visible: i32) {
         for tab in &self.tabs {
-            let mut view = View::from(&tab.view);
+            let view = View::from(&tab.view);
             view.set_visible(visible);
         }
     }
 
     pub fn attach_settings_view(&mut self, view: BrowserView) {
-        let Some(window) = self.window.clone() else { return; };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         if self.chat_open {
             // Visibility only: the chat session stays enabled (Tauri never
             // leaves the room when its settings menu opens).
@@ -731,34 +748,36 @@ impl SimpleHandler {
         self.settings_view = Some(view);
         self.settings_open = true;
         let settings_view = self.settings_view.clone();
-        if settings_view.is_some() {
-            self.attach_overlay_view(settings_view.as_ref().unwrap(), 1, false);
+        if let Some(settings_view) = settings_view.as_ref() {
+            self.attach_overlay_view(settings_view, 1, false);
         }
         // Tauri parity: settings is a full-viewport sheet, so the page hides
         // beneath it (the tabs) instead of fighting the box layout.
         self.set_all_tabs_visible(0);
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
-        if let Some(browser) = self.settings_view.as_ref().and_then(|view| view.browser()) {
-            if let Some(host) = browser.host() {
-                host.set_focus(1);
-            }
+        if let Some(browser) = self.settings_view.as_ref().and_then(|view| view.browser())
+            && let Some(host) = browser.host()
+        {
+            host.set_focus(1);
         }
     }
 
     pub fn show_settings_view(&mut self) {
-        let Some(window) = self.window.clone() else { return; };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         if self.chat_open {
             self.hide_chat_panel();
         }
         if let Some(view) = self.settings_view.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             view.set_visible(1);
         }
-        if !self.panel_settings_child {
-            if let Some(view) = self.settings_view.clone() {
-                self.attach_overlay_view(&view, 1, false);
-            }
+        if !self.panel_settings_child
+            && let Some(view) = self.settings_view.clone()
+        {
+            self.attach_overlay_view(&view, 1, false);
         }
         self.settings_open = true;
         self.set_all_tabs_visible(0);
@@ -768,24 +787,26 @@ impl SimpleHandler {
 
     pub fn close_settings_view(&mut self) {
         if let Some(view) = self.settings_view.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             view.set_visible(0);
         }
         self.settings_open = false;
         if self.active_uid.is_some() {
             self.set_all_tabs_visible(0);
-            if let Some(uid) = self.active_uid {
-                if let Some(tab) = self.tab(uid) {
-                    let mut view = View::from(&tab.view);
-                    view.set_visible(1);
-                }
+            if let Some(uid) = self.active_uid
+                && let Some(tab) = self.tab(uid)
+            {
+                let view = View::from(&tab.view);
+                view.set_visible(1);
             }
         }
         self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(false)");
     }
 
     pub fn attach_chat_panel(&mut self, view: BrowserView) {
-        let Some(window) = self.window.clone() else { return; };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         if self.settings_open {
             self.close_settings_view();
         }
@@ -805,25 +826,34 @@ impl SimpleHandler {
                 host.set_focus(1);
             }
             if let Some(frame) = browser.main_frame() {
-                let mut frame = frame;
-                frame.execute_java_script(Some(&CefString::from("window.fdbChatPanelOpen&&fdbChatPanelOpen()")), None, 0);
+                let frame = frame;
+                frame.execute_java_script(
+                    Some(&CefString::from(
+                        "window.fdbChatPanelOpen&&fdbChatPanelOpen()",
+                    )),
+                    None,
+                    0,
+                );
             }
         }
     }
 
     pub fn show_chat_panel(&mut self) {
-        let Some(window) = self.window.clone() else { return; };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
         if self.settings_open {
             self.close_settings_view();
         }
         if let Some(view) = self.chat_panel.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             view.set_visible(1);
         }
-        if self.chat_panel.is_some() && !self.panel_chat_child {
-            if let Some(chat) = self.chat_panel.clone() {
-                self.attach_overlay_view(&chat, 0, true);
-            }
+        if self.chat_panel.is_some()
+            && !self.panel_chat_child
+            && let Some(chat) = self.chat_panel.clone()
+        {
+            self.attach_overlay_view(&chat, 0, true);
         }
         self.chat_panel_uid = self.active_uid;
         if let Some(uid) = self.active_uid {
@@ -832,10 +862,10 @@ impl SimpleHandler {
         self.chat_open = true;
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
-        if let Some(browser) = self.chat_panel.as_ref().and_then(|view| view.browser()) {
-            if let Some(host) = browser.host() {
-                host.set_focus(1);
-            }
+        if let Some(browser) = self.chat_panel.as_ref().and_then(|view| view.browser())
+            && let Some(host) = browser.host()
+        {
+            host.set_focus(1);
         }
     }
 
@@ -844,7 +874,7 @@ impl SimpleHandler {
     /// tab, while the panel itself is only visible on an enabled tab.
     pub fn hide_chat_panel(&mut self) {
         if let Some(view) = self.chat_panel.as_ref() {
-            let mut view = View::from(view);
+            let view = View::from(view);
             view.set_visible(0);
         }
         self.chat_open = false;
@@ -857,13 +887,16 @@ impl SimpleHandler {
             self.chat_tabs.remove(&uid);
         }
         self.chat_panel_uid = None;
-        if let Some(view) = self.chat_panel.as_ref() {
-            if let Some(browser) = view.browser() {
-                if let Some(frame) = browser.main_frame() {
-                    let mut frame = frame;
-                    frame.execute_java_script(Some(&CefString::from("window.fdbPanelClose&&fdbPanelClose()")), None, 0);
-                }
-            }
+        if let Some(view) = self.chat_panel.as_ref()
+            && let Some(browser) = view.browser()
+            && let Some(frame) = browser.main_frame()
+        {
+            let frame = frame;
+            frame.execute_java_script(
+                Some(&CefString::from("window.fdbPanelClose&&fdbPanelClose()")),
+                None,
+                0,
+            );
         }
         self.hide_chat_panel();
     }
@@ -873,24 +906,33 @@ impl SimpleHandler {
     /// them so background chat tabs stay fresh too.
     pub(crate) fn chat_page_browsers(&self) -> Vec<Browser> {
         let mut browsers = Vec::new();
-        if let Some(view) = self.chat_panel.as_ref() {
-            if let Some(browser) = view.browser() {
-                browsers.push(browser);
-            }
+        if let Some(view) = self.chat_panel.as_ref()
+            && let Some(browser) = view.browser()
+        {
+            browsers.push(browser);
         }
         for uid in &self.chat_tabs {
-            if let Some(tab) = self.tabs.iter().find(|tab| tab.uid == *uid) {
-                if let Some(browser) = tab.view.browser() {
-                    browsers.push(browser);
-                }
+            if let Some(tab) = self.tabs.iter().find(|tab| tab.uid == *uid)
+                && let Some(browser) = tab.view.browser()
+            {
+                browsers.push(browser);
             }
         }
         browsers
     }
 
     fn chrome_state(&mut self) {
-        self.chrome_execute(0, &format!("window.fdbSettingsOpen&&fdbSettingsOpen({})", self.settings_open));
-        self.chrome_execute(0, &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open));
+        self.chrome_execute(
+            0,
+            &format!(
+                "window.fdbSettingsOpen&&fdbSettingsOpen({})",
+                self.settings_open
+            ),
+        );
+        self.chrome_execute(
+            0,
+            &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open),
+        );
         // Full tab-strip resync: after an F5 reload of the chrome page its JS
         // state is gone; without this the strip resets to one placeholder tab.
         let tabs: Vec<serde_json::Value> = self
@@ -903,7 +945,10 @@ impl SimpleHandler {
                 let url = tab
                     .view
                     .browser()
-                    .and_then(|b| b.main_frame().map(|frame| CefString::from(&frame.url()).to_string()))
+                    .and_then(|b| {
+                        b.main_frame()
+                            .map(|frame| CefString::from(&frame.url()).to_string())
+                    })
                     .unwrap_or_default();
                 let display = if url.starts_with("file://") || url.starts_with("data:") {
                     String::new()
@@ -913,9 +958,16 @@ impl SimpleHandler {
                 serde_json::json!({"uid": tab.uid, "url": display})
             })
             .collect();
-        let active = self.active_uid.map(|uid| uid.to_string()).unwrap_or_else(|| "null".to_string());
+        let active = self
+            .active_uid
+            .map(|uid| uid.to_string())
+            .unwrap_or_else(|| "null".to_string());
         if !tabs.is_empty() {
-            let script = format!("window.fdbTabs&&fdbTabs({},{})", serde_json::to_string(&tabs).unwrap_or_default(), active);
+            let script = format!(
+                "window.fdbTabs&&fdbTabs({},{})",
+                serde_json::to_string(&tabs).unwrap_or_default(),
+                active
+            );
             self.chrome_execute(0, &script);
         }
     }
@@ -929,20 +981,19 @@ impl SimpleHandler {
         }
         self.active_uid = Some(uid);
         for tab in &self.tabs {
-            let mut view = View::from(&tab.view);
+            let view = View::from(&tab.view);
             view.set_visible(i32::from(tab.uid == uid));
         }
         // Tauri parity (activateTab): the selected page takes keyboard focus so
         // keystrokes land in the content, not the chrome strip — unless an
         // overlay owns focus or the chat panel is about to take it.
-        if !self.chat_open && !self.settings_open {
-            if let Some(tab) = self.tab(uid) {
-                if let Some(browser) = tab.view.browser() {
-                    if let Some(host) = browser.host() {
-                        host.set_focus(1);
-                    }
-                }
-            }
+        if !self.chat_open
+            && !self.settings_open
+            && let Some(tab) = self.tab(uid)
+            && let Some(browser) = tab.view.browser()
+            && let Some(host) = browser.host()
+        {
+            host.set_focus(1);
         }
         if !self.chat_open && !self.settings_open && self.chat_tabs.contains(&uid) {
             self.show_chat_panel();
@@ -972,7 +1023,9 @@ impl SimpleHandler {
     }
 
     fn on_status_message(&mut self, browser: Option<&mut Browser>, value: Option<&CefString>) {
-        let Some(browser) = browser else { return; };
+        let Some(browser) = browser else {
+            return;
+        };
         let source_id = browser.identifier();
         // The status bubble is global chrome chrome; a background tab's hover
         // status must not overwrite what the active tab is showing.
@@ -994,9 +1047,13 @@ impl SimpleHandler {
         can_go_back: bool,
         can_go_forward: bool,
     ) {
-        let Some(browser) = browser else { return; };
+        let Some(browser) = browser else {
+            return;
+        };
         let source_id = browser.identifier();
-        let Some(uid) = self.tab_uid(source_id) else { return; };
+        let Some(uid) = self.tab_uid(source_id) else {
+            return;
+        };
         let script = format!(
             "window.fdbLoad&&fdbLoad({},{},{},{})",
             if is_loading { 1 } else { 0 },
@@ -1035,7 +1092,7 @@ impl SimpleHandler {
 
         // Identify the fixed chrome view by identity, not by URL or creation
         // order: the URL is still empty during `on_after_created`.
-        if let (Some(chrome), Some(mut view)) = (
+        if let (Some(chrome), Some(view)) = (
             self.chrome_view.as_mut(),
             browser_view_get_for_browser(Some(&mut browser)),
         ) {
@@ -1047,7 +1104,11 @@ impl SimpleHandler {
         }
 
         if let Some(uid) = self.pending_uids.front().copied() {
-            if let Some(position) = self.pending_views.iter().position(|(pending, _)| *pending == uid) {
+            if let Some(position) = self
+                .pending_views
+                .iter()
+                .position(|(pending, _)| *pending == uid)
+            {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
                 self.register_tab(uid, view);
@@ -1061,7 +1122,7 @@ impl SimpleHandler {
             let mut as_view = View::from(&view);
             for tab in self.tabs.iter_mut() {
                 if tab.browser_id < 0 {
-                    let mut tab_view = View::from(&tab.view);
+                    let tab_view = View::from(&tab.view);
                     if tab_view.is_same(Some(&mut as_view)) != 0 {
                         tab.browser_id = browser.identifier();
                         break;
@@ -1070,7 +1131,11 @@ impl SimpleHandler {
             }
         }
         if let Some(uid) = self.pending_uids.front().copied() {
-            if let Some(position) = self.pending_views.iter().position(|(pending, _)| *pending == uid) {
+            if let Some(position) = self
+                .pending_views
+                .iter()
+                .position(|(pending, _)| *pending == uid)
+            {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
                 self.register_tab(uid, view);
@@ -1078,11 +1143,11 @@ impl SimpleHandler {
             }
             return;
         }
-        if self.tabs.is_empty() {
-            if let Some(view) = browser_view_get_for_browser(Some(&mut browser)) {
-                self.register_tab(0, view);
-                self.active_uid = Some(0);
-            }
+        if self.tabs.is_empty()
+            && let Some(view) = browser_view_get_for_browser(Some(&mut browser))
+        {
+            self.register_tab(0, view);
+            self.active_uid = Some(0);
         }
     }
 
@@ -1117,10 +1182,7 @@ impl SimpleHandler {
         }
         if self.tabs.iter().any(|tab| tab.browser_id == browser_id) {
             self.tabs.retain(|tab| tab.browser_id != browser_id);
-            if self
-                .active_uid
-                .is_some_and(|uid| self.tab(uid).is_none())
-            {
+            if self.active_uid.is_some_and(|uid| self.tab(uid).is_none()) {
                 self.active_uid = self.tabs.last().map(|tab| tab.uid);
             }
         }
@@ -1137,7 +1199,9 @@ impl SimpleHandler {
         frame: Option<&mut Frame>,
         _transition_type: TransitionType,
     ) {
-        let (Some(browser), Some(frame)) = (browser, frame) else { return; };
+        let (Some(browser), Some(frame)) = (browser, frame) else {
+            return;
+        };
         let source_id = browser.identifier();
         let url = CefString::from(&frame.url()).to_string();
         if url.starts_with("data:text/html") {
@@ -1165,17 +1229,20 @@ impl SimpleHandler {
         }
     }
 
-
     fn on_before_popup(
         &mut self,
         browser: Option<&mut Browser>,
         target_url: Option<&CefString>,
     ) -> i32 {
-        let Some(browser) = browser else { return 0; };
+        let Some(browser) = browser else {
+            return 0;
+        };
         if self.chrome_browser_id == Some(browser.identifier()) {
             return 0;
         }
-        let Some(target_url) = target_url else { return 1; };
+        let Some(target_url) = target_url else {
+            return 1;
+        };
         let url = target_url.to_string();
         if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("fdn://") {
             if let Some(instance) = SimpleHandler::instance() {
@@ -1204,7 +1271,9 @@ impl SimpleHandler {
         _frame: Option<&mut Frame>,
         _http_status_code: i32,
     ) {
-        let Some(browser) = browser else { return; };
+        let Some(browser) = browser else {
+            return;
+        };
         if self.chrome_browser_id != Some(browser.identifier()) {
             return;
         }
@@ -1241,7 +1310,9 @@ impl SimpleHandler {
         }
         let error_code = error_code as i32;
 
-        let Some(frame) = frame else { return; };
+        let Some(frame) = frame else {
+            return;
+        };
         let uri = internal_page_url(&error_page(&failed, &text, error_code));
         let uri = CefString::from(uri.as_str());
         frame.load_url(Some(&uri));
@@ -1258,9 +1329,13 @@ impl SimpleHandler {
         _user_gesture: i32,
         _is_redirect: i32,
     ) -> i32 {
-        let Some(request) = request else { return 0; };
+        let Some(request) = request else {
+            return 0;
+        };
         let url = CefString::from(&request.url()).to_string();
-        let Some(mut current) = browser else { return 0; };
+        let Some(current) = browser else {
+            return 0;
+        };
         let current_id = current.identifier();
         if self.chrome_browser_id != Some(current_id) {
             if let Some((domain, target)) = choice_target(&url) {
@@ -1285,7 +1360,9 @@ impl SimpleHandler {
             post_page(target_id, internal_page_url(CHAT_HTML));
             return 1;
         }
-        let Some(target) = navigation_target(&url) else { return 0; };
+        let Some(target) = navigation_target(&url) else {
+            return 0;
+        };
         spawn_navigation(target_id, target);
         1
     }
@@ -1312,8 +1389,7 @@ impl SimpleHandler {
             .map(|frame| {
                 let url = CefString::from(&frame.url()).to_string();
                 url.starts_with("data:text/html")
-                    || (url.starts_with("file://")
-                        && url.contains("/free-domain-browser-cef-ui/"))
+                    || (url.starts_with("file://") && url.contains("/free-domain-browser-cef-ui/"))
             })
             .unwrap_or(false)
     }
@@ -1333,19 +1409,11 @@ impl SimpleHandler {
                 } else if let Some(uid) = value.get("uid").and_then(|uid| uid.as_u64()) {
                     // Popup-originated navigations target the tab that was
                     // created for them, not whichever tab is active later.
-                    match self
-                        .tabs
+                    self.tabs
                         .iter()
                         .find(|tab| tab.uid == uid)
                         .map(|tab| tab.browser_id)
-                    {
-                        Some(target) => {
-                            Some(BridgeAction::Navigate(target, url.to_string()))
-                        }
-                        // Unknown tab: drop the command (the default fallthrough
-                        // for console messages would do nothing anyway).
-                        None => None,
-                    }
+                        .map(|target| BridgeAction::Navigate(target, url.to_string()))
                 } else {
                     Some(BridgeAction::Navigate(target_id, url.to_string()))
                 }
@@ -1392,9 +1460,18 @@ impl SimpleHandler {
                 .or_else(|| value.get("view").and_then(|uid| uid.as_u64()))
                 .or_else(|| value.get("index").and_then(|uid| uid.as_u64()))
                 .map(BridgeAction::SelectTab),
-            "back" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Back)),
-            "forward" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Forward)),
-            "reload" => Some(BridgeAction::BrowserCommand(target_id, BrowserCommandKind::Reload)),
+            "back" => Some(BridgeAction::BrowserCommand(
+                target_id,
+                BrowserCommandKind::Back,
+            )),
+            "forward" => Some(BridgeAction::BrowserCommand(
+                target_id,
+                BrowserCommandKind::Forward,
+            )),
+            "reload" => Some(BridgeAction::BrowserCommand(
+                target_id,
+                BrowserCommandKind::Reload,
+            )),
             "home" => Some(BridgeAction::Home(target_id)),
             "external" => {
                 let url = value.get("url")?.as_str()?.trim();
@@ -1493,7 +1570,6 @@ wrap_client! {
     }
 }
 
-
 wrap_download_handler! {
     struct SimpleDownloadHandler;
 
@@ -1522,11 +1598,10 @@ wrap_download_handler! {
             let path = unique_download_path(&suggested);
             let cef_path = CefString::from(path.to_string_lossy().as_ref());
             callback.cont(Some(&cef_path), 0);
-            if let Some(instance) = SimpleHandler::instance() {
-                if let Ok(mut inner) = instance.lock() {
+            if let Some(instance) = SimpleHandler::instance()
+                && let Ok(inner) = instance.lock() {
                     inner.chrome_toast(&format!("Downloading to {}", path.display()));
                 }
-            }
             1
         }
 
@@ -1539,15 +1614,14 @@ wrap_download_handler! {
             let Some(item) = download_item else { return; };
             let percent = item.percent_complete();
             let done = item.is_complete() != 0;
-            if let Some(instance) = SimpleHandler::instance() {
-                if let Ok(mut inner) = instance.lock() {
+            if let Some(instance) = SimpleHandler::instance()
+                && let Ok(inner) = instance.lock() {
                     if done {
                         inner.chrome_toast("Download complete");
                     } else {
                         inner.chrome_toast(&format!("Downloading… {percent}%"));
                     }
                 }
-            }
         }
     }
 }
@@ -1570,7 +1644,10 @@ fn unique_download_path(suggested: &str) -> std::path::PathBuf {
         return candidate;
     }
     let path = std::path::Path::new(&base);
-    let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("download");
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("download");
     let extension = path.extension().and_then(|extension| extension.to_str());
     for index in 1..1000 {
         let name = match extension {
@@ -1682,21 +1759,19 @@ wrap_display_handler! {
                     // (the page itself is a file:// URL, which update_chrome
                     // skips), so the chrome reflects a fresh back-to-start tab.
                     post_page(target_id, internal_page_url(NEWTAB_HTML));
-                    if let Some(instance) = SimpleHandler::instance() {
-                        if let Ok(mut handler) = instance.lock() {
+                    if let Some(instance) = SimpleHandler::instance()
+                        && let Ok(mut handler) = instance.lock() {
                             handler.update_chrome(target_id, Some(""), None);
                         }
-                    }
                 }
                 Some(BridgeAction::External(url)) => {
-                    if let Err(error) = open_external(&url) {
-                        if let Some(instance) = SimpleHandler::instance() {
+                    if let Err(error) = open_external(&url)
+                        && let Some(instance) = SimpleHandler::instance() {
                             instance
                                 .lock()
                                 .expect("Failed to lock handler")
                                 .chrome_toast(&format!("Could not open browser: {error}"));
                         }
-                    }
                 }
                 Some(BridgeAction::ClearCache) => {
                     clear_registry_cache();
@@ -1712,7 +1787,7 @@ wrap_display_handler! {
                     spawn_navigation(target_id, format!("fdn://{domain}"));
                 }
                 Some(BridgeAction::FocusChrome) => {
-                    let mut inner = self.inner.lock().expect("Failed to lock inner");
+                    let inner = self.inner.lock().expect("Failed to lock inner");
                     inner.chrome_focus("window.fdbFocusUrl&&fdbFocusUrl()");
                 }
                 Some(BridgeAction::NewTab(uid, url)) => {
@@ -1786,11 +1861,10 @@ wrap_keyboard_handler! {
                 Some("window.fdbCloseActive&&fdbCloseActive()")
             } else if command && key == b'L' as i32 {
                 // Focus the chrome view itself, not just the input element.
-                if let Some(instance) = SimpleHandler::instance() {
-                    if let Ok(inner) = instance.lock() {
+                if let Some(instance) = SimpleHandler::instance()
+                    && let Ok(inner) = instance.lock() {
                         inner.chrome_focus("window.fdbFocusUrl&&fdbFocusUrl()");
                     }
-                }
                 return 1;
             } else if command && key == b'R' as i32 {
                 Some("window.fdbReload&&fdbReload()")
@@ -1826,11 +1900,10 @@ wrap_keyboard_handler! {
                 }
                 None => return 0,
             };
-            if let Some(instance) = SimpleHandler::instance() {
-                if let Ok(inner) = instance.lock() {
+            if let Some(instance) = SimpleHandler::instance()
+                && let Ok(inner) = instance.lock() {
                     inner.chrome_execute(0, &script);
                 }
-            }
             1
         }
     }
@@ -1961,13 +2034,12 @@ wrap_resource_request_handler! {
                     let request_host = url::Url::parse(&CefString::from(&request.url()).to_string())
                         .ok()
                         .and_then(|value| value.host_str().map(str::to_string));
-                    if let (Some(initiator), Some(target)) = (initiator_host, request_host) {
-                        if initiator != target {
+                    if let (Some(initiator), Some(target)) = (initiator_host, request_host)
+                        && initiator != target {
                             let name = CefString::from("Cookie");
                             let empty = CefString::from("");
                             request.set_header_by_name(Some(&name), Some(&empty), 1);
                         }
-                    }
                 }
             }
             ReturnValue::CONTINUE
@@ -2034,16 +2106,23 @@ fn open_review_in_system_browser(domain: String) {
 }
 
 fn open_settings_overlay() {
-    let Some(instance) = SimpleHandler::instance() else { return; };
+    let Some(instance) = SimpleHandler::instance() else {
+        return;
+    };
     let (inner, exists) = {
         let handler = instance.lock().expect("Failed to lock handler");
         (handler.weak_self.upgrade(), handler.settings_view.is_some())
     };
     if exists {
-        instance.lock().expect("Failed to lock handler").show_settings_view();
+        instance
+            .lock()
+            .expect("Failed to lock handler")
+            .show_settings_view();
         return;
     }
-    let Some(inner) = inner else { return; };
+    let Some(inner) = inner else {
+        return;
+    };
     let url = settings_page_url(&crate::settings::load());
     let Some(view) = create_content_view(inner, &url) else {
         if let Ok(handler) = instance.lock() {
@@ -2058,7 +2137,9 @@ fn open_settings_overlay() {
 }
 
 fn toggle_chat_panel() {
-    let Some(instance) = SimpleHandler::instance() else { return; };
+    let Some(instance) = SimpleHandler::instance() else {
+        return;
+    };
     let (inner, exists, open) = {
         let handler = instance.lock().expect("Failed to lock handler");
         (
@@ -2076,7 +2157,9 @@ fn toggle_chat_panel() {
         }
         return;
     }
-    let Some(inner) = inner else { return; };
+    let Some(inner) = inner else {
+        return;
+    };
     let url = format!("{}&panel=1", internal_page_url(CHAT_HTML));
     let Some(view) = create_content_view(inner, &url) else {
         if let Ok(handler) = instance.lock() {
@@ -2108,9 +2191,19 @@ fn install_chat_sink() {
 
 fn handle_chat_command(browser_id: i32, message: &str) {
     install_chat_sink();
-    let Some(payload) = message.strip_prefix("fdbchat:") else { return; };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else { return; };
-    let Some(cmd) = value.get("cmd").and_then(|cmd| cmd.as_str()).map(str::to_string) else { return; };
+    let Some(payload) = message.strip_prefix("fdbchat:") else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
+        return;
+    };
+    let Some(cmd) = value
+        .get("cmd")
+        .and_then(|cmd| cmd.as_str())
+        .map(str::to_string)
+    else {
+        return;
+    };
     if cmd == "close_panel" {
         if let Some(instance) = SimpleHandler::instance() {
             instance
@@ -2138,8 +2231,16 @@ fn handle_chat_command(browser_id: i32, message: &str) {
                 .map(|snapshot| serde_json::json!(snapshot))
                 .map_err(|error| error.to_string()),
             "send" => {
-                let text = value.get("text").and_then(|text| text.as_str()).unwrap_or_default().to_string();
-                service.send(text).await.map(|_| serde_json::Value::Null).map_err(|error| error.to_string())
+                let text = value
+                    .get("text")
+                    .and_then(|text| text.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                service
+                    .send(text)
+                    .await
+                    .map(|_| serde_json::Value::Null)
+                    .map_err(|error| error.to_string())
             }
             "confirm_age" => service
                 .confirm_age()
@@ -2147,27 +2248,75 @@ fn handle_chat_command(browser_id: i32, message: &str) {
                 .map(|snapshot| serde_json::json!(snapshot))
                 .map_err(|error| error.to_string()),
             "set_nickname" => {
-                let nickname = value.get("nickname").and_then(|nickname| nickname.as_str()).unwrap_or_default().to_string();
-                service.set_nickname(nickname).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+                let nickname = value
+                    .get("nickname")
+                    .and_then(|nickname| nickname.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                service
+                    .set_nickname(nickname)
+                    .await
+                    .map(|snapshot| serde_json::json!(snapshot))
+                    .map_err(|error| error.to_string())
             }
             "set_profile" => {
                 let profile = crate::chat::settings::Profile {
-                    description: value.get("description").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    gender: value.get("gender").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    age_band: value.get("age_band").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    country: value.get("country").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    city: value.get("city").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    description: value
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    gender: value
+                        .get("gender")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    age_band: value
+                        .get("age_band")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    country: value
+                        .get("country")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    city: value
+                        .get("city")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
                 };
                 let show = value.get("show").and_then(|v| v.as_bool()).unwrap_or(false);
-                service.set_profile(profile, show).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+                service
+                    .set_profile(profile, show)
+                    .await
+                    .map(|snapshot| serde_json::json!(snapshot))
+                    .map_err(|error| error.to_string())
             }
             "ignore" => {
-                let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
-                service.ignore(sender).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+                let sender = value
+                    .get("sender")
+                    .and_then(|sender| sender.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                service
+                    .ignore(sender)
+                    .await
+                    .map(|snapshot| serde_json::json!(snapshot))
+                    .map_err(|error| error.to_string())
             }
             "unignore" => {
-                let sender = value.get("sender").and_then(|sender| sender.as_str()).unwrap_or_default().to_string();
-                service.unignore(sender).await.map(|snapshot| serde_json::json!(snapshot)).map_err(|error| error.to_string())
+                let sender = value
+                    .get("sender")
+                    .and_then(|sender| sender.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                service
+                    .unignore(sender)
+                    .await
+                    .map(|snapshot| serde_json::json!(snapshot))
+                    .map_err(|error| error.to_string())
             }
             "clear_local_data" => service
                 .clear_local_data()
@@ -2280,14 +2429,12 @@ fn open_external(raw: &str) -> Result<(), String> {
         let name = raw.trim_start_matches("fdn://").to_string();
         let domain_key = name.split('/').next().unwrap_or("").to_string();
         let domain_key = domain_key.trim_end_matches(".fdn").to_string();
-        if let Some(target) = remembered_choice(&domain_key) {
-            if let Ok(parsed) = url::Url::parse(&target) {
-                if matches!(parsed.scheme(), "http" | "https")
-                    && parsed.host_str().is_some_and(|host| host != "fdb.invalid")
-                {
-                    return open_external_http(&target);
-                }
-            }
+        if let Some(target) = remembered_choice(&domain_key)
+            && let Ok(parsed) = url::Url::parse(&target)
+            && matches!(parsed.scheme(), "http" | "https")
+            && parsed.host_str().is_some_and(|host| host != "fdb.invalid")
+        {
+            return open_external_http(&target);
         }
         let raw = raw.to_string();
         std::thread::spawn(move || {
@@ -2375,13 +2522,14 @@ fn spawn_navigation(target_id: i32, target: String) {
     }
     // Normal web URLs must not wait on registry + public-DNS probes. Only
     // free-namespace names (or bare input) need the resolver.
-    if let Ok(parsed) = url::Url::parse(&target) {
-        if matches!(parsed.scheme(), "http" | "https")
-            && parsed.host_str().is_some_and(|host| host != "fdn" && !host.ends_with(".fdn"))
-        {
-            post_page(target_id, target);
-            return;
-        }
+    if let Ok(parsed) = url::Url::parse(&target)
+        && matches!(parsed.scheme(), "http" | "https")
+        && parsed
+            .host_str()
+            .is_some_and(|host| host != "fdn" && !host.ends_with(".fdn"))
+    {
+        post_page(target_id, target);
+        return;
     }
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -2398,9 +2546,15 @@ fn spawn_navigation(target_id: i32, target: String) {
                 };
                 match navigator.resolve(&registry, &target).await {
                     Ok(outcome) => match outcome.kind {
-                        fdn_core::OutcomeKind::Conflict => internal_page_url(&conflict_page(&outcome)),
-                        fdn_core::OutcomeKind::Unregistered => internal_page_url(&claim_page(&outcome)),
-                        fdn_core::OutcomeKind::Unavailable => internal_page_url(&unavailable_page(&outcome)),
+                        fdn_core::OutcomeKind::Conflict => {
+                            internal_page_url(&conflict_page(&outcome))
+                        }
+                        fdn_core::OutcomeKind::Unregistered => {
+                            internal_page_url(&claim_page(&outcome))
+                        }
+                        fdn_core::OutcomeKind::Unavailable => {
+                            internal_page_url(&unavailable_page(&outcome))
+                        }
                         _ => {
                             let registry = if outcome.source == fdn_core::Source::GithubRegistry {
                                 crate::proxy::proxy_url(&outcome.domain, &outcome.path)
@@ -2482,7 +2636,7 @@ wrap_task! {
                     .find(|browser| browser.identifier() == self.target_id)
                     .cloned()
             };
-            let Some(mut target) = target else { return; };
+            let Some(target) = target else { return; };
             match self.kind {
                 BrowserCommandKind::Back => target.go_back(),
                 BrowserCommandKind::Forward => target.go_forward(),
@@ -2492,9 +2646,9 @@ wrap_task! {
     }
 }
 
-/// Runs a full layout pass of the content panel. Must execute AFTER the
-/// handler lock is released: CEF can re-enter `on_window_bounds_changed`,
-/// which locks the same mutex.
+// Runs a full layout pass of the content panel. Must execute AFTER the
+// handler lock is released: CEF can re-enter `on_window_bounds_changed`,
+// which locks the same mutex.
 wrap_task! {
     struct PanelLayout;
 
@@ -2505,22 +2659,22 @@ wrap_task! {
                 let handler = instance.lock().expect("Failed to lock handler");
                 handler.content_panel.clone()
             };
-            let Some(mut panel) = panel else { return };
+            let Some(panel) = panel else { return };
             panel.layout();
         }
     }
 }
 
-/// Post a content-panel layout pass. Safe to call while the handler mutex is
-/// held: the post happens through a fresh thread the way the other UI tasks
-/// in this file do (a synchronous CefPostTask can run the task inline, which
-/// would deadlock against our own lock).
+// Post a content-panel layout pass. Safe to call while the handler mutex is
+// held: the post happens through a fresh thread the way the other UI tasks
+// in this file do (a synchronous CefPostTask can run the task inline, which
+// would deadlock against our own lock).
 
-/// Add a view to the content panel, on the UI thread and without holding
-/// the handler lock. Every piece of context is re-read inside the task:
-/// wrappers created in this posted-task context are the live CEF objects
-/// (stored clones read from other threads report an empty view tree).
-/// flex 1 = active tab, flex 0 = chat strip.
+// Add a view to the content panel, on the UI thread and without holding
+// the handler lock. Every piece of context is re-read inside the task:
+// wrappers created in this posted-task context are the live CEF objects
+// (stored clones read from other threads report an empty view tree).
+// flex 1 = active tab, flex 0 = chat strip.
 wrap_task! {
     struct PanelAddChild {
         view: BrowserView,
@@ -2555,7 +2709,7 @@ wrap_task! {
             } else {
                 panel.add_child_view_at(Some(&mut child), panel.child_view_count() as i32);
             }
-            if let Some(mut layout) =
+            if let Some(layout) =
                 panel.get_layout().and_then(|layout| layout.as_box_layout())
             {
                 layout.set_flex_for_view(Some(&mut child), self.flex);
@@ -2578,8 +2732,8 @@ wrap_task! {
     }
 }
 
-/// Remove a view from the content panel, on the UI thread and unlocked
-/// (see PanelAddChild for the wrapper-staleness rationale).
+// Remove a view from the content panel, on the UI thread and unlocked
+// (see PanelAddChild for the wrapper-staleness rationale).
 wrap_task! {
     struct PanelRemoveChild {
         view: View,
@@ -2593,7 +2747,7 @@ wrap_task! {
                 handler.chrome_view.clone()
             };
             let Some(chrome_view) = chrome_view else { return };
-            let Some(mut panel) = live_panel(&chrome_view) else {
+            let Some(panel) = live_panel(&chrome_view) else {
                 return;
             };
             let mut view = self.view.clone();
@@ -2608,9 +2762,9 @@ wrap_task! {
 /// view tree), but BrowserView wrappers stay valid, so derive the panel
 /// through the chrome bar's own window: [chrome, panel].
 fn live_panel(chrome_view: &View) -> Option<Panel> {
-    let mut view = chrome_view.clone();
+    let view = chrome_view.clone();
     let window = view.window()?;
-    let mut panel_child = window.child_view_at(1)?;
+    let panel_child = window.child_view_at(1)?;
     panel_child.as_panel()
 }
 
@@ -2662,12 +2816,11 @@ wrap_task! {
                     .find(|browser| browser.identifier() == self.target_id)
                     .cloned()
             };
-            if let Some(mut target) = target {
-                if let Some(frame) = target.main_frame() {
-                    let mut frame = frame;
+            if let Some(target) = target
+                && let Some(frame) = target.main_frame() {
+                    let frame = frame;
                     frame.load_url(Some(&CefString::from(self.url.as_str())));
                 }
-            }
         }
     }
 }
@@ -2689,9 +2842,9 @@ wrap_task! {
                     .find(|browser| browser.identifier() == self.browser_id)
                     .cloned()
             };
-            let Some(mut target) = target else { return; };
+            let Some(target) = target else { return; };
             if let Some(frame) = target.main_frame() {
-                let mut frame = frame;
+                let frame = frame;
                 frame.execute_java_script(Some(&CefString::from(self.script.as_str())), None, 0);
             }
         }
@@ -2760,7 +2913,7 @@ wrap_task! {
                 inner.is_closing = true;
                 inner.browser_list.clone()
             };
-            for mut browser in browsers {
+            for browser in browsers {
                 if let Some(host) = browser.host() {
                     host.close_browser(self.force_close.into());
                 }
@@ -2771,12 +2924,16 @@ wrap_task! {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{choice_target, error_page, navigation_key, navigation_target, open_external, unavailable_page};
+    use super::{
+        choice_target, error_page, navigation_key, navigation_target, open_external,
+        unavailable_page,
+    };
 
     #[test]
     fn accepts_chrome_navigation() {
         assert_eq!(
-            navigation_target("https://fdb.invalid/navigate?url=https%3A%2F%2Fexample.com%2F").as_deref(),
+            navigation_target("https://fdb.invalid/navigate?url=https%3A%2F%2Fexample.com%2F")
+                .as_deref(),
             Some("https://example.com/")
         );
     }
@@ -2793,10 +2950,7 @@ mod navigation_tests {
         let choice = choice_target(
             "https://fdb.invalid/choose?domain=foo&target=https%3A%2F%2Ffoo.example%2F",
         );
-        assert_eq!(
-            choice,
-            Some(("foo".into(), "https://foo.example/".into()))
-        );
+        assert_eq!(choice, Some(("foo".into(), "https://foo.example/".into())));
         assert_eq!(
             choice_target("https://fdb.invalid/choose?domain=foo&target=javascript%3Aalert(1)"),
             None

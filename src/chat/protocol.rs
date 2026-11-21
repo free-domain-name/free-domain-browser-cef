@@ -244,7 +244,6 @@ impl Presence {
     }
 }
 
-
 impl ProfileCard {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
@@ -350,7 +349,10 @@ fn validate_profile(
         return Err(ProtocolError::Profile("unknown age band".to_string()));
     }
     if !country.is_empty()
-        && (country.len() != 2 || !country.chars().all(|character| character.is_ascii_alphabetic()))
+        && (country.len() != 2
+            || !country
+                .chars()
+                .all(|character| character.is_ascii_alphabetic()))
     {
         return Err(ProtocolError::Profile(
             "country must be a two-letter ISO code".to_string(),

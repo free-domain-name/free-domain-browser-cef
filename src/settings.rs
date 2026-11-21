@@ -47,7 +47,13 @@ impl Settings {
         }
         if !matches!(
             settings.skin.as_str(),
-            "default" | "high-tech" | "futuristic" | "historic" | "victorian" | "amazon" | "terminal"
+            "default"
+                | "high-tech"
+                | "futuristic"
+                | "historic"
+                | "victorian"
+                | "amazon"
+                | "terminal"
         ) {
             settings.skin = Settings::default().skin;
         }
@@ -143,7 +149,8 @@ mod tests {
 
     #[test]
     fn explicit_path_does_not_read_the_shared_fallback() {
-        let dir = std::env::temp_dir().join(format!("fdb-settings-explicit-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("fdb-settings-explicit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("settings.json");
         // SAFETY: environment mutation is process-global. This test owns the
@@ -169,12 +176,19 @@ mod tests {
         let value = serde_json::json!({"custom_css": css});
         let settings = Settings::from_value(&value).unwrap();
         assert!(settings.custom_css.len() <= 24_000);
-        assert!(settings.custom_css.is_char_boundary(settings.custom_css.len()));
+        assert!(
+            settings
+                .custom_css
+                .is_char_boundary(settings.custom_css.len())
+        );
     }
 
     #[test]
     fn empty_home_falls_back_to_default() {
         let value = serde_json::json!({"home":"  ","cookies":false,"dnt":true});
-        assert_eq!(Settings::from_value(&value).unwrap().home, Settings::default().home);
+        assert_eq!(
+            Settings::from_value(&value).unwrap().home,
+            Settings::default().home
+        );
     }
 }

@@ -16,10 +16,12 @@ the active tab (with a compact drawer), and community reviews open in a reusable
 dedicated review window.
 System/light/dark theme, all seven skins and compact density are applied to the
 chrome and internal pages; macOS gets a native app/Browser/Edit menu. The chat
-page talks to the ported iroh service; set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`) to enable
-the community relay, otherwise it reports “chat bootstrap is not configured”.
-Still pending: a Developer ID-signed/notarized release, native MSI/NSIS/AppImage/
-deb installers, and a production `fdn-chatd` lobby deployment. The chat
+page talks to the ported iroh service. The production relay and the lobby key
+are compiled in, so the community chat works out of the box; set
+`FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`), or write
+`<app-config-dir>/chat-bootstrap.json`, to point it at another lobby.
+Still pending: a Developer ID-signed/notarized release and native MSI/NSIS/AppImage/
+deb installers. The chat
 transport/protocol has been validated locally with two browser instances and a
 headless gossip peer over the public relay.
 

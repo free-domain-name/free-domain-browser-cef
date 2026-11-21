@@ -9,10 +9,10 @@
 
 use anyhow::{Context, Result};
 use iroh::{
-    address_lookup::memory::MemoryLookup, endpoint::presets, protocol::Router, Endpoint,
-    EndpointAddr, EndpointId, RelayMap, RelayMode, RelayUrl,
+    Endpoint, EndpointAddr, EndpointId, RelayMap, RelayMode, RelayUrl,
+    address_lookup::memory::MemoryLookup, endpoint::presets, protocol::Router,
 };
-use iroh_gossip::{api::GossipTopic, Gossip, ALPN};
+use iroh_gossip::{ALPN, Gossip, api::GossipTopic};
 
 use super::{config::BootstrapConfig, identity::Identity, protocol::PROTOCOL_VERSION};
 

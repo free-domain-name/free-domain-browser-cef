@@ -19,8 +19,8 @@ pub mod transport;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     sync::{
-        atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -47,9 +47,7 @@ pub fn runtime() -> &'static tokio::runtime::Runtime {
 
 pub fn service() -> &'static StdArc<ChatService> {
     static SERVICE: std::sync::OnceLock<StdArc<ChatService>> = std::sync::OnceLock::new();
-    SERVICE.get_or_init(|| {
-        StdArc::new(ChatService::new(AppHandle::new(StdArc::new(|_, _| {}))))
-    })
+    SERVICE.get_or_init(|| StdArc::new(ChatService::new(AppHandle::new(StdArc::new(|_, _| {})))))
 }
 
 pub struct AppHandle {
@@ -102,7 +100,7 @@ use self::{
     identity::Identity,
     policy::{LimitError, Policy},
     protocol::{
-        fingerprint, now_ms, Message, Presence, ProfileCard, ProtocolError, Wire, MAX_TEXT_CHARS,
+        MAX_TEXT_CHARS, Message, Presence, ProfileCard, ProtocolError, Wire, fingerprint, now_ms,
     },
     settings::{Profile, Settings, SettingsStore},
     transport::Transport,
@@ -290,7 +288,8 @@ impl ChatService {
             .or_else(|| {
                 let primary = crate::settings::config_dir();
                 let probe = primary.join(".chat-write-probe");
-                if std::fs::create_dir_all(&primary).is_ok() && std::fs::write(&probe, b"1").is_ok() {
+                if std::fs::create_dir_all(&primary).is_ok() && std::fs::write(&probe, b"1").is_ok()
+                {
                     let _ = std::fs::remove_file(probe);
                     Some(primary)
                 } else {
@@ -645,7 +644,6 @@ impl ChatService {
         Ok(self.snapshot().await)
     }
 
-
     pub async fn set_profile(
         &self,
         profile: Profile,
@@ -653,19 +651,16 @@ impl ChatService {
     ) -> Result<Snapshot, ChatError> {
         let profile = profile.normalized();
         profile.validate().map_err(ChatError::Invalid)?;
-        if show_in_rooms && !profile.is_empty() {
-            if let Some(shared) = self.session_shared().await {
-                let left = profile_cooldown_ms(&shared);
-                if left > 0 {
-                    return Err(ChatError::ProfileCooldown(left));
-                }
+        if show_in_rooms
+            && !profile.is_empty()
+            && let Some(shared) = self.session_shared().await
+        {
+            let left = profile_cooldown_ms(&shared);
+            if left > 0 {
+                return Err(ChatError::ProfileCooldown(left));
             }
         }
-        let next_version = self
-            .settings
-            .get()
-            .profile_version
-            .wrapping_add(1);
+        let next_version = self.settings.get().profile_version.wrapping_add(1);
         self.settings
             .update(|settings| {
                 settings.profile = profile.clone();
@@ -676,16 +671,18 @@ impl ChatService {
 
         let session = {
             let inner = self.inner.lock().await;
-            inner
-                .session
-                .as_ref()
-                .map(|session| (session.sender.clone(), Arc::clone(&session.identity), Arc::clone(&session.shared)))
+            inner.session.as_ref().map(|session| {
+                (
+                    session.sender.clone(),
+                    Arc::clone(&session.identity),
+                    Arc::clone(&session.shared),
+                )
+            })
         };
         if let Some((sender, identity, shared)) = session {
-            *shared.profile.lock().expect("profile lock") = Some(ProfileView::from_profile(&profile));
-            shared
-                .show_profile
-                .store(show_in_rooms, Ordering::Relaxed);
+            *shared.profile.lock().expect("profile lock") =
+                Some(ProfileView::from_profile(&profile));
+            shared.show_profile.store(show_in_rooms, Ordering::Relaxed);
             shared
                 .profile_version
                 .store(next_version, Ordering::Relaxed);
@@ -700,9 +697,7 @@ impl ChatService {
                 user.last_seen_ms = now_ms();
             }
             if show_in_rooms {
-                shared
-                    .last_profile_ms
-                    .store(now_ms(), Ordering::Relaxed);
+                shared.last_profile_ms.store(now_ms(), Ordering::Relaxed);
                 if let Ok(mut card) = ProfileCard::create(
                     &shared.room,
                     shared.node_id,
@@ -798,7 +793,10 @@ impl ChatService {
         self.stop_session().await;
         // Nothing was written to disk when the session ran with a fallback
         // identity, so skip the delete entirely in that case.
-        if !ephemeral_identity() && !self.identity_ephemeral.load(std::sync::atomic::Ordering::Relaxed)
+        if !ephemeral_identity()
+            && !self
+                .identity_ephemeral
+                .load(std::sync::atomic::Ordering::Relaxed)
         {
             let path = identity::identity_file_path(self.settings.dir());
             tokio::task::spawn_blocking(move || identity::delete(Some(path.as_path())))
@@ -1145,12 +1143,7 @@ fn emit_error(app: &AppHandle, message: &str) {
     let _ = app.emit(EVENT_ERROR, serde_json::json!({ "message": message }));
 }
 
-fn snapshot_from(
-    shared: &Shared,
-    settings: &Settings,
-    enabled: bool,
-    seq: u64,
-) -> Snapshot {
+fn snapshot_from(shared: &Shared, settings: &Settings, enabled: bool, seq: u64) -> Snapshot {
     let users = sorted_users(shared);
     let online = users.iter().filter(|user| !user.is_me).count();
     let messages = shared
@@ -1175,7 +1168,7 @@ fn snapshot_from(
             .lock()
             .expect("policy lock")
             .send_cooldown_ms(),
-        profile_cooldown_ms: profile_cooldown_ms(&shared),
+        profile_cooldown_ms: profile_cooldown_ms(shared),
         age_confirmed: settings.age_confirmed,
         error: shared.error.lock().expect("error lock").clone(),
         relay_url: shared.relay_url.clone(),
@@ -1202,4 +1195,3 @@ fn sorted_users(shared: &Shared) -> Vec<UserView> {
     });
     users
 }
-
