@@ -1,8 +1,8 @@
 # Plan 2 — parity gaps found by the full Tauri ↔ CEF audit (2026-11-14)
 
 Status: **implemented on 2026-11-14** — items 1–5, 7–12 are done (Rust + page
-changes below), item 6 was verified at runtime and needs no code, item 13
-remains deferred. See "Implementation status" at the end. Packaging work
+changes below), item 6 was verified at runtime and needs no code, item 13 was
+implemented on 2026-11-21. See "Implementation status" at the end. Packaging work
 (`.app`/DMG/zip/installers) is explicitly **out of scope** throughout.
 
 ## How this list was produced
@@ -315,8 +315,16 @@ are required for any of them.
   `close_chat_panel` command + `CloseChatPanel` variant, and chrome's unused
   `STUMBLE_URL`.
 - **Item 12 — done.** F5 now requires an empty modifier mask.
-- **Item 13 — deferred** (P3 stretch; overflow menu + full key matrix cover
-  Linux/Windows today).
+- **Item 13 — done (2026-11-21).** The Browser and Edit menus now exist on
+  every platform, from one shared model (`src/menu.rs`): macOS keeps its
+  AppKit menu, Windows gets a real Win32 menu bar (`src/menu_win32.rs`:
+  `AppendMenuW` plus a subclassed window procedure that turns `WM_COMMAND`
+  into menu commands), and Linux shows the same menu in a CEF window of its
+  own (`src/menu.rs::page_html`). Linux cannot host a native menu bar:
+  `libcef.so` links X11/xcb and not GTK (`nm -D libcef.so | grep -c gtk_`
+  is 0), so CEF draws its own X11 window and there is no GTK window to pack a
+  menu bar into. The menu opens with F10 or Alt+F, or from the chrome's
+  overflow menu, and every entry runs the same script as the native bars.
 - **Verification:** `cargo check` clean, 29/29 unit tests pass, all four
   modified page scripts pass `node --check`, hidden CDP smoke run green.
 

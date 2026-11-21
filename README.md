@@ -15,7 +15,10 @@ opens as an overlay below the chrome, chat as a 420 px side panel that follows
 the active tab (with a compact drawer), and community reviews open in a reusable
 dedicated review window.
 System/light/dark theme, all seven skins and compact density are applied to the
-chrome and internal pages; macOS gets a native app/Browser/Edit menu. The chat
+chrome and internal pages; the Browser and Edit menus exist on every platform:
+a native menu bar on macOS and Windows, and a menu window on Linux, where CEF
+draws its own X11 window and cannot host a native one. Press F10 or Alt+F to
+open it. The chat
 page talks to the ported iroh service. The production relay and the lobby key
 are compiled in, so the community chat works out of the box; set
 `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`), or write

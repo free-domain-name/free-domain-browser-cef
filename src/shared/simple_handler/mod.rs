@@ -36,6 +36,62 @@ type OsEvent<'a> = Option<&'a mut cef::sys::MSG>;
 
 static SIMPLE_HANDLER_INSTANCE: OnceLock<Weak<Mutex<SimpleHandler>>> = OnceLock::new();
 
+#[cfg(target_os = "windows")]
+/// Runs a native menu command.
+///
+/// The Linux and Windows menu bars call this with the scripts of the chosen
+/// entry: `script` runs in the chrome view and `page_script` in the page of
+/// the active tab.
+pub(crate) fn run_menu_command(script: &str, page_script: &str) {
+    let Some(instance) = SimpleHandler::instance() else {
+        return;
+    };
+    let handler = instance.lock().expect("Failed to lock handler");
+    if !script.is_empty() {
+        handler.chrome_execute(0, script);
+    }
+    if !page_script.is_empty() {
+        handler.active_tab_execute(page_script);
+    }
+}
+
+/// The scripts of the menu entry with the given Win32 command id.
+///
+/// The ids follow the order of the shared menu model: the first entry owns
+/// `FIRST_COMMAND_ID`, the next one the id after it. Separators have no id.
+#[cfg(target_os = "windows")]
+pub(crate) fn menu_command(id: usize) -> Option<(&'static str, &'static str)> {
+    let mut current = crate::menu_win32::FIRST_COMMAND_ID;
+    for menu in crate::menu::MENUS {
+        for entry in menu.entries {
+            if entry.is_separator() {
+                continue;
+            }
+            if current == id {
+                return Some((entry.script, entry.page_script));
+            }
+            current += 1;
+        }
+    }
+    None
+}
+
+/// Opens the menu window.
+///
+/// Only Linux uses it: there CEF draws its own X11 window and cannot host a
+/// native menu bar, so the menu is shown in a window of its own. The native
+/// menu bars of macOS and Windows do the same work.
+fn open_menu_window() {
+    #[cfg(target_os = "linux")]
+    {
+        let Some(instance) = SimpleHandler::instance() else {
+            return;
+        };
+        crate::shared::simple_app::create_menu_window(instance);
+        eprintln!("[menu] the menu window is opened");
+    }
+}
+
 enum BridgeAction {
     Navigate(i32, String),
     SaveSettings(crate::settings::Settings),
@@ -54,6 +110,10 @@ enum BridgeAction {
     About,
     FocusChrome,
     Quit,
+    /// Open the menu window (Linux, where there is no native menu bar).
+    MenuBar,
+    /// Run the menu entry with this id.
+    MenuAction(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -552,6 +612,27 @@ impl SimpleHandler {
             return;
         };
         let Some(frame) = chrome.main_frame() else {
+            return;
+        };
+        let frame = frame;
+        frame.execute_java_script(Some(&CefString::from(script)), None, 0);
+    }
+
+    /// Runs JavaScript in the page of the active tab.
+    ///
+    /// The native Edit menu uses this: the page lives in its own browser, so
+    /// the editing commands cannot run in the chrome view.
+    pub(crate) fn active_tab_execute(&self, script: &str) {
+        let Some(uid) = self.active_uid else {
+            return;
+        };
+        let Some(tab) = self.tab(uid) else {
+            return;
+        };
+        let Some(browser) = tab.view.browser() else {
+            return;
+        };
+        let Some(frame) = browser.main_frame() else {
             return;
         };
         let frame = frame;
@@ -1084,6 +1165,10 @@ impl SimpleHandler {
         let mut browser = browser;
         if Self::is_chrome_frame(&mut browser) {
             self.chrome_browser_id = Some(browser.identifier());
+            // The chrome browser is realized with the window, so this is the
+            // first moment the native menu bar can be attached to it.
+            #[cfg(target_os = "windows")]
+            install_menu_bar(Some(&mut browser));
             self.browser_list.push(browser);
             return;
         }
@@ -1099,6 +1184,10 @@ impl SimpleHandler {
             let mut candidate = View::from(&view);
             if chrome.is_same(Some(&mut candidate)) != 0 {
                 self.chrome_browser_id = Some(browser.identifier());
+                // The chrome browser is realized with the window, so this is
+                // the first moment the native menu bar can be attached to it.
+                #[cfg(target_os = "windows")]
+                install_menu_bar(Some(&mut browser));
                 return;
             }
         }
@@ -1425,6 +1514,11 @@ impl SimpleHandler {
             }
             "chat" => Some(BridgeAction::ToggleChatPanel),
             "about" => Some(BridgeAction::About),
+            "menu_bar" => Some(BridgeAction::MenuBar),
+            "menu_action" => value
+                .get("id")
+                .and_then(|id| id.as_u64())
+                .map(|id| BridgeAction::MenuAction(id as usize)),
             "review" => {
                 let domain = value.get("domain")?.as_str()?.trim();
                 if domain.is_empty() {
@@ -1805,6 +1899,21 @@ wrap_display_handler! {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
                     inner.switch_uid(uid);
                 }
+                Some(BridgeAction::MenuBar) => {
+                    open_menu_window();
+                }
+                Some(BridgeAction::MenuAction(id)) => {
+                    let Some(entry) = crate::menu::entry(id) else {
+                        return 1;
+                    };
+                    let inner = self.inner.lock().expect("Failed to lock inner");
+                    if !entry.script.is_empty() {
+                        inner.chrome_execute(0, entry.script);
+                    }
+                    if !entry.page_script.is_empty() {
+                        inner.active_tab_execute(entry.page_script);
+                    }
+                }
                 Some(BridgeAction::Quit) => {
                     let mut inner = self.inner.lock().expect("Failed to lock inner");
                     inner.close_all_browsers(true);
@@ -1889,6 +1998,10 @@ wrap_keyboard_handler! {
                 // Plain F5 only: with modifiers it belongs to the OS/macOS and
                 // must not trigger a reload.
                 Some("window.fdbReload&&fdbReload()")
+            } else if modifiers == 0 && key == 121 {
+                // F10 opens the menu, the way every other browser does.
+                open_menu_window();
+                return 1;
             } else {
                 None
             };

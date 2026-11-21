@@ -69,6 +69,30 @@ for _ in $(seq 1 120); do
       exit 1
     fi
     echo "browser is running"
+    # F10 opens the menu window. Press it and take a screenshot of the
+    # virtual display so the menu can be looked at.
+    sleep 2
+    if command -v xdotool >/dev/null 2>&1; then
+      xdotool search --name "Free Domain Browser" windowactivate --sync 2>/dev/null || true
+      xdotool key F10 2>/dev/null || true
+      sleep 2
+    fi
+    if grep -q "the menu window is opened" "$LOG"; then
+      echo "the menu window is opened"
+    else
+      echo "the menu window was NOT opened" >&2
+    fi
+    # The menu opens in a window of its own: the display should show the
+    # browser window and the menu window.
+    if command -v xwininfo >/dev/null 2>&1; then
+      xwininfo -root -tree 2>/dev/null | grep -E "0x[0-9a-f]+" | head -8
+    fi
+    if command -v import >/dev/null 2>&1; then
+      shot="${FDB_SMOKE_SHOT:-/tmp/fdb-cef-linux.png}"
+      if import -window root "$shot" 2>/dev/null; then
+        echo "screenshot: $shot"
+      fi
+    fi
     exit 0
   fi
   sleep 1

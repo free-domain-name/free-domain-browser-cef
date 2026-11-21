@@ -273,6 +273,44 @@ wrap_panel_delegate! {
     impl PanelDelegate {}
 }
 
+wrap_window_delegate! {
+    // The window that shows the menu on Linux, where CEF draws its own X11
+    // window and cannot host a native menu bar.
+    struct MenuWindowDelegate {
+        content_view: RefCell<Option<BrowserView>>,
+    }
+
+    impl ViewDelegate {
+        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
+            Size {
+                width: 260,
+                height: 380,
+            }
+        }
+
+        fn minimum_size(&self, _view: Option<&mut View>) -> Size {
+            Size {
+                width: 200,
+                height: 160,
+            }
+        }
+    }
+
+    impl PanelDelegate {}
+
+    impl WindowDelegate {
+        fn on_window_created(&self, window: Option<&mut Window>) {
+            let Some(window) = window else { return };
+            window.set_title(Some(&CefString::from("Menu")));
+            let content = self.content_view.borrow();
+            if let Some(view) = content.as_ref() {
+                let mut view = View::from(view);
+                window.add_child_view(Some(&mut view));
+            }
+        }
+    }
+}
+
 wrap_browser_view_delegate! {
     struct SimpleBrowserViewDelegate {
         runtime_style: RuntimeStyle,
@@ -315,6 +353,21 @@ wrap_browser_view_delegate! {
             self.runtime_style
         }
     }
+}
+
+/// Opens the menu window.
+///
+/// Linux is the only platform that needs this: CEF draws its own X11 window
+/// there and cannot host a native menu bar, so the menu is shown in a window
+/// of its own. The entries are the ones the native menu bars show.
+pub fn create_menu_window(inner: std::sync::Arc<std::sync::Mutex<SimpleHandler>>) {
+    let html = crate::menu::page_html();
+    let url = get_data_uri(html.as_bytes(), "text/html");
+    let Some(view) = create_content_view(inner, &url) else {
+        return;
+    };
+    let mut delegate = MenuWindowDelegate::new(RefCell::new(Some(view)));
+    window_create_top_level(Some(&mut delegate));
 }
 
 /// Create a content BrowserView for a new tab. The caller must not hold the

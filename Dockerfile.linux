@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libasound2-dev libatk1.0-dev libcups2-dev libdrm-dev libxrandr-dev \
       libxcomposite-dev libxdamage-dev libxfixes-dev libpango1.0-dev \
       libcairo2-dev libgl1-mesa-dri libglx-mesa0 libegl1 \
-      xvfb x11-utils dbus-x11 fonts-liberation \
+      xvfb x11-utils dbus-x11 fonts-liberation imagemagick xdotool \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -31,14 +31,12 @@ ENV CARGO_PROFILE_DEV_DEBUG=0
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_BUILD_JOBS=2
 RUN cargo fetch --locked
-# Split into layers so a failure in the app itself does not throw away the
-# dependency build or the downloaded CEF distribution.
-RUN cargo build -j 2 -p cef-dll-sys
-RUN cargo build -j 2 --bin free_domain_browser_cef_helper
-RUN cargo build -j 2 --bin free-domain-browser-cef
-# The packaging binary is what the Linux release job runs, so it has to
-# compile on Linux as well.
-RUN cargo build -j 2 --bin bundle
+# One layer for the whole build: the build tree is tens of gigabytes, and
+# removing the intermediates afterwards keeps the image small enough for a
+# small build machine.
+RUN cargo build -j 2 --bin free-domain-browser-cef --bin free_domain_browser_cef_helper --bin bundle \
+    && rm -rf /app/target/debug/deps /app/target/debug/build \
+              /app/target/debug/incremental /app/target/debug/.fingerprint
 # The downloaded archive is not needed at runtime and is 400 MB.
 RUN rm -f /app/cef-binary/*/*.tar.bz2
 

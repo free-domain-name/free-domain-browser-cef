@@ -4,6 +4,9 @@
 )]
 
 pub mod chat;
+pub mod menu;
+#[cfg(target_os = "windows")]
+pub mod menu_win32;
 pub mod proxy;
 pub mod settings;
 pub mod shared;
