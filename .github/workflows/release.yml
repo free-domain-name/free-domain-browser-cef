@@ -90,8 +90,35 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Write the checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum ./* > checksums.txt
+
       - name: Publish tagged release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
           fail_on_unmatched_files: false
+          # The CEF build is a preview: the packages are unsigned, there is no
+          # notarization and no installer, so it must not become "Latest".
+          prerelease: true
+          make_latest: false
+          body: |
+            Portable preview builds of the CEF (Chromium Embedded Framework) browser.
+
+            - macOS: portable zip
+            - Linux: portable tar.gz and Debian package
+            - Windows: portable zip and setup executable
+
+            These builds are unsigned and are not notarized, so macOS and Windows may
+            ask you to confirm the first launch. Every file is listed in
+            `checksums.txt` with its SHA-256.
+
+            The Tauri build with signed installers is the stable one:
+            https://github.com/free-domain-name/tauri-browser/releases
+
+            Source code: https://github.com/free-domain-name/free-domain-browser-cef
+            Registry: https://github.com/free-domain-name/registry

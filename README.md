@@ -28,6 +28,25 @@ deb installers. The chat
 transport/protocol has been validated locally with two browser instances and a
 headless gossip peer over the public relay.
 
+## Links
+
+- Project site: <https://free-domain-name.github.io/>
+- Browser page: <https://free-domain-name.github.io/tauri-browser/>
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## Preview build
+
+CI publishes portable preview builds as a GitHub prerelease:
+<https://github.com/free-domain-name/free-domain-browser-cef/releases>
+
+Pushing a `v*` tag builds the browser for macOS, Linux and Windows and
+publishes the archives with a `checksums.txt`. The packages are unsigned and
+are not notarized, so macOS and Windows may ask you to confirm the first
+launch. There is no release yet.
+
+The stable build with installers is the Tauri one:
+<https://github.com/free-domain-name/tauri-browser/releases>
+
 ## Requirements
 
 - macOS, x86_64 Linux, or Windows
