@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: desktop functionality is ported, including settings/chat overlays, a reusable dedicated review window, native macOS menus, themed/compact internal pages and verified DMG plus portable archive packaging. Remaining work is non-macOS native installer polish and platform-limited mobile support. See `MIGRATION.md`.
+Status: desktop functionality is ported, including settings/chat overlays, a reusable dedicated review window, native menus on every platform, themed/compact internal pages and verified DMG plus portable archive packaging. Remaining work is the MSI/AppImage installers, Apple notarization credentials, a Windows CI runtime check and platform-limited mobile support. See `MIGRATION.md`.
 
 ## Constraints
 
@@ -24,7 +24,7 @@ Status: desktop functionality is ported, including settings/chat overlays, a reu
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
 - Reviews open in a reusable dedicated CEF top-level window; system/light/dark theme, all seven skins and compact density reach the chrome and internal pages.
 - The chat panel tracks the active tab and hides/shows as tabs change.
-- macOS has a native app/Browser/Edit menu; other platforms use the overflow menu.
+- The Browser and Edit menus exist on every platform: a native menu bar on macOS and Windows, and a menu window on Linux, where CEF draws its own X11 window.
 - Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
 
 ## Phase 0 — stable dev loop (mostly done)

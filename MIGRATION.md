@@ -21,7 +21,7 @@ commits are made here.
 
 ## Verified
 
-- CEF unit tests: 28 passed.
+- CEF unit tests: 33 passed.
 - `fdn-core` Linux tests: 14 passed, 5 live-network ignored.
 - Headless Chromium checks of chrome, status bar, start page, settings and chat
   (including compact side-panel mode) with dynamic DOM assertions.
@@ -75,7 +75,7 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Built-in skins | seven skins across chrome/pages | seven chrome and internal-page palettes | match |
 | Custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
 | Settings | in-chrome overlay, instant apply | fixed overlay below the chrome, instant apply, close/Escape | match |
-| Application menu | native OS Browser/Edit menu | native macOS app/Browser/Edit menu plus overflow fallback and keyboard handler | match on macOS; overflow on Linux/Windows |
+| Application menu | native OS Browser/Edit menu | native app/Browser/Edit menu on macOS and Windows, a menu window on Linux (CEF draws its own X11 window there), plus the overflow fallback | match |
 | External open | resolves registry target / public URL | resolves and opens registry target / public URL | match |
 | Popup -> tab | new tab through resolver | `on_before_popup` creates a tab through the resolver | match |
 | Downloads | no handler | automatic `~/Downloads` save with progress | CEF ahead |
@@ -89,11 +89,11 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 
 ## Remaining work
 
-- Windows executable resource metadata and Linux distribution packaging are
-  portable archives, a Linux `.deb` and a Windows NSIS setup rather than MSI/AppImage installers.
-- Linux/Windows menus use the cross-platform overflow fallback; macOS gets the
-  native app/Browser/Edit menu.
-- Mobile targets are outside the CEF desktop prototype; CEF is a desktop
-  embedding and this repository does not ship Android/iOS shells.
+- Installers are the portable archives, a Linux `.deb` and a Windows NSIS
+  setup; MSI and AppImage packages are not produced.
+- The Windows runtime is packaged but never launched in CI; only the Linux
+  container build is verified today.
 - Notarization still needs Apple credentials; ad-hoc signing is done by the
   bundle helper. Lobby deployment still needs a production `fdn-chatd`.
+- Mobile targets are outside the CEF desktop prototype; CEF is a desktop
+  embedding and this repository does not ship Android/iOS shells.

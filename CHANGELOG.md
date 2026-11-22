@@ -6,11 +6,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Run the macOS CI job again. The `macos-14` runner image was retired, so the
+  `macos-smoke` job was cancelled before it ran a single step and the macOS
+  release package was never built. Both workflows use `macos-latest` now, and
+  the CEF cache key follows the runner architecture.
+- Refresh the docs: the Browser and Edit menus exist on every platform, the
+  Linux `.deb` and the Windows NSIS setup are built, and the test count is
+  current.
+
 ### Open
 
 - Sign the release builds. Everything published so far is unsigned.
 - Notarize the macOS bundle. No Apple credentials are wired into the build.
-- Build the native installers: MSI, NSIS, AppImage and .deb.
+- Build the native MSI and AppImage installers. The Linux `.deb` and the
+  Windows NSIS setup are already produced by the packaging scripts.
 - Verify the Windows runtime in CI. Only the Linux container build is verified today.
 
 ### Known limitations

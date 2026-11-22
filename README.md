@@ -18,15 +18,14 @@ System/light/dark theme, all seven skins and compact density are applied to the
 chrome and internal pages; the Browser and Edit menus exist on every platform:
 a native menu bar on macOS and Windows, and a menu window on Linux, where CEF
 draws its own X11 window and cannot host a native one. Press F10 or Alt+F to
-open it. The chat
-page talks to the ported iroh service. The production relay and the lobby key
-are compiled in, so the community chat works out of the box; set
-`FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`), or write
+open it. The chat page talks to the ported iroh service. The production relay
+and the lobby key are compiled in, so the community chat works out of the box;
+set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`), or write
 `<app-config-dir>/chat-bootstrap.json`, to point it at another lobby.
-Still pending: a Developer ID-signed/notarized release and native MSI/NSIS/AppImage/
-deb installers. The chat
-transport/protocol has been validated locally with two browser instances and a
-headless gossip peer over the public relay.
+Still pending: a Developer ID-signed/notarized release and native MSI/AppImage
+installers; the Linux `.deb` and the Windows NSIS setup are already produced by
+the packaging scripts. The chat transport/protocol has been validated locally
+with two browser instances and a headless gossip peer over the public relay.
 
 ## Links
 
