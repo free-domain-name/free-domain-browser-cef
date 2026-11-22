@@ -3,6 +3,9 @@
 #
 # The package has to carry the CEF runtime next to the executable; the check
 # below fails when it does not.
+#
+# The DevTools endpoint is read with curl.exe, the same way the shell script
+# reads it on macOS and Linux.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
@@ -33,30 +36,48 @@ function Stop-Browser {
     -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
+function Get-Cdp([string]$path) {
+  $body = & curl.exe -s --fail --max-time 5 "http://127.0.0.1:$port$path" 2>$null
+  if ($LASTEXITCODE -ne 0) { return $null }
+  if (-not $body) { return $null }
+  return ($body -join "`n")
+}
+
+function Show-Log {
+  Write-Host "browser log:"
+  Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 20
+  Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 20
+}
+
+function Show-Probe {
+  Write-Host "DevTools probe:"
+  & curl.exe -v --max-time 5 "http://127.0.0.1:$port/json/version" 2>&1 | Select-Object -Last 20
+}
+
 $ready = $false
 for ($i = 0; $i -lt 180; $i++) {
-  try {
-    $version = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/version" -TimeoutSec 2
+  $version = Get-Cdp "/json/version"
+  if ($version) {
     $ready = $true
     break
-  } catch {
-    if ($proc.HasExited) {
-      Write-Host "the browser exited early; last log:"
-      Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 20
-      exit 1
-    }
-    Start-Sleep -Seconds 1
   }
+  if ($proc.HasExited) {
+    Write-Host "the browser exited early:"
+    Show-Log
+    exit 1
+  }
+  Start-Sleep -Seconds 1
 }
 if (-not $ready) {
-  Write-Host "timed out waiting for CEF; last log:"
-  Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 20
+  Write-Host "timed out waiting for CEF:"
+  Show-Log
+  Show-Probe
   Stop-Browser
   exit 1
 }
 
 Write-Host "CEF DevTools ready on $port"
-$targets = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json" -TimeoutSec 5
+$targets = (Get-Cdp "/json") | ConvertFrom-Json
 Write-Host "$($targets.Count) targets"
 foreach ($target in $targets) { Write-Host $target.url }
 
@@ -64,13 +85,14 @@ if ($expect) {
   $found = $targets | Where-Object { $_.url -like "*$expect*" }
   if (-not $found) {
     Write-Host "expected target not found: $expect"
+    Show-Log
     Stop-Browser
     exit 1
   }
 }
 if ($proc.HasExited) {
-  Write-Host "the browser exited early; last log:"
-  Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 20
+  Write-Host "the browser exited early:"
+  Show-Log
   exit 1
 }
 Write-Host "the packaged browser is running"
