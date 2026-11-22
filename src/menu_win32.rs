@@ -81,16 +81,16 @@ mod win32 {
             }
             return 0;
         }
+        let previous = PREVIOUS_PROC.load(Ordering::SeqCst);
         if message == WM_NCDESTROY {
             // Give the window back to CEF before it goes away.
-            let previous = PREVIOUS_PROC.swap(0, Ordering::SeqCst);
+            PREVIOUS_PROC.store(0, Ordering::SeqCst);
             if previous != 0 {
                 unsafe {
                     SetWindowLongPtrW(hwnd, GWLP_WNDPROC, previous as isize);
                 }
             }
         }
-        let previous = PREVIOUS_PROC.load(Ordering::SeqCst);
         if previous == 0 {
             return 0;
         }
