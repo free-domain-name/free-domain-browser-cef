@@ -94,8 +94,9 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 
 - Installers are the portable archives, a Linux `.deb` and a Windows NSIS
   setup; MSI and AppImage packages are not produced.
-- The Windows runtime is packaged but never launched in CI; only the Linux
-  container build is verified today.
+- The Windows runtime now runs in CI: the job packages the browser, starts the
+  packaged executable and checks its DevTools endpoint, and the Linux container
+  build does the same with the tarball.
 - Notarization still needs Apple credentials; ad-hoc signing is done by the
   bundle helper. Lobby deployment still needs a production `fdn-chatd`.
 - Mobile targets are outside the CEF desktop prototype; CEF is a desktop

@@ -42,9 +42,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add the packaging scripts for macOS, Linux and Windows.
 - Publish the Linux preview package from CI as a prerelease, with a
   `checksums.txt` next to it.
+- Add the page of this build at
+  <https://free-domain-name.github.io/free-domain-browser-cef/>, and a section
+  on the project home page that puts this build and the stable Tauri build side
+  by side.
 
 ### Fixed
 
+- Build the browser for Windows at all. The Windows code did not compile: it
+  used the browser host trait without importing it and treated the window
+  handle as a raw pointer, while it is the `HWND` wrapper around it. The
+  release job went green anyway, because PowerShell does not stop on a native
+  command that fails, so the packaging script now checks the exit code.
+- Stop the native menu bar from freezing the browser on Windows. The menu was
+  set on the window from inside the CEF callback that asked for it, which
+  deadlocked the UI thread: the browser started, but it never answered on its
+  DevTools port. The window procedure is taken over first and the menu is set
+  by a message that the window handles in its own message loop.
 - Ship the CEF runtime with the Linux and Windows packages. The archives only
   carried the browser binaries, so a user could not start them: the loader
   found no `libcef.so` and Windows found no `libcef.dll`. The packages now
