@@ -173,15 +173,18 @@ jobs:
           body: |
             Portable preview builds of the CEF (Chromium Embedded Framework) browser.
 
-            - macOS: portable zip and disk image
+            - macOS: portable zip and disk image, signed with the Developer ID and
+              notarized by Apple
             - Linux: portable tar.gz and Debian package
             - Windows: portable zip and setup executable
 
-            These builds are unsigned and are not notarized, so macOS and Windows may
-            ask you to confirm the first launch. Every file is listed in
+            The macOS build is signed and notarized: Gatekeeper reports it as
+            "Notarized Developer ID", so it opens without the extra confirmation.
+            The Linux and Windows builds are not signed, so Windows may still ask
+            you to confirm the first launch. Every file is listed in
             `checksums.txt` with its SHA-256.
 
-            The Tauri build with signed installers is the stable one:
+            The Tauri build with installers is the stable one:
             https://github.com/free-domain-name/tauri-browser/releases
 
             Source code: https://github.com/free-domain-name/free-domain-browser-cef
