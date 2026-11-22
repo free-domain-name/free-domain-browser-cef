@@ -23,7 +23,20 @@ sign() {
     --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$1"
 }
 
-# Sign helper executables first, then the framework, then the outer app.
+# The libraries inside the framework are nested code of their own. They come
+# with a linker signature only, and the notary rejects the whole archive when
+# one of them is not signed with a real certificate.
+sign_library() {
+  codesign --force --timestamp --sign "$IDENTITY" "$1"
+}
+
+# Sign the nested libraries first, then the helper executables, then the
+# framework, then the outer app: a container is signed after its contents.
+find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.so" \) -type f -print0 |
+  while IFS= read -r -d '' library; do
+    sign_library "$library"
+  done
+
 find "$APP/Contents/Frameworks" -type f -path '*/Contents/MacOS/*' -print0 |
   while IFS= read -r -d '' helper; do
     sign "$helper"
