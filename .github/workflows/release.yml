@@ -109,7 +109,7 @@ jobs:
           body: |
             Portable preview builds of the CEF (Chromium Embedded Framework) browser.
 
-            - macOS: portable zip
+            - macOS: portable zip and disk image
             - Linux: portable tar.gz and Debian package
             - Windows: portable zip and setup executable
 
