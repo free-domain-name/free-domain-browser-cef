@@ -54,7 +54,7 @@ for entry in "$runtime"/*; do
   base="$(basename "$entry")"
   case "$base" in
     # Development files are not needed to run the browser.
-    include|cmake|CMakeLists.txt|*.tar.bz2) continue ;;
+    include|cmake|CMakeLists.txt|libcef_dll|*.tar.bz2) continue ;;
   esac
   cp -R "$entry" "$STAGE/"
 done

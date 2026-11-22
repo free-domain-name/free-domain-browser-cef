@@ -42,7 +42,8 @@ CI publishes portable preview builds as a GitHub prerelease:
 Pushing a `v*` tag builds the browser for macOS, Linux and Windows and
 publishes the archives with a `checksums.txt`. The packages are unsigned and
 are not notarized, so macOS and Windows may ask you to confirm the first
-launch. There is no release yet.
+launch. The first preview is
+[v0.1.0](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.0).
 
 The stable build with installers is the Tauri one:
 <https://github.com/free-domain-name/tauri-browser/releases>

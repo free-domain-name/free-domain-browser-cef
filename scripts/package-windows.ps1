@@ -45,7 +45,7 @@ foreach ($candidate in @($cefRoot, "$cefRoot/*", "$cefRoot/*/*")) {
   if ($null -ne $dir) { $runtime = $dir.FullName; break }
 }
 if ($null -eq $runtime) { throw "libcef.dll not found below $cefRoot" }
-Get-ChildItem $runtime | Where-Object { $_.Name -notin @("include", "cmake", "CMakeLists.txt") } |
+Get-ChildItem $runtime | Where-Object { $_.Name -notin @("include", "cmake", "CMakeLists.txt", "libcef_dll") } |
   ForEach-Object { Copy-Item -Recurse -Force $_.FullName $stage }
 Write-Host "CEF runtime: $runtime"
 
@@ -56,7 +56,24 @@ Write-Host "wrote $out"
 
 # Build an NSIS installer when makensis is available; the portable zip remains
 # the fallback on machines without NSIS.
+#
+# A machine that just installed NSIS does not have it on PATH yet: the
+# runner picks up the new PATH value with the next process, so the usual
+# install directories are searched as well.
 $nsis = Get-Command makensis -ErrorAction SilentlyContinue
+if ($null -eq $nsis) {
+  $known = @(
+    "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+    "$env:ProgramFiles\NSIS\makensis.exe",
+    "$env:LOCALAPPDATA\Programs\NSIS\makensis.exe"
+  )
+  foreach ($path in $known) {
+    if ($path -and (Test-Path $path)) {
+      $nsis = Get-Item $path
+      break
+    }
+  }
+}
 if ($null -ne $nsis) {
   $stageAbs = (Resolve-Path $stage).Path
   $setup = Join-Path (Get-Location) "target/$name-setup.exe"
