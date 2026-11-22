@@ -29,9 +29,10 @@ pub fn install_menu_bar(browser: Option<&mut Browser>) {
     let Some(browser) = browser else { return };
     let Some(host) = browser.host() else { return };
     let handle = host.window_handle();
-    if handle.is_null() {
+    // On Windows the window handle is the `HWND` wrapper around the pointer.
+    if handle.0.is_null() {
         return;
     }
-    crate::menu_win32::install(handle as *mut c_void);
+    crate::menu_win32::install(handle.0 as *mut c_void);
     INSTALLED.store(true, std::sync::atomic::Ordering::SeqCst);
 }
