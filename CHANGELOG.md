@@ -6,16 +6,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- Run the macOS CI job again. The `macos-14` runner image was retired, so the
-  `macos-smoke` job was cancelled before it ran a single step and the macOS
-  release package was never built. Both workflows use `macos-latest` now, and
-  the CEF cache key follows the runner architecture.
-- Refresh the docs: the Browser and Edit menus exist on every platform, the
-  Linux `.deb` and the Windows NSIS setup are built, and the test count is
-  current.
-
 ### Open
 
 - Sign the release builds. Everything published so far is unsigned.
@@ -30,7 +20,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   settings instead of the OS keychain.
 - Ship the preview as an unsigned build.
 
-## [0.1.0] - 2026-11-21
+## [0.1.0] - 2026-11-22
 
 ### Added
 
@@ -52,6 +42,16 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add the packaging scripts for macOS, Linux and Windows.
 - Publish the Linux preview package from CI as a prerelease, with a
   `checksums.txt` next to it.
+
+### Fixed
+
+- Run the macOS CI job again. The `macos-14` runner image was retired, so the
+  `macos-smoke` job was cancelled before it ran a single step and the macOS
+  release package was never built. Both workflows use `macos-latest` now, and
+  the CEF cache key follows the runner architecture.
+- Refresh the docs: the Browser and Edit menus exist on every platform, the
+  Linux `.deb` and the Windows NSIS setup are built, and the test count is
+  current.
 
 [Unreleased]: https://github.com/free-domain-name/free-domain-browser-cef/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.0
