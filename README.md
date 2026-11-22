@@ -123,6 +123,13 @@ Portable Linux and Windows archives can be built on their native platforms:
 ./scripts/package-windows.ps1  # zip, plus NSIS setup.exe when makensis exists
 ```
 
+Both packages carry the CEF runtime next to the browser, so they start without
+any other file. The Linux package starts through a launcher that points the
+loader at that runtime; a tarball cannot ship the setuid sandbox helper as
+root, so the launcher says so and runs without the sandbox until the helper is
+installed. The Debian package installs the helper as root and keeps the
+sandbox.
+
 Tagged `v*` pushes run `.github/workflows/release.yml`, which builds those
 portable archives, a Linux `.deb`, and a Windows NSIS setup when the tools are
 available, and attaches them to the GitHub release. These are ad-hoc/unsigned

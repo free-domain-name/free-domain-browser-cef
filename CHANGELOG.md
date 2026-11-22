@@ -45,6 +45,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Ship the CEF runtime with the Linux and Windows packages. The archives only
+  carried the browser binaries, so a user could not start them: the loader
+  found no `libcef.so` and Windows found no `libcef.dll`. The packages now
+  carry the runtime and its resources, the Linux package starts through a
+  launcher that points the loader at it and reports the missing setuid
+  sandbox, and the Debian package installs the sandbox helper as root.
 - Run the macOS CI job again. The `macos-14` runner image was retired, so the
   `macos-smoke` job was cancelled before it ran a single step and the macOS
   release package was never built. Both workflows use `macos-latest` now, and

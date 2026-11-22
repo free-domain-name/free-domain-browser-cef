@@ -1,4 +1,11 @@
 fn main() {
+    // The Linux packages ship the CEF runtime next to the executable, so the
+    // loader has to look there. The launcher also sets LD_LIBRARY_PATH; this
+    // keeps the binary working when it is started directly.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN");
+    }
+
     #[cfg(windows)]
     {
         let mut resource = winres::WindowsResource::new();

@@ -74,3 +74,29 @@ jobs:
         with:
           name: cef-smoke-log
           path: ${{ runner.temp }}/free-domain-browser-cef-smoke.log
+
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - name: Package the browser
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+        env:
+          FDB_PROFILE: debug
+      - name: Hidden CEF smoke
+        shell: pwsh
+        env:
+          FDB_SMOKE_EXPECT: github.com
+        run: ./scripts/smoke-hidden.ps1
+      - name: Upload CEF log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cef-smoke-log-windows
+          path: ${{ runner.temp }}/free-domain-browser-cef-smoke.*.log

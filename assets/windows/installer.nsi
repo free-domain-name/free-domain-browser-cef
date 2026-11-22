@@ -26,7 +26,7 @@ RequestExecutionLevel user
 
 Section "Free Domain Browser" SecMain
   SetOutPath "$INSTDIR"
-  File /r "${STAGE}\*.*"
+  File /r "${STAGE}\*"
   CreateShortCut "$DESKTOP\Free Domain Browser.lnk" "$INSTDIR\free-domain-browser-cef.exe"
   CreateShortCut "$SMPROGRAMS\Free Domain Browser.lnk" "$INSTDIR\free-domain-browser-cef.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"

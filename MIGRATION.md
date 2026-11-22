@@ -29,6 +29,9 @@ commits are made here.
   switching tabs, theme switch, review-window reuse and native menu installation.
 - Linux `.deb` assembly was verified with `dpkg-deb`, and the Windows NSIS
   script was compiled to a PE installer with `makensis` (in Docker).
+- The portable packages carry the CEF runtime: the Linux container smoke test
+  unpacks the tarball and starts the packaged browser, and the Windows CI job
+  runs the packaged executable and checks its DevTools endpoint.
 - macOS bundle build: `assets/mac/free-domain-browser-cef.icns` copied into
   `Contents/Resources`, `CFBundleIconFile`, Utilities category, copyright,
   display name, high-resolution flag and the GPL LICENSE populated. The DMG was

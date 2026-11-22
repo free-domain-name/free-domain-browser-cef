@@ -40,7 +40,13 @@ RUN cargo build -j 2 --bin free-domain-browser-cef --bin free_domain_browser_cef
 # The downloaded archive is not needed at runtime and is 400 MB.
 RUN rm -f /app/cef-binary/*/*.tar.bz2
 
-COPY scripts/smoke-linux.sh /usr/local/bin/smoke-linux.sh
-RUN chmod +x /usr/local/bin/smoke-linux.sh
+# Build the portable package from the same binaries and check that the
+# package really carries the CEF runtime and starts.
+ENV FDB_PROFILE=debug FDB_SKIP_BUILD=1 FDB_BIN_DIR=/app/target/debug
+RUN ./scripts/package-linux.sh
 
-CMD ["/usr/local/bin/smoke-linux.sh"]
+COPY scripts/smoke-linux.sh /usr/local/bin/smoke-linux.sh
+COPY scripts/smoke-linux-package.sh /usr/local/bin/smoke-linux-package.sh
+RUN chmod +x /usr/local/bin/smoke-linux.sh /usr/local/bin/smoke-linux-package.sh
+
+CMD ["/bin/sh", "-c", "/usr/local/bin/smoke-linux.sh && /usr/local/bin/smoke-linux-package.sh"]
