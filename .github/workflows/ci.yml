@@ -84,6 +84,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
+      # NSIS is installed here on purpose: without it the packaging script
+      # skips the installer and the path stays untested.
+      - name: Install the Windows build tools
+        shell: pwsh
+        run: choco install cmake ninja nsis -y --no-progress
       - name: Package the browser
         shell: pwsh
         run: ./scripts/package-windows.ps1
