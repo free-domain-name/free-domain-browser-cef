@@ -9,10 +9,8 @@ rm -f "$OUT"
 ditto -c -k --keepParent "$APP" "$OUT"
 echo "wrote $OUT"
 if command -v hdiutil >/dev/null 2>&1; then
-  DMG="target/FreeDomainBrowser-CEF.dmg"
-  rm -f "$DMG"
-  if hdiutil create -volname "Free Domain Browser" -srcfolder "$APP" -ov -format UDZO "$DMG"; then
-    echo "wrote $DMG"
+  if ./scripts/make-dmg.sh; then
+    :
   else
     echo "warning: DMG creation failed; the .app zip is still available" >&2
   fi

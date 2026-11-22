@@ -122,9 +122,7 @@ jobs:
           rm -f target/FreeDomainBrowser-CEF.zip target/FreeDomainBrowser-CEF.dmg
           ditto -c -k --keepParent target/bundle/free-domain-browser-cef.app \
             target/FreeDomainBrowser-CEF.zip
-          hdiutil create -volname "Free Domain Browser" \
-            -srcfolder target/bundle/free-domain-browser-cef.app \
-            -ov -format UDZO target/FreeDomainBrowser-CEF.dmg
+          ./scripts/make-dmg.sh
           xcrun stapler validate target/bundle/free-domain-browser-cef.app
           spctl --assess --type execute --verbose=2 \
             target/bundle/free-domain-browser-cef.app
