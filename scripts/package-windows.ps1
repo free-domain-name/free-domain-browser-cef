@@ -60,8 +60,11 @@ Write-Host "wrote $out"
 # A machine that just installed NSIS does not have it on PATH yet: the
 # runner picks up the new PATH value with the next process, so the usual
 # install directories are searched as well.
-$nsis = Get-Command makensis -ErrorAction SilentlyContinue
-if ($null -eq $nsis) {
+$nsisPath = $null
+$command = Get-Command makensis -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -ne $command) {
+  $nsisPath = $command.Source
+} else {
   $known = @(
     "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
     "$env:ProgramFiles\NSIS\makensis.exe",
@@ -69,16 +72,16 @@ if ($null -eq $nsis) {
   )
   foreach ($path in $known) {
     if ($path -and (Test-Path $path)) {
-      $nsis = Get-Item $path
+      $nsisPath = $path
       break
     }
   }
 }
-if ($null -ne $nsis) {
+if ($nsisPath) {
   $stageAbs = (Resolve-Path $stage).Path
   $setup = Join-Path (Get-Location) "target/$name-setup.exe"
   Remove-Item -Force $setup -ErrorAction SilentlyContinue
-  & $nsis.Source "/DSTAGE=$stageAbs" "/DOUTFILE=$setup" "assets/windows/installer.nsi"
+  & $nsisPath "/DSTAGE=$stageAbs" "/DOUTFILE=$setup" "assets/windows/installer.nsi"
   if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
   Write-Host "wrote $setup"
 } else {
