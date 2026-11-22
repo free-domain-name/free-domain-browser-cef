@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - name: macOS
-            os: macos-14
+            os: macos-latest
             command: ./scripts/package-release.sh
           - name: Linux
             os: ubuntu-22.04

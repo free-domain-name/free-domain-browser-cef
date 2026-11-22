@@ -46,7 +46,9 @@ jobs:
         run: ./scripts/test-docker.sh
 
   macos-smoke:
-    runs-on: macos-14
+    # `macos-14` was retired as a hosted image; the job was cancelled before
+    # it ran a single step. `macos-latest` is the supported label.
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +60,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cef-binary
-          key: cef-156.0.26-macos-arm64-v1
+          # The runner architecture decides which CEF archive is downloaded,
+          # so the cache key has to follow it.
+          key: cef-156.0.26-${{ runner.os }}-${{ runner.arch }}-v1
       - run: cargo test --bin free-domain-browser-cef
       - name: Hidden CEF smoke
         env:
