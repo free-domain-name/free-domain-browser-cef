@@ -19,7 +19,13 @@ $stage = Join-Path $root $name
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 $binDir = if ($env:FDB_BIN_DIR) { $env:FDB_BIN_DIR } else { "target/bootstrap/$profile" }
-Copy-Item -Recurse -Force "$binDir/*" $stage
+# Only the two binaries belong in the package. Copying the whole build
+# directory would put the dependency tree into the archive.
+foreach ($bin in @("free-domain-browser-cef.exe", "free_domain_browser_cef_helper.exe")) {
+  $source = Join-Path $binDir $bin
+  if (-not (Test-Path $source)) { throw "missing $source" }
+  Copy-Item -Force $source $stage
+}
 Copy-Item -Force "icons/icon.ico" (Join-Path $stage "free-domain-browser-cef.ico")
 Copy-Item -Force "LICENSE" (Join-Path $stage "LICENSE")
 

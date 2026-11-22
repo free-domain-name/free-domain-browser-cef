@@ -23,8 +23,16 @@ STAGE="$ROOT/$NAME"
 BIN_DIR="${FDB_BIN_DIR:-target/bootstrap/$PROFILE}"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp -R "$BIN_DIR"/. "$STAGE/"
-rm -f "$STAGE"/*.d
+# Only the two binaries belong in the package. Copying the whole build
+# directory would put the dependency tree into the archive.
+for bin in free-domain-browser-cef free_domain_browser_cef_helper; do
+  if [ -f "$BIN_DIR/$bin" ]; then
+    cp "$BIN_DIR/$bin" "$STAGE/"
+  else
+    echo "missing $BIN_DIR/$bin" >&2
+    exit 1
+  fi
+done
 
 # The CEF runtime has to travel with the browser. The loader looks for
 # libcef.so next to the executable and CEF reads its locales and resources
