@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://free-domain-name.github.io/free-domain-browser-cef/sitemap.xml

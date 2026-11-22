@@ -5,3 +5,7 @@
 target/docker-out/
 
 cef-binary
+
+# local preview and tooling artifacts
+/.preview/
+/.dsh-vision-router/

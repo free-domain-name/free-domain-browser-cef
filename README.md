@@ -30,7 +30,8 @@ with two browser instances and a headless gossip peer over the public relay.
 ## Links
 
 - Project site: <https://free-domain-name.github.io/>
-- Browser page: <https://free-domain-name.github.io/tauri-browser/>
+- This build's page: <https://free-domain-name.github.io/free-domain-browser-cef/>
+- The stable Tauri build's page: <https://free-domain-name.github.io/tauri-browser/>
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Preview build
