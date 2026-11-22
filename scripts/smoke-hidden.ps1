@@ -62,7 +62,7 @@ function Start-Browser {
 }
 
 # First try: the browser as it is shipped, with the native menu bar.
-$env:FDB_DISABLE_MENU = "0"
+$env:FDB_WINDOWS_MENU = "post"
 $proc = Start-Browser
 $ready = $false
 for ($i = 0; $i -lt 60; $i++) {
@@ -77,7 +77,7 @@ if (-not $ready) {
   Stop-Browser $proc
 
   # Second try: without the menu bar, to tell the menu apart from the rest.
-  $env:FDB_DISABLE_MENU = "1"
+  $env:FDB_WINDOWS_MENU = "none"
   $proc = Start-Browser
   for ($i = 0; $i -lt 60; $i++) {
     if (Get-Cdp "/json/version") { $ready = $true; break }

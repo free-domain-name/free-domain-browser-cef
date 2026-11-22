@@ -26,6 +26,7 @@ mod win32 {
 
     const WM_COMMAND: u32 = 0x0111;
     const WM_NCDESTROY: u32 = 0x0082;
+    const WM_APP_INSTALL_MENU: u32 = 0x8001;
     const MF_STRING: u32 = 0x0000;
     const MF_POPUP: u32 = 0x0010;
     const MF_SEPARATOR: u32 = 0x0800;
@@ -38,6 +39,7 @@ mod win32 {
         fn DrawMenuBar(hwnd: HWND) -> i32;
         fn GetWindowLongPtrW(hwnd: HWND, index: isize) -> isize;
         fn SetWindowLongPtrW(hwnd: HWND, index: isize, value: isize) -> isize;
+        fn PostMessageW(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> i32;
         fn CallWindowProcW(
             previous: WNDPROC,
             hwnd: HWND,
@@ -70,6 +72,15 @@ mod win32 {
                 return 0;
             }
         }
+        if message == WM_APP_INSTALL_MENU {
+            // The menu is built here, in the message loop, and not in the
+            // lifecycle callback that asked for it: changing the menu of the
+            // window from inside the callback deadlocks the UI thread.
+            unsafe {
+                install_menu(hwnd);
+            }
+            return 0;
+        }
         if message == WM_NCDESTROY {
             // Give the window back to CEF before it goes away.
             let previous = PREVIOUS_PROC.swap(0, Ordering::SeqCst);
@@ -89,16 +100,12 @@ mod win32 {
 
     /// Builds the menu, installs it in the window and takes over the window
     /// procedure so the menu commands reach the browser.
+    ///
+    /// The menu itself is set later, from the message loop: doing it here
+    /// would change the window from inside a CEF callback, which deadlocks
+    /// the UI thread.
     pub fn install(hwnd: HWND) {
-        let menu = unsafe { build_menu() };
-        if menu.is_null() {
-            return;
-        }
         unsafe {
-            if SetMenu(hwnd, menu) == 0 {
-                return;
-            }
-            DrawMenuBar(hwnd);
             let previous = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
             if previous == 0 {
                 return;
@@ -109,6 +116,46 @@ mod win32 {
                 GWLP_WNDPROC,
                 menu_wnd_proc as *const () as usize as isize,
             );
+            if PostMessageW(hwnd, WM_APP_INSTALL_MENU, 0, 0) == 0 {
+                // The message did not make it into the queue, so the menu is
+                // left out rather than set from the wrong thread.
+                eprintln!("[menu] the menu bar could not be posted to the window");
+            }
+        }
+    }
+
+    /// Builds the menu and hands it to the window.
+    unsafe fn install_menu(hwnd: HWND) {
+        let menu = unsafe { build_menu() };
+        if menu.is_null() {
+            return;
+        }
+        unsafe {
+            if SetMenu(hwnd, menu) == 0 {
+                return;
+            }
+            DrawMenuBar(hwnd);
+        }
+    }
+
+    /// Builds the menu, installs it in the window and takes over the window
+    /// procedure in one go.
+    ///
+    /// This is the variant that hangs the UI thread, so it is only used when
+    /// it is asked for explicitly.
+    pub fn install_direct(hwnd: HWND) {
+        unsafe {
+            let previous = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
+            if previous == 0 {
+                return;
+            }
+            PREVIOUS_PROC.store(previous as usize, Ordering::SeqCst);
+            SetWindowLongPtrW(
+                hwnd,
+                GWLP_WNDPROC,
+                menu_wnd_proc as *const () as usize as isize,
+            );
+            install_menu(hwnd);
         }
     }
 
@@ -189,4 +236,14 @@ pub(crate) fn run_command(id: usize) {
 #[cfg(target_os = "windows")]
 pub fn install(hwnd: HWND) {
     win32::install(hwnd);
+}
+
+/// Installs the menu bar in the given window without waiting for the message
+/// loop.
+///
+/// The menu is then set from inside the CEF callback that asked for it, which
+/// deadlocks the UI thread, so this is only used for testing.
+#[cfg(target_os = "windows")]
+pub fn install_direct(hwnd: HWND) {
+    win32::install_direct(hwnd);
 }

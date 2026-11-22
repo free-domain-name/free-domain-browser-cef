@@ -78,11 +78,11 @@ pub(crate) fn menu_command(id: usize) -> Option<(&'static str, &'static str)> {
 
 /// Opens the menu window.
 ///
-/// Only Linux uses it: there CEF draws its own X11 window and cannot host a
-/// native menu bar, so the menu is shown in a window of its own. The native
-/// menu bars of macOS and Windows do the same work.
+/// Linux and Windows use it: there CEF draws its own window and cannot host
+/// a native menu bar, so the menu is shown in a window of its own. The native
+/// menu bar of macOS does the same work.
 fn open_menu_window() {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let Some(instance) = SimpleHandler::instance() else {
             return;

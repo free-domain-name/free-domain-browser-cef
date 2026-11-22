@@ -13,9 +13,12 @@ pub fn platform_show_window(_browser: Option<&mut Browser>) {}
 pub fn install_menu_bar(browser: Option<&mut Browser>) {
     use std::ffi::c_void;
 
-    // The menu bar can be switched off to tell it apart from the rest of the
-    // Windows setup when the browser misbehaves.
-    if std::env::var("FDB_DISABLE_MENU").is_ok_and(|value| value != "0") {
+    // How the menu bar is installed can be changed to tell the menu apart
+    // from the rest of the Windows setup when the browser misbehaves:
+    // "post" (the default) sets it from the message loop, "direct" sets it
+    // from the lifecycle callback and "none" leaves it out.
+    let mode = std::env::var("FDB_WINDOWS_MENU").unwrap_or_else(|_| "post".to_string());
+    if mode == "none" {
         return;
     }
 
@@ -39,6 +42,11 @@ pub fn install_menu_bar(browser: Option<&mut Browser>) {
     if handle.0.is_null() {
         return;
     }
-    crate::menu_win32::install(handle.0 as *mut c_void);
+    let hwnd = handle.0 as *mut c_void;
+    if mode == "direct" {
+        crate::menu_win32::install_direct(hwnd);
+    } else {
+        crate::menu_win32::install(hwnd);
+    }
     INSTALLED.store(true, std::sync::atomic::Ordering::SeqCst);
 }
