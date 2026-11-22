@@ -8,17 +8,33 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Open
 
-- Sign the release builds. Everything published so far is unsigned.
-- Notarize the macOS bundle. No Apple credentials are wired into the build.
 - Build the native MSI and AppImage installers. The Linux `.deb` and the
   Windows NSIS setup are already produced by the packaging scripts.
-- Verify the Windows runtime in CI. Only the Linux container build is verified today.
 
 ### Known limitations
 
 - Keep the chat identity in a plain file (`chat-identity.json`) next to the chat
   settings instead of the OS keychain.
-- Ship the preview as an unsigned build.
+- Ship the Linux and Windows builds unsigned. The macOS build is signed with
+  the Developer ID and notarized; the other platforms have no signing
+  identity set up yet.
+
+## [0.1.1] - 2026-11-22
+
+### Added
+
+- Sign the macOS release with the Developer ID and notarize it with Apple.
+  The release workflow imports the certificate from a secret, signs the
+  bundle, staples the ticket and rebuilds the archives, so Gatekeeper reports
+  the build as "Notarized Developer ID" and opens without a prompt.
+- Sign the nested libraries of the Chromium framework. They came with a linker
+  signature only, and the notary rejected the whole archive because of them.
+
+### Fixed
+
+- Find `makensis` where Chocolatey puts it, so the Windows setup executable is
+  built instead of being skipped.
+- Leave the CEF C++ wrapper sources out of the packages.
 
 ## [0.1.0] - 2026-11-22
 
@@ -73,5 +89,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Linux `.deb` and the Windows NSIS setup are built, and the test count is
   current.
 
-[Unreleased]: https://github.com/free-domain-name/free-domain-browser-cef/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/free-domain-name/free-domain-browser-cef/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/free-domain-name/free-domain-browser-cef/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.0

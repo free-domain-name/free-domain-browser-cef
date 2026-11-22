@@ -22,10 +22,11 @@ open it. The chat page talks to the ported iroh service. The production relay
 and the lobby key are compiled in, so the community chat works out of the box;
 set `FDN_CHAT_LOBBY_ID` (and optionally `FDN_CHAT_RELAY_URL`), or write
 `<app-config-dir>/chat-bootstrap.json`, to point it at another lobby.
-Still pending: a Developer ID-signed/notarized release and native MSI/AppImage
-installers; the Linux `.deb` and the Windows NSIS setup are already produced by
-the packaging scripts. The chat transport/protocol has been validated locally
-with two browser instances and a headless gossip peer over the public relay.
+Still pending: native MSI/AppImage installers; the Linux `.deb` and the Windows
+NSIS setup are already produced by the packaging scripts. The macOS build is
+signed with the Developer ID and notarized by Apple. The chat
+transport/protocol has been validated locally with two browser instances and a
+headless gossip peer over the public relay.
 
 ## Links
 
@@ -40,9 +41,12 @@ CI publishes portable preview builds as a GitHub prerelease:
 <https://github.com/free-domain-name/free-domain-browser-cef/releases>
 
 Pushing a `v*` tag builds the browser for macOS, Linux and Windows and
-publishes the archives with a `checksums.txt`. The packages are unsigned and
-are not notarized, so macOS and Windows may ask you to confirm the first
-launch. The first preview is
+publishes the archives with a `checksums.txt`. The macOS build is signed with
+the Developer ID and notarized by Apple, so it opens without the extra
+confirmation; the Linux and Windows builds are unsigned and may still ask you
+to confirm the first launch. The releases are
+[v0.1.1](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.1)
+and
 [v0.1.0](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.0).
 
 The stable build with installers is the Tauri one:
@@ -109,14 +113,26 @@ Build without launching:
 cargo run --bin bundle -- --build-only
 ```
 
-Package an ad-hoc-signed release `.app` zip (macOS). The bundle step signs the
-app, its helpers, and the embedded framework so macOS will launch it locally;
-distribution still needs a Developer ID signature. An optional DMG is created
-when `hdiutil` is available:
+Package a release `.app` zip (macOS). The bundle step signs the app, its
+helpers, and the embedded framework so macOS will launch it locally. An
+optional DMG is created when `hdiutil` is available:
 
 ```sh
 ./scripts/package-release.sh
 ```
+
+To sign it with your own Developer ID and send it to the notary:
+
+```sh
+./scripts/sign-release.sh 'Developer ID Application: Example (TEAMID)'
+xcrun notarytool submit target/FreeDomainBrowser-CEF.zip \
+  --key <AuthKey.p8> --key-id <KEY_ID> --issuer <ISSUER_ID> --wait
+xcrun stapler staple target/bundle/free-domain-browser-cef.app
+```
+
+The release workflow does all of this on its own when the repository holds the
+`APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`,
+`APPLE_API_KEY_ID` and `APPLE_API_ISSUER` secrets.
 
 Portable Linux and Windows archives can be built on their native platforms:
 
@@ -134,24 +150,15 @@ sandbox.
 
 Tagged `v*` pushes run `.github/workflows/release.yml`, which builds those
 portable archives, a Linux `.deb`, and a Windows NSIS setup when the tools are
-available, and attaches them to the GitHub release. These are ad-hoc/unsigned
-builds; MSI and AppImage packages are not produced.
+available, and attaches them to the GitHub release. The macOS build is signed
+with the Developer ID and notarized when the Apple secrets are configured; MSI
+and AppImage packages are not produced.
 
-Replace the ad-hoc signature with a Developer ID identity (macOS). The bundled CEF
-helpers need hardened-runtime JIT/library entitlements, so the script signs
-helpers first, then the framework, then the app, and rewrites the zip:
-
-```sh
-./scripts/sign-release.sh 'Developer ID Application: Example (TEAMID)'
-```
-
-Notarization still requires Apple credentials and is not part of the script:
-
-```sh
-xcrun notarytool submit target/FreeDomainBrowser-CEF.zip \
-  --keychain-profile PROFILE --wait
-xcrun stapler staple target/bundle/free-domain-browser-cef.app
-```
+The Developer ID signature needs the hardened-runtime JIT/library entitlements,
+so the script signs the nested libraries and the helpers first, then the
+framework, then the app, and rewrites the zip. Notarization is a separate step
+that needs Apple credentials; the workflow runs it with an App Store Connect API
+key when the repository holds the secrets listed above.
 
 On macOS, always launch through `cargo run`/the bundle: the raw binary cannot
 load CEF's ICU outside the `.app`. On Linux/Windows the binary is self-contained

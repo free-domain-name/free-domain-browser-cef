@@ -1,6 +1,6 @@
 # CEF migration plan
 
-Status: desktop functionality is ported, including settings/chat overlays, a reusable dedicated review window, native menus on every platform, themed/compact internal pages and verified DMG plus portable archive packaging. Remaining work is the MSI/AppImage installers, Apple notarization credentials, a Windows CI runtime check and platform-limited mobile support. See `MIGRATION.md`.
+Status: desktop functionality is ported, including settings/chat overlays, a reusable dedicated review window, native menus on every platform, themed/compact internal pages and verified DMG plus portable archive packaging. Remaining work is the MSI/AppImage installers and platform-limited mobile support; the macOS build is signed and notarized, and the Windows runtime is verified in CI. See `MIGRATION.md`.
 
 ## Constraints
 
@@ -122,9 +122,14 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Bundle locales/`cef.pak`/`icudtl.dat` (provided by the CEF framework; verified in the app bundle).
 - [x] Code-sign app + helpers with a stable identity via `scripts/sign-release.sh`;
   verified with `Developer ID Application: Ozkan Pakdil (TA5X5C9T57)`, and the
-  signed zip was rewritten. Notarization remains pending Apple credentials.
+  signed zip was rewritten. The nested libraries of the Chromium framework are
+  signed as well, because the notary rejects an archive whose nested code
+  carries only a linker signature.
   Debug/release bundles are ad-hoc signed after assembly so macOS does not kill
   them with an invalid signature.
+- [x] Notarize the signed build with Apple and staple the ticket; verified with
+  `spctl --assess`: "accepted, source=Notarized Developer ID". The release
+  workflow repeats the whole chain from the repository secrets.
 - [x] Hardened-runtime sandbox entitlements (`assets/entitlements.mac.plist`).
 - [x] CI smoke workflow (`.github/workflows/ci.yml`).
 
@@ -137,7 +142,7 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   through the hidden CEF harness.
 - [x] Ad-hoc-signed release bundle launches hidden and serves DevTools.
 - [x] Chat two-client local validation (presence + bidirectional messages).
-- [ ] Production `fdn-chatd` lobby deployment and notarization credentials.
+- [ ] Production `fdn-chatd` lobby deployment.
 
 ## Suggested order
 

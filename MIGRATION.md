@@ -97,7 +97,11 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 - The Windows runtime now runs in CI: the job packages the browser, starts the
   packaged executable and checks its DevTools endpoint, and the Linux container
   build does the same with the tarball.
-- Notarization still needs Apple credentials; ad-hoc signing is done by the
-  bundle helper. Lobby deployment still needs a production `fdn-chatd`.
+- The macOS build is signed with the Developer ID and notarized by Apple, both
+  in the release workflow and in `scripts/sign-release.sh`; the nested
+  libraries of the Chromium framework are signed as well, because the notary
+  rejects an archive whose nested code carries only a linker signature. The
+  Linux and Windows builds stay unsigned.
+- Lobby deployment still needs a production `fdn-chatd`.
 - Mobile targets are outside the CEF desktop prototype; CEF is a desktop
   embedding and this repository does not ship Android/iOS shells.

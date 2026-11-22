@@ -275,7 +275,7 @@
         <div class="artifact-grid">
           <article class="artifact">
             <h3>macOS</h3>
-            <p>Portable zip with the app bundle, and a disk image with it.</p>
+            <p>Portable zip with the app bundle, and a disk image with it. Signed and notarized.</p>
             <code>FreeDomainBrowser-CEF.zip</code>
             <code>FreeDomainBrowser-CEF.dmg</code>
           </article>
@@ -294,9 +294,10 @@
         </div>
 
         <p class="fine-note">
-          The packages are ad-hoc signed at best: they are not notarized and not signed with a Developer ID
-          or an Authenticode certificate. macOS and Windows will ask you to confirm the first launch. If you
-          want an installer-first build, take the
+          The macOS build is signed with the Developer ID and notarized by Apple: Gatekeeper reports it as
+          "Notarized Developer ID" and it opens without a prompt. The Linux and Windows packages are not
+          signed, so Windows may still ask you to confirm the first launch. If you want an installer-first
+          build, take the
           <a href="https://github.com/free-domain-name/tauri-browser/releases">Tauri release</a>.
         </p>
       </section>
