@@ -6,6 +6,9 @@
 #
 # The DevTools endpoint is read with curl.exe, the same way the shell script
 # reads it on macOS and Linux.
+#
+# The browser is started twice when the endpoint stays quiet: once with the
+# native menu bar and once without it. That tells the two apart.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
@@ -23,18 +26,6 @@ if (-not (Test-Path (Join-Path $stage "libcef.dll"))) {
 $logDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
 $out = Join-Path $logDir "free-domain-browser-cef-smoke.out.log"
 $err = Join-Path $logDir "free-domain-browser-cef-smoke.err.log"
-Remove-Item -Force $out, $err -ErrorAction SilentlyContinue
-
-$proc = Start-Process -FilePath $exe `
-  -ArgumentList @("--remote-debugging-port=$port", "--url=$url", "--no-sandbox") `
-  -WorkingDirectory (Resolve-Path $stage).Path `
-  -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
-
-function Stop-Browser {
-  Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-  Get-Process -Name "free-domain-browser-cef", "free_domain_browser_cef_helper" `
-    -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-}
 
 function Get-Cdp([string]$path) {
   $body = & curl.exe -s --fail --max-time 5 "http://127.0.0.1:$port$path" 2>$null
@@ -45,34 +36,64 @@ function Get-Cdp([string]$path) {
 
 function Show-Log {
   Write-Host "browser log:"
-  Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 20
-  Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 20
+  Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 25
+  Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 25
 }
 
 function Show-Probe {
   Write-Host "DevTools probe:"
-  & curl.exe -v --max-time 5 "http://127.0.0.1:$port/json/version" 2>&1 | Select-Object -Last 20
+  & curl.exe -v --max-time 5 "http://127.0.0.1:$port/json/version" 2>&1 | Select-Object -Last 15
 }
 
+function Stop-Browser($proc) {
+  if ($null -ne $proc) {
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+  }
+  Get-Process -Name "free-domain-browser-cef", "free_domain_browser_cef_helper" `
+    -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
+function Start-Browser {
+  Remove-Item -Force $out, $err -ErrorAction SilentlyContinue
+  return Start-Process -FilePath $exe `
+    -ArgumentList @("--remote-debugging-port=$port", "--url=$url", "--no-sandbox", "--enable-logging=stderr") `
+    -WorkingDirectory (Resolve-Path $stage).Path `
+    -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+}
+
+# First try: the browser as it is shipped, with the native menu bar.
+$env:FDB_DISABLE_MENU = "0"
+$proc = Start-Browser
 $ready = $false
-for ($i = 0; $i -lt 180; $i++) {
-  $version = Get-Cdp "/json/version"
-  if ($version) {
-    $ready = $true
-    break
-  }
-  if ($proc.HasExited) {
-    Write-Host "the browser exited early:"
-    Show-Log
-    exit 1
-  }
+for ($i = 0; $i -lt 60; $i++) {
+  if (Get-Cdp "/json/version") { $ready = $true; break }
+  if ($proc.HasExited) { break }
   Start-Sleep -Seconds 1
 }
+
 if (-not $ready) {
-  Write-Host "timed out waiting for CEF:"
+  Write-Host "the DevTools endpoint stayed quiet with the native menu bar"
+  Show-Log
+  Stop-Browser $proc
+
+  # Second try: without the menu bar, to tell the menu apart from the rest.
+  $env:FDB_DISABLE_MENU = "1"
+  $proc = Start-Browser
+  for ($i = 0; $i -lt 60; $i++) {
+    if (Get-Cdp "/json/version") { $ready = $true; break }
+    if ($proc.HasExited) { break }
+    Start-Sleep -Seconds 1
+  }
+  if ($ready) {
+    Write-Host "the DevTools endpoint only answers without the native menu bar"
+    Show-Log
+    Stop-Browser $proc
+    exit 1
+  }
+  Write-Host "the DevTools endpoint never answered"
   Show-Log
   Show-Probe
-  Stop-Browser
+  Stop-Browser $proc
   exit 1
 }
 
@@ -86,7 +107,7 @@ if ($expect) {
   if (-not $found) {
     Write-Host "expected target not found: $expect"
     Show-Log
-    Stop-Browser
+    Stop-Browser $proc
     exit 1
   }
 }
@@ -96,5 +117,5 @@ if ($proc.HasExited) {
   exit 1
 }
 Write-Host "the packaged browser is running"
-Stop-Browser
+Stop-Browser $proc
 exit 0

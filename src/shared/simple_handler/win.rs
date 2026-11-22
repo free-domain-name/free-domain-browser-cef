@@ -13,6 +13,12 @@ pub fn platform_show_window(_browser: Option<&mut Browser>) {}
 pub fn install_menu_bar(browser: Option<&mut Browser>) {
     use std::ffi::c_void;
 
+    // The menu bar can be switched off to tell it apart from the rest of the
+    // Windows setup when the browser misbehaves.
+    if std::env::var("FDB_DISABLE_MENU").is_ok_and(|value| value != "0") {
+        return;
+    }
+
     // The chrome browser can be reported more than once; one menu bar is
     // enough.
     static INSTALLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
