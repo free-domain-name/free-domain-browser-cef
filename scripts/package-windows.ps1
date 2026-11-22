@@ -12,6 +12,10 @@ if ($env:FDB_SKIP_BUILD -ne "1") {
   } else {
     cargo run --bin bundle -- --build-only
   }
+  # PowerShell does not fail on a native command that exits with an error, so
+  # the exit code has to be checked by hand. Without it a broken build was
+  # packaged as if it had worked.
+  if ($LASTEXITCODE -ne 0) { throw "the browser build failed with exit code $LASTEXITCODE" }
 }
 $name = "FreeDomainBrowser-CEF-windows-x64"
 $root = "target/package"
