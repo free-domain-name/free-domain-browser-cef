@@ -18,6 +18,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Ship the Linux and Windows builds unsigned. The macOS build is signed with
   the Developer ID and notarized; the other platforms have no signing
   identity set up yet.
+- The macOS build runs without Chromium's renderer sandbox. The seatbelt
+  sandbox needs the App Sandbox, and an App Sandboxed app cannot register the
+  Mach port that Chromium's helper processes rendezvous through. The helper
+  processes trap with SIGTRAP on launch without it and the browser quits with
+  "GPU process isn't usable".
+
+## [0.1.2] - 2026-11-23
+
+### Fixed
+
+- The macOS release build starts again. Release builds enabled Chromium's
+  seatbelt sandbox, which needs the App Sandbox entitlement; the helper
+  processes trapped with SIGTRAP on launch and the browser quit with "GPU
+  process isn't usable" before showing a window. The macOS build now runs
+  without the renderer sandbox, and the release workflow smoke tests the
+  signed bundle so a broken signature cannot ship again.
 
 ## [0.1.1] - 2026-11-22
 

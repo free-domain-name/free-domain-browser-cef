@@ -2,13 +2,26 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- The App Sandbox entitlement is deliberately absent. Chromium's macOS
+       renderer sandbox is the seatbelt sandbox, which needs the App Sandbox,
+       and an App Sandboxed app cannot register the Mach port that Chromium's
+       helper processes rendezvous through. The helpers trap with SIGTRAP on
+       launch and the browser quits with "GPU process isn't usable", so the
+       browser runs without the sandbox on macOS instead. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- The remote debugging port listens on localhost. -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+  <!-- The browser saves its settings and the chat identity in the user's
+       home directory. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
   <key>com.apple.security.cs.allow-jit</key>
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
   <key>com.apple.security.cs.disable-library-validation</key>
-  <true/>
-  <key>com.apple.security.network.client</key>
   <true/>
 </dict>
 </plist>

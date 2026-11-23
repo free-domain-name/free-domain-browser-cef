@@ -5,7 +5,14 @@ cd "$(dirname "$0")/.."
 PORT="${FDB_SMOKE_PORT:-9222}"
 LOG="${TMPDIR:-/tmp}/free-domain-browser-cef-smoke.log"
 rm -f "$LOG"
-cargo run -- --initial-show-state=hidden --remote-debugging-port="$PORT" --url="${FDB_SMOKE_URL:-https://github.com/}" >"$LOG" 2>&1 &
+# FDB_SMOKE_BIN runs a built binary instead of the debug build. The release
+# workflow uses it to smoke test the signed bundle, because a signature can
+# break the browser in ways the ad-hoc debug build never shows.
+if [ -n "${FDB_SMOKE_BIN:-}" ]; then
+  "$FDB_SMOKE_BIN" --initial-show-state=hidden --remote-debugging-port="$PORT" --url="${FDB_SMOKE_URL:-https://github.com/}" >"$LOG" 2>&1 &
+else
+  cargo run -- --initial-show-state=hidden --remote-debugging-port="$PORT" --url="${FDB_SMOKE_URL:-https://github.com/}" >"$LOG" 2>&1 &
+fi
 PID=$!
 cleanup() {
   kill "$PID" 2>/dev/null || true

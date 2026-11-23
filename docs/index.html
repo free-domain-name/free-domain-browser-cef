@@ -179,8 +179,10 @@
               <p class="build-sub">Chromium 156, bundled</p>
             </div>
             <p>
-              Ships Chromium with the app. Pages are rendered by the same engine on every machine, with a
-              sandboxed renderer and the browser chrome written as plain HTML.
+              Ships Chromium with the app. Pages are rendered by the same engine on every machine, and the
+              browser chrome is written as plain HTML. On macOS the renderer runs without Chromium's
+              seatbelt sandbox, because that sandbox needs the App Sandbox and an App Sandboxed app cannot
+              register the Mach port Chromium's helper processes rendezvous through.
             </p>
             <ul class="build-list">
               <li>Real Chromium: identical rendering everywhere</li>

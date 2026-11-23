@@ -102,6 +102,23 @@ jobs:
         shell: bash
         run: ./scripts/sign-release.sh "$SIGN_IDENTITY"
 
+      # The signature can break the browser in ways the ad-hoc build never
+      # shows, so the signed bundle is started before it is notarized.
+      - name: Smoke test the signed bundle
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE_P12 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FDB_SMOKE_BIN="$PWD/target/bundle/free-domain-browser-cef.app/Contents/MacOS/free-domain-browser-cef"
+          export FDB_SMOKE_PORT=9222
+          export FDB_SMOKE_URL="https://github.com/"
+          export FDB_SMOKE_EXPECT="github.com"
+          ./scripts/smoke-hidden.sh
+          if grep -q "GPU process isn't usable" "${TMPDIR:-/tmp}/free-domain-browser-cef-smoke.log"; then
+            echo "the signed bundle cannot start its GPU process" >&2
+            exit 1
+          fi
+
       - name: Notarize the signed build
         if: runner.os == 'macOS' && env.APPLE_API_KEY != ''
         env:

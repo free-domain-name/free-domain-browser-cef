@@ -19,6 +19,9 @@ if [ ! -d "$APP" ]; then
 fi
 
 sign() {
+  # The hardened runtime is required: Apple's notary rejects an archive whose
+  # executables do not have it ("The executable does not have the hardened
+  # runtime enabled").
   codesign --force --timestamp --options runtime \
     --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$1"
 }

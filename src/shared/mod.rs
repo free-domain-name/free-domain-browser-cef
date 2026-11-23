@@ -84,8 +84,15 @@ pub fn run_main(main_args: &MainArgs, cmd_line: &CommandLine, sandbox_info: *mut
     let cache_path = format!("{cache_root}/cache");
     let mut settings = Settings {
         // Debug bundles run without the macOS sandbox so they can be launched
-        // from a terminal/agent. Release builds use the CEF sandbox.
-        no_sandbox: i32::from(cfg!(debug_assertions)),
+        // from a terminal/agent.
+        //
+        // Release bundles need it too on macOS. Chromium's renderer sandbox
+        // there is the seatbelt sandbox, which only works inside the App
+        // Sandbox, and an App Sandboxed app cannot register the Mach port
+        // that Chromium's helper processes rendezvous through. Without this
+        // the helper processes trap with SIGTRAP on launch and the browser
+        // quits with "GPU process isn't usable".
+        no_sandbox: i32::from(cfg!(debug_assertions) || cfg!(target_os = "macos")),
         cache_path: CefString::from(cache_path.as_str()),
         root_cache_path: CefString::from(cache_root.as_str()),
         remote_debugging_port: {
