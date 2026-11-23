@@ -1,0 +1,20 @@
+{
+  "name": "registry",
+  "description": "A name that is not in the registry is looked up in public DNS.",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "nothing-here-987654.example",
+      "why": "a name nobody registered is typed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Page could not be loaded"
+      },
+      "timeout": 25000,
+      "why": "the browser says the name does not resolve"
+    }
+  ]
+}

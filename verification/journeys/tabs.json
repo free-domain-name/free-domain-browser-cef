@@ -1,0 +1,61 @@
+{
+  "name": "tabs",
+  "description": "A tab can be opened and closed again.",
+  "steps": [
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 1
+      },
+      "why": "the browser starts with one tab"
+    },
+    {
+      "do": "click",
+      "selector": "#tabs .plus",
+      "why": "the new tab button is pressed"
+    },
+    {
+      "do": "pause",
+      "ms": 1500,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "atLeast": 2
+      },
+      "why": "there are two tabs now"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "equals": ""
+      },
+      "why": "the new tab starts on the start page"
+    },
+    {
+      "do": "evaluate",
+      "expression": "window.fdbCloseActive && window.fdbCloseActive(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the active tab is closed"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to close the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 1
+      },
+      "why": "one tab is left"
+    }
+  ]
+}

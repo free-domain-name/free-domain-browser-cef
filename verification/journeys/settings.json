@@ -1,0 +1,73 @@
+{
+  "name": "settings",
+  "description": "The settings sheet opens and a change reaches the browser.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings sheet opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "return document.getElementById('skin').value;",
+      "expect": {
+        "equals": "default"
+      },
+      "why": "the settings sheet shows the current skin"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('skin'); field.value = 'terminal'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": "terminal"
+      },
+      "why": "the skin is changed to terminal"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to apply the skin"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.documentElement.dataset.skin;",
+      "expect": {
+        "equals": "terminal"
+      },
+      "why": "the browser wears the new skin"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('save').click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings are saved"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to save"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "return document.getElementById('status').textContent;",
+      "expect": {
+        "notEquals": ""
+      },
+      "why": "the settings sheet says what happened"
+    }
+  ]
+}

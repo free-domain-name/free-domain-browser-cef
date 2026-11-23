@@ -8,6 +8,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A verification framework. The journeys in `verification/journeys` are the
+  written-down version of what the browser must do, and `scripts/verify.sh`
+  checks them against the real build: it starts the application binary,
+  drives the running window and reads what is really there. No mock browser
+  and no fake network. The journeys run in CI as well, with the browser
+  hidden because the runner has no screen.
 - One command to install the portable build on macOS, Linux and Windows, on
   the project page and in the README:
   `curl -fsSL https://free-domain-name.github.io/install.sh | sh`. The script

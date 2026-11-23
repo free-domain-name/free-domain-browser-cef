@@ -69,6 +69,25 @@ and
 The stable build with installers is the Tauri one:
 <https://github.com/free-domain-name/tauri-browser/releases>
 
+## Verification
+
+The journeys in `verification/journeys` are the written-down version of what
+the browser must do, and the runner checks them against the real build:
+
+```sh
+scripts/verify.sh                # every journey
+scripts/verify.sh first-launch   # one journey
+```
+
+It starts the actual application binary, drives the running window through
+the DevTools protocol and looks at what is really there. No mock browser and
+no fake network. The whole suite takes about half a minute. The same
+journeys run in CI, where the browser starts hidden because the runner has
+no screen.
+
+See [verification/README.md](verification/README.md) for the format of a
+journey and for the list of what is covered.
+
 ## Requirements
 
 - macOS, x86_64 Linux, or Windows

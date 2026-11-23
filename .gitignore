@@ -9,3 +9,6 @@ cef-binary
 # local preview and tooling artifacts
 /.preview/
 /.dsh-vision-router/
+
+# Screenshots from the verification runs
+verification/artifacts/

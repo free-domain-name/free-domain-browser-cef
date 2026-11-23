@@ -1,0 +1,28 @@
+{
+  "name": "search",
+  "description": "Words without a dot are searched, not treated as a name.",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "free domain names",
+      "why": "two words are typed into the address bar"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "duckduckgo"
+      },
+      "timeout": 25000,
+      "why": "the search result page is loaded"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "contains": "free"
+      },
+      "why": "the address bar keeps what was typed"
+    }
+  ]
+}

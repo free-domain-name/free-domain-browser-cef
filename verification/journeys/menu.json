@@ -1,0 +1,70 @@
+{
+  "name": "menu",
+  "description": "The browser menu opens on F10 and its entries work.",
+  "steps": [
+    {
+      "do": "key",
+      "key": "F10",
+      "why": "F10 is pressed on the window"
+    },
+    {
+      "do": "pause",
+      "timeout": 300,
+      "why": "the app has a moment to open the menu",
+      "ms": 800
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Menu"
+      },
+      "timeout": 10000,
+      "why": "the menu window opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Menu",
+      "expression": "return document.querySelectorAll('button[data-id]').length;",
+      "expect": {
+        "above": 5
+      },
+      "why": "the menu lists its entries"
+    },
+    {
+      "do": "inPage",
+      "title": "Menu",
+      "expression": "return Array.from(document.querySelectorAll('button[data-id]')).some(function(b){return b.textContent.trim() === 'New Tab';});",
+      "expect": {
+        "equals": true
+      },
+      "why": "the menu has a New Tab entry"
+    },
+    {
+      "do": "inPage",
+      "title": "Menu",
+      "expression": "const button = Array.from(document.querySelectorAll('button[data-id]')).find(function(b){return b.textContent.trim() === 'New Tab';}); button.click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the New Tab entry is pressed"
+    },
+    {
+      "do": "waitFor",
+      "expression": "document.querySelectorAll('#tabs > *').length",
+      "timeout": 5000,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > *').length;",
+      "expect": {
+        "atLeast": 2
+      },
+      "why": "the menu opened a second tab"
+    }
+  ],
+  "platform": [
+    "linux",
+    "windows"
+  ]
+}
