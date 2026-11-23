@@ -6,6 +6,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- One command to install the portable build on macOS, Linux and Windows, on
+  the project page and in the README:
+  `curl -fsSL https://free-domain-name.github.io/install.sh | sh`. The script
+  resolves the newest release, verifies its SHA-256 against `checksums.txt`
+  and unpacks it into the home directory.
+- A check for the pages under `docs/`, so a broken page is caught before it
+  reaches the site.
+
+### Changed
+
+- The Rust CI is skipped for pushes that only touch the pages or the
+  markdown. Those pushes run the cheap page check instead of the five
+  browser builds.
+
 ### Open
 
 - Build the native MSI and AppImage installers. The Linux `.deb` and the

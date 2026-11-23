@@ -2,6 +2,12 @@ name: ci
 on:
   push:
     branches: [main]
+    # The Rust builds are expensive and the pages under docs/ do not touch
+    # them. A push that only changes the pages skips this workflow; the
+    # pages have their own check in the pages workflow.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   pull_request:
   workflow_dispatch:
 

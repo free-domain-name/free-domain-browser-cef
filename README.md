@@ -40,11 +40,28 @@ headless gossip peer over the public relay.
 CI publishes portable preview builds as a GitHub prerelease:
 <https://github.com/free-domain-name/free-domain-browser-cef/releases>
 
+Install the portable build in one command:
+
+```sh
+curl -fsSL https://free-domain-name.github.io/install.sh | sh
+```
+
+On Windows:
+
+```powershell
+irm https://free-domain-name.github.io/install.ps1 | iex
+```
+
+The script finds the newest release, checks its SHA-256 against
+`checksums.txt` and unpacks it into your home directory. Nothing is written
+outside it and nothing needs root. Set `FDB_VERSION=v0.1.2` to pin a release.
+
 Pushing a `v*` tag builds the browser for macOS, Linux and Windows and
 publishes the archives with a `checksums.txt`. The macOS build is signed with
 the Developer ID and notarized by Apple, so it opens without the extra
 confirmation; the Linux and Windows builds are unsigned and may still ask you
 to confirm the first launch. The releases are
+[v0.1.2](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.2),
 [v0.1.1](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.1)
 and
 [v0.1.0](https://github.com/free-domain-name/free-domain-browser-cef/releases/tag/v0.1.0).

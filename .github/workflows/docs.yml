@@ -1,0 +1,25 @@
+name: docs
+# The pages under docs/ are served straight from main, so a broken page
+# reaches the site as soon as it is pushed. This workflow checks them.
+# The Rust CI is skipped for pushes that only touch these pages, so this is
+# the only check that runs for them, and it costs a few seconds.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "scripts/check-docs.sh"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "scripts/check-docs.sh"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the pages
+        run: ./scripts/check-docs.sh

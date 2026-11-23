@@ -9,3 +9,10 @@
   font-size: 0.92rem;
   letter-spacing: -0.01em;
 }
+
+/* The install commands sit under the artifact list on this page, and the
+   shared stylesheet leaves the spacing above the list to the section head.
+   Here the artifact grid is what comes before it. */
+.artifact-grid + .install-list {
+  margin-top: 28px;
+}

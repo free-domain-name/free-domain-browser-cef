@@ -295,6 +295,45 @@
           </article>
         </div>
 
+        <div class="install-list">
+          <div class="install-row">
+            <div class="install-label">
+              <span class="install-os">macOS</span>
+            </div>
+            <div class="code-block copyable">
+              <code id="install-macos">curl -fsSL https://free-domain-name.github.io/install.sh | sh</code>
+              <button class="copy-button" type="button" data-copy="#install-macos" aria-live="polite">Copy</button>
+            </div>
+          </div>
+
+          <div class="install-row">
+            <div class="install-label">
+              <span class="install-os">Linux</span>
+            </div>
+            <div class="code-block copyable">
+              <code id="install-linux">curl -fsSL https://free-domain-name.github.io/install.sh | sh</code>
+              <button class="copy-button" type="button" data-copy="#install-linux" aria-live="polite">Copy</button>
+            </div>
+          </div>
+
+          <div class="install-row">
+            <div class="install-label">
+              <span class="install-os">Windows</span>
+            </div>
+            <div class="code-block copyable">
+              <code id="install-windows">irm https://free-domain-name.github.io/install.ps1 | iex</code>
+              <button class="copy-button" type="button" data-copy="#install-windows" aria-live="polite">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="fine-note">
+          The installers download the newest release, check its SHA-256 against
+          <code>checksums.txt</code> and unpack it into your home directory. Nothing is
+          written outside it and nothing needs root. Set
+          <code>FDB_VERSION=v0.1.2</code> to pin a release.
+        </p>
+
         <p class="fine-note">
           The macOS build is signed with the Developer ID and notarized by Apple: Gatekeeper reports it as
           "Notarized Developer ID" and it opens without a prompt. The Linux and Windows packages are not
