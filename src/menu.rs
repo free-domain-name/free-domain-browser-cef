@@ -95,6 +95,66 @@ pub const EDIT_MENU: Menu = Menu {
 /// Every native menu, in the order they are shown.
 pub const MENUS: &[Menu] = &[BROWSER_MENU, EDIT_MENU];
 
+/// The menu of the chrome bar's "☰" button.
+///
+/// The chrome bar is a 79 pixel tall browser view: a dropdown drawn inside
+/// the chrome page would be clipped away by the view. The button therefore
+/// opens this menu as a native popup menu instead.
+pub const TOOLBAR_MENU: Menu = Menu {
+    title: "Free Domain Browser",
+    entries: &[
+        // Linux and Windows have no native menu bar, so the menu window is
+        // the only way to reach the full menu there.
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        MenuEntry::new("Menu Bar", "window.fdbMenuBar&&fdbMenuBar()"),
+        MenuEntry::new("New Tab", "window.fdbNewTab&&fdbNewTab()"),
+        MenuEntry::new("Close Tab", "window.fdbCloseActive&&fdbCloseActive()"),
+        MenuEntry::separator(),
+        MenuEntry::new("Reload", "window.fdbReload&&fdbReload()"),
+        MenuEntry::new("Back", "window.fdbBack&&fdbBack()"),
+        MenuEntry::new("Forward", "window.fdbForward&&fdbForward()"),
+        MenuEntry::separator(),
+        MenuEntry::new("Settings", "window.fdbOpenSettings&&fdbOpenSettings()"),
+        MenuEntry::new("Community Chat", "window.fdbToggleChat&&fdbToggleChat()"),
+        MenuEntry::new("Open in System Browser", "window.fdbOpenExternal&&fdbOpenExternal()"),
+        MenuEntry::new("Clear Registry Cache", "window.fdbClearCache&&fdbClearCache()"),
+        MenuEntry::separator(),
+        MenuEntry::new("About Free Domain Browser", "window.fdbAbout&&fdbAbout()"),
+        MenuEntry::new("Quit", "window.fdbQuit&&fdbQuit()"),
+    ],
+};
+
+/// The first command id of the toolbar menu.
+///
+/// CEF reserves the ids below `MENU_ID_USER_FIRST` (26500) for itself.
+pub const TOOLBAR_MENU_FIRST_COMMAND_ID: i32 = 26_500;
+
+/// The entries of the toolbar menu, in the order they are shown.
+///
+/// A separator has no command id.
+pub fn toolbar_entries() -> impl Iterator<Item = (Option<i32>, &'static MenuEntry)> {
+    let mut id = TOOLBAR_MENU_FIRST_COMMAND_ID;
+    TOOLBAR_MENU.entries.iter().map(move |entry| {
+        if entry.is_separator() {
+            (None, entry)
+        } else {
+            let command_id = id;
+            id += 1;
+            (Some(command_id), entry)
+        }
+    })
+}
+
+/// The toolbar entry with the given command id.
+pub fn toolbar_entry(command_id: i32) -> Option<&'static MenuEntry> {
+    let index = usize::try_from(command_id.checked_sub(TOOLBAR_MENU_FIRST_COMMAND_ID)?).ok()?;
+    TOOLBAR_MENU
+        .entries
+        .iter()
+        .filter(|entry| !entry.is_separator())
+        .nth(index)
+}
+
 /// Every entry of every menu, in the order they are shown.
 ///
 /// The index of an entry in this list is the id the menu page sends back

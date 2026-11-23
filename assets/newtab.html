@@ -26,19 +26,19 @@ h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#7f8ea8;mar
 <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.7 2.4 4 5.2 4 8.5s-1.3 6.1-4 8.5c-2.7-2.4-4-5.2-4-8.5s1.3-6.1 4-8.5z"/></svg></div>
 <h1>Every name, two worlds.</h1>
 <p class="sub">The community Free Registry is asked first. If a name is not there, the public web is used. If it exists in both, you choose.</p>
-<form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q)location.href='https://duckduckgo.com/?q='+encodeURIComponent(q)"><input id="q" autofocus placeholder="Search or enter a registry name — try hello.fdn"><button>Search</button></form>
+<form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q)location.href='https://duckduckgo.com/?q='+encodeURIComponent(q)"><input id="q" autofocus placeholder="Search or enter a registry name — try hello.fdn" title="Search or enter a registry name" aria-label="Search or enter a registry name"><button title="Search" aria-label="Search">Search</button></form>
 <h2>Try the registry</h2>
 <div class="samples">
-<button class="sample" type="button" data-url="fdn://hello.fdn"><span class="kind">registry only</span><strong>hello.fdn</strong><span>Resolved from GitHub and served through fdn://</span></button>
-<button class="sample" type="button" data-url="https://google.com"><span class="kind conflict">conflict</span><strong>google.com</strong><span>Exists in the registry and in public DNS</span></button>
-<button class="sample" type="button" data-url="fdn://ipmap.info"><span class="kind">hostname target</span><strong>ipmap.info</strong><span>Target is another hostname, fetched as that host</span></button>
-<button class="sample" type="button" data-url="fdn://insecure.fdn"><span class="kind">port 8080</span><strong>insecure.fdn</strong><span>Plain HTTP with a non-default port</span></button>
+<button class="sample" type="button" data-url="fdn://hello.fdn" title="Open hello.fdn from the registry" aria-label="Open hello.fdn from the registry"><span class="kind">registry only</span><strong>hello.fdn</strong><span>Resolved from GitHub and served through fdn://</span></button>
+<button class="sample" type="button" data-url="https://google.com" title="Open google.com (registry and public DNS conflict)" aria-label="Open google.com (registry and public DNS conflict)"><span class="kind conflict">conflict</span><strong>google.com</strong><span>Exists in the registry and in public DNS</span></button>
+<button class="sample" type="button" data-url="fdn://ipmap.info" title="Open ipmap.info (hostname target)" aria-label="Open ipmap.info (hostname target)"><span class="kind">hostname target</span><strong>ipmap.info</strong><span>Target is another hostname, fetched as that host</span></button>
+<button class="sample" type="button" data-url="fdn://insecure.fdn" title="Open insecure.fdn (port 8080, plain HTTP)" aria-label="Open insecure.fdn (port 8080, plain HTTP)"><span class="kind">port 8080</span><strong>insecure.fdn</strong><span>Plain HTTP with a non-default port</span></button>
 </div>
 <h2>Public web</h2>
 <div class="samples">
-<button class="sample" type="button" data-url="https://github.com/"><strong>GitHub</strong><span>github.com</span></button>
-<button class="sample" type="button" data-url="https://yahoo.com/"><strong>Yahoo</strong><span>yahoo.com</span></button>
-<button class="sample" type="button" data-url="https://example.com/"><strong>Example</strong><span>example.com</span></button>
+<button class="sample" type="button" data-url="https://github.com/" title="Open github.com" aria-label="Open github.com"><strong>GitHub</strong><span>github.com</span></button>
+<button class="sample" type="button" data-url="https://yahoo.com/" title="Open yahoo.com" aria-label="Open yahoo.com"><strong>Yahoo</strong><span>yahoo.com</span></button>
+<button class="sample" type="button" data-url="https://example.com/" title="Open example.com" aria-label="Open example.com"><strong>Example</strong><span>example.com</span></button>
 </div>
 <p class="fineprint">Registry records are public and PR-reviewed at <span class="mono">github.com/free-domain-name/registry</span>. Names that also exist on public DNS open a chooser instead of guessing.</p>
 <script>

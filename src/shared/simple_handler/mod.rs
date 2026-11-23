@@ -112,6 +112,7 @@ enum BridgeAction {
     Quit,
     /// Open the menu window (Linux, where there is no native menu bar).
     MenuBar,
+    OpenMenu(i32, i32),
     /// Run the menu entry with this id.
     MenuAction(usize),
 }
@@ -725,25 +726,25 @@ impl SimpleHandler {
         // pass that would re-enter the handler lock. The panel mutation runs
         // inside the posted PanelAddChild task instead.
         let child_view = view.clone();
-        let mut task = PanelAddChild::new(child_view, 1);
+        let mut task = PanelAddChild::new(child_view, PanelChild::Tab);
         std::thread::spawn(move || {
             post_task(ThreadId::UI, Some(&mut task));
         });
     }
 
     /// Append an overlay view (chat strip or settings) as the last child of
-    /// the content panel with the given flex, and lay the panel out.
-    fn attach_overlay_view(&mut self, view: &BrowserView, flex: i32, is_chat: bool) {
+    /// the content panel with the given kind, and lay the panel out.
+    fn attach_overlay_view(&mut self, view: &BrowserView, kind: PanelChild) {
         if self.content_panel.is_none() {
             return;
         }
-        if is_chat {
-            self.panel_chat_child = true;
-        } else {
-            self.panel_settings_child = true;
+        match kind {
+            PanelChild::Chat => self.panel_chat_child = true,
+            PanelChild::Settings => self.panel_settings_child = true,
+            PanelChild::Tab => {}
         }
         let child_view = view.clone();
-        let mut task = PanelAddChild::new(child_view, flex);
+        let mut task = PanelAddChild::new(child_view, kind);
         std::thread::spawn(move || {
             post_task(ThreadId::UI, Some(&mut task));
         });
@@ -830,7 +831,7 @@ impl SimpleHandler {
         self.settings_open = true;
         let settings_view = self.settings_view.clone();
         if let Some(settings_view) = settings_view.as_ref() {
-            self.attach_overlay_view(settings_view, 1, false);
+            self.attach_overlay_view(settings_view, PanelChild::Settings);
         }
         // Tauri parity: settings is a full-viewport sheet, so the page hides
         // beneath it (the tabs) instead of fighting the box layout.
@@ -858,7 +859,7 @@ impl SimpleHandler {
         if !self.panel_settings_child
             && let Some(view) = self.settings_view.clone()
         {
-            self.attach_overlay_view(&view, 1, false);
+            self.attach_overlay_view(&view, PanelChild::Settings);
         }
         self.settings_open = true;
         self.set_all_tabs_visible(0);
@@ -898,7 +899,7 @@ impl SimpleHandler {
         }
         self.chat_open = true;
         if let Some(chat) = self.chat_panel.clone() {
-            self.attach_overlay_view(&chat, 0, true);
+            self.attach_overlay_view(&chat, PanelChild::Chat);
         }
         self.layout_overlays(&window);
         self.chrome_execute(0, "window.fdbChatPanel&&fdbChatPanel(true)");
@@ -934,7 +935,7 @@ impl SimpleHandler {
             && !self.panel_chat_child
             && let Some(chat) = self.chat_panel.clone()
         {
-            self.attach_overlay_view(&chat, 0, true);
+            self.attach_overlay_view(&chat, PanelChild::Chat);
         }
         self.chat_panel_uid = self.active_uid;
         if let Some(uid) = self.active_uid {
@@ -1515,6 +1516,13 @@ impl SimpleHandler {
             "chat" => Some(BridgeAction::ToggleChatPanel),
             "about" => Some(BridgeAction::About),
             "menu_bar" => Some(BridgeAction::MenuBar),
+            "menu_open" => {
+                // The button reports where it is on screen so the native menu
+                // opens right below it.
+                let x = value.get("x").and_then(|x| x.as_i64()).unwrap_or(0) as i32;
+                let y = value.get("y").and_then(|y| y.as_i64()).unwrap_or(0) as i32;
+                Some(BridgeAction::OpenMenu(x, y))
+            }
             "menu_action" => value
                 .get("id")
                 .and_then(|id| id.as_u64())
@@ -1901,6 +1909,25 @@ wrap_display_handler! {
                 }
                 Some(BridgeAction::MenuBar) => {
                     open_menu_window();
+                }
+                Some(BridgeAction::OpenMenu(x, y)) => {
+                    // The menu model and the popup are UI thread only, and the
+                    // popup runs its own message loop while it is open, so the
+                    // handler lock must not be held here.
+                    let Some(instance) = SimpleHandler::instance() else {
+                        return 1;
+                    };
+                    let window = {
+                        let handler = instance.lock().expect("Failed to lock handler");
+                        handler.window.clone()
+                    };
+                    let Some(window) = window else {
+                        return 1;
+                    };
+                    let mut task = ShowToolbarMenu::new(window, x, y);
+                    std::thread::spawn(move || {
+                        post_task(ThreadId::UI, Some(&mut task));
+                    });
                 }
                 Some(BridgeAction::MenuAction(id)) => {
                     let Some(entry) = crate::menu::entry(id) else {
@@ -2783,20 +2810,32 @@ wrap_task! {
 // in this file do (a synchronous CefPostTask can run the task inline, which
 // would deadlock against our own lock).
 
+// What a content-panel child is. The kind is explicit on purpose: the
+// settings sheet shares flex 1 with the tabs, so deriving "is a tab" from
+// the flex value alone misfiled the sheet as a tab and left it hidden.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PanelChild {
+    /// A tab page. Only the active tab is visible.
+    Tab,
+    /// The settings sheet. Covers the whole content area.
+    Settings,
+    /// The chat strip. A column on the right of the page.
+    Chat,
+}
+
 // Add a view to the content panel, on the UI thread and without holding
 // the handler lock. Every piece of context is re-read inside the task:
 // wrappers created in this posted-task context are the live CEF objects
 // (stored clones read from other threads report an empty view tree).
-// flex 1 = active tab, flex 0 = chat strip.
 wrap_task! {
     struct PanelAddChild {
         view: BrowserView,
-        flex: i32,
+        kind: PanelChild,
     }
 
     impl Task {
         fn execute(&self) {
-            let is_tab = self.flex == 1;
+            let is_tab = self.kind == PanelChild::Tab;
             let (chrome_view, overlays, is_active_tab) = {
                 let Some(instance) = SimpleHandler::instance() else { return };
                 let handler = instance.lock().expect("Failed to lock handler");
@@ -2822,23 +2861,34 @@ wrap_task! {
             } else {
                 panel.add_child_view_at(Some(&mut child), panel.child_view_count() as i32);
             }
+            // The settings sheet is a full-area overlay, the chat strip is a
+            // right-hand column, and the tabs share the remaining width.
+            let flex = match self.kind {
+                PanelChild::Tab => 1,
+                PanelChild::Settings => 1,
+                PanelChild::Chat => 0,
+            };
             if let Some(layout) =
                 panel.get_layout().and_then(|layout| layout.as_box_layout())
             {
-                layout.set_flex_for_view(Some(&mut child), self.flex);
+                layout.set_flex_for_view(Some(&mut child), flex);
             }
-            let bounds = if is_tab {
-                panel_rect
-            } else {
-                let width = CHAT_PANEL_WIDTH.min(panel_rect.width.max(1));
-                Rect {
-                    x: (panel_rect.width - width).max(0),
-                    y: 0,
-                    width,
-                    height: panel_rect.height.max(1),
+            let bounds = match self.kind {
+                PanelChild::Chat => {
+                    let width = CHAT_PANEL_WIDTH.min(panel_rect.width.max(1));
+                    Rect {
+                        x: (panel_rect.width - width).max(0),
+                        y: 0,
+                        width,
+                        height: panel_rect.height.max(1),
+                    }
                 }
+                PanelChild::Tab | PanelChild::Settings => panel_rect,
             };
             child.set_bounds(Some(&bounds));
+            // Only a background tab may be invisible. The overlays are
+            // visible as soon as they are attached; hiding the settings
+            // sheet here is what made the first click paint an empty panel.
             child.set_visible(if is_tab && !is_active_tab { 0 } else { 1 });
             panel.layout();
         }
@@ -2898,6 +2948,80 @@ wrap_task! {
             let Some(inner) = SimpleHandler::instance() else { return; };
             let inner = inner.lock().expect("Failed to lock inner");
             inner.chrome_execute(0, &self.script);
+        }
+    }
+}
+
+// The native popup menu of the chrome bar's "☰" button.
+//
+// The chrome bar is a browser view of its own and only 79 pixels tall, so a
+// dropdown drawn inside the chrome page is clipped away by the view. The
+// button opens a native menu instead, the way other browsers do.
+wrap_menu_model_delegate! {
+    struct ToolbarMenuDelegate;
+
+    impl MenuModelDelegate {
+        fn execute_command(
+            &self,
+            _menu_model: Option<&mut MenuModel>,
+            command_id: ::std::os::raw::c_int,
+            _event_flags: EventFlags,
+        ) {
+            let Some(entry) = crate::menu::toolbar_entry(command_id) else {
+                return;
+            };
+            run_toolbar_command(entry.script);
+        }
+    }
+}
+
+/// Runs a toolbar menu command in the chrome view.
+fn run_toolbar_command(script: &str) {
+    let Some(instance) = SimpleHandler::instance() else {
+        return;
+    };
+    let handler = instance.lock().expect("Failed to lock inner");
+    handler.chrome_execute(0, script);
+}
+
+// Shows the toolbar (☰) menu as a native popup menu.
+//
+// The menu model and the popup are UI thread only, and the popup runs its
+// own message loop until the user picks an item: the handler lock must not be
+// held while it is open.
+wrap_task! {
+    struct ShowToolbarMenu {
+        window: Window,
+        x: i32,
+        y: i32,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            // The button reports its position in the chrome page. The chrome
+            // bar fills the top of the window, so the page origin is the
+            // client area origin.
+            let origin = self.window.client_area_bounds_in_screen();
+            let point = Point {
+                x: origin.x + self.x,
+                y: origin.y + self.y,
+            };
+            let mut delegate = ToolbarMenuDelegate::new();
+            let Some(mut model) = menu_model_create(Some(&mut delegate)) else {
+                return;
+            };
+            for (command_id, entry) in crate::menu::toolbar_entries() {
+                match command_id {
+                    Some(command_id) => {
+                        model.add_item(command_id, Some(&CefString::from(entry.title)));
+                    }
+                    None => {
+                        model.add_separator();
+                    }
+                }
+            }
+            self.window
+                .show_menu(Some(&mut model), Some(&point), MenuAnchorPosition::TOPRIGHT);
         }
     }
 }
