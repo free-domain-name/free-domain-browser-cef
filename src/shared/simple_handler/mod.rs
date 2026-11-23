@@ -206,6 +206,12 @@ fn appearance_live_script(settings: &crate::settings::Settings) -> String {
     )
 }
 
+/// The page a new tab opens and the page the browser starts on when the user
+/// has not chosen a home page of their own.
+pub fn start_page_url() -> String {
+    internal_page_url(NEWTAB_HTML)
+}
+
 /// Materialize an internal page on disk so it gets a real file:// origin and
 /// can use localStorage for settings.
 fn internal_page_url(html: &str) -> String {

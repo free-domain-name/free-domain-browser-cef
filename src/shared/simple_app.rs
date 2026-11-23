@@ -431,16 +431,32 @@ wrap_browser_process_handler! {
             let settings = BrowserSettings::default();
 
             // Check if a "--url=" value was provided via the command-line. If so, use
-            // that instead of the default URL.
+            // that instead of the home page.
             let url = CefString::from(&command_line.switch_value(Some(&CefString::from("url"))))
                 .to_string();
+            // The home page the user chose, or the start page when there is
+            // none. The browser must never open a search engine on its own.
+            let home = crate::settings::load().home.trim().to_string();
             let url = if url.is_empty() {
-                "https://yahoo.com/"
+                if home.is_empty() {
+                    crate::shared::simple_handler::start_page_url()
+                } else {
+                    home
+                }
             } else {
-                url.as_str()
+                url.as_str().to_string()
             };
-            let initial_page_url = url.to_string();
-            let url = CefString::from(url);
+            // The chrome shows the address of the page. An internal page has
+            // no address worth showing, so its tab starts with an empty one.
+            let initial_tab_url = if url.starts_with("http://")
+                || url.starts_with("https://")
+                || url.starts_with("fdn://")
+            {
+                url.clone()
+            } else {
+                String::new()
+            };
+            let url = CefString::from(url.as_str());
 
             // Views is enabled by default (add `--use-native` to disable).
             let use_views = command_line.has_switch(Some(&CefString::from("use-native"))) == 0;
@@ -448,12 +464,12 @@ wrap_browser_process_handler! {
             // If using Views create the browser using the Views framework, otherwise
             // create the browser using the native platform framework.
             if use_views {
-                // A fixed chrome bar, then Yahoo in a separate BrowserView
+                // A fixed chrome bar, then the page in a separate BrowserView
                 // below it. CEF Views clips both views to their bounds.
-                let initial_page_json = serde_json::to_string(&initial_page_url)
+                let initial_tab_json = serde_json::to_string(&initial_tab_url)
                     .unwrap_or_else(|_| "\"\"".to_string());
                 let chrome_html = include_str!("../../assets/chrome.html")
-                    .replace("__FDB_INITIAL_URL__", &initial_page_json)
+                    .replace("__FDB_INITIAL_URL__", &initial_tab_json)
                     // data: origins cannot resolve a relative stylesheet;
                     // inline the shared kit for the chrome page only.
                     .replace("</head>", &format!("<style>{}</style></head>", UI_KIT_CSS));

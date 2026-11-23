@@ -19,7 +19,10 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            home: "https://yahoo.com/".to_string(),
+            // An empty home page means the start page, the same way the home
+            // button works. It must not be a search engine: the browser opens
+            // on its own start page until the user picks a page of their own.
+            home: String::new(),
             cookies: true,
             dnt: false,
             compact_tabs: false,
@@ -32,13 +35,10 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Accept the object sent by the settings page. Unknown keys are ignored;
-    /// an empty home page is replaced with the default.
+    /// Accept the object sent by the settings page. Unknown keys are ignored.
+    /// An empty home page is kept: it means the start page.
     pub fn from_value(value: &serde_json::Value) -> Option<Self> {
         let mut settings: Settings = serde_json::from_value(value.clone()).ok()?;
-        if settings.home.trim().is_empty() {
-            settings.home = Settings::default().home;
-        }
         if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
             settings.theme = Settings::default().theme;
         }
@@ -184,11 +184,11 @@ mod tests {
     }
 
     #[test]
-    fn empty_home_falls_back_to_default() {
+    fn an_empty_home_page_is_kept() {
+        // An empty home page means the start page. It must not fall back to
+        // a page the user never asked for.
         let value = serde_json::json!({"home":"  ","cookies":false,"dnt":true});
-        assert_eq!(
-            Settings::from_value(&value).unwrap().home,
-            Settings::default().home
-        );
+        assert_eq!(Settings::from_value(&value).unwrap().home, "  ");
+        assert!(Settings::default().home.trim().is_empty());
     }
 }
