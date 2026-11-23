@@ -116,8 +116,14 @@ pub const TOOLBAR_MENU: Menu = Menu {
         MenuEntry::separator(),
         MenuEntry::new("Settings", "window.fdbOpenSettings&&fdbOpenSettings()"),
         MenuEntry::new("Community Chat", "window.fdbToggleChat&&fdbToggleChat()"),
-        MenuEntry::new("Open in System Browser", "window.fdbOpenExternal&&fdbOpenExternal()"),
-        MenuEntry::new("Clear Registry Cache", "window.fdbClearCache&&fdbClearCache()"),
+        MenuEntry::new(
+            "Open in System Browser",
+            "window.fdbOpenExternal&&fdbOpenExternal()",
+        ),
+        MenuEntry::new(
+            "Clear Registry Cache",
+            "window.fdbClearCache&&fdbClearCache()",
+        ),
         MenuEntry::separator(),
         MenuEntry::new("About Free Domain Browser", "window.fdbAbout&&fdbAbout()"),
         MenuEntry::new("Quit", "window.fdbQuit&&fdbQuit()"),
