@@ -60,7 +60,7 @@ footer button{background:var(--accent);border:0;border-radius:var(--radius-contr
 <details class="card" id="ignoreCard"><summary>Ignored <span id="ignoreCount">0</span></summary><ul id="ignoreList"></ul><div id="ignoreEmpty" class="sub">Nobody is ignored.</div></details>
 <div class="card"><h2>Online <span id="onlineCount">0</span></h2><ul id="users"></ul></div>
 </aside>
-<main><header><h2># general</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="panelMenu" class="btn ghost" type="button" title="Open the chat menu" aria-label="Open the chat menu">Menu</button><button id="join" class="btn primary" type="button" title="Join chat" aria-label="Join chat">Join chat</button><button id="disable" class="btn ghost" type="button" title="Leave chat" aria-label="Leave chat">Leave</button><button id="panelClose" class="btn ghost" type="button" title="Close the chat panel" aria-label="Close the chat panel">Close</button></header>
+<main><header><h2 id="roomTitle">fdn:general:v1</h2><span class="pill" id="statePill">offline</span><span class="spacer"></span><button id="panelMenu" class="btn ghost" type="button" title="Open the chat menu" aria-label="Open the chat menu">Menu</button><button id="join" class="btn primary" type="button" title="Join chat" aria-label="Join chat">Join chat</button><button id="disable" class="btn ghost" type="button" title="Leave chat" aria-label="Leave chat">Leave</button><button id="panelClose" class="btn ghost" type="button" title="Close the chat panel" aria-label="Close the chat panel">Close</button></header>
 <div id="connection">Connecting to the community relay…</div>
 <div class="messages" id="messages"><div class="empty">Join the room to load messages.</div></div>
 <footer><input id="text" maxlength="500" placeholder="Message #general" disabled title="Type a message to send" aria-label="Type a message to send"><span id="count" class="count">0 / 500</span><button id="send" disabled title="Send message" aria-label="Send message">Send</button></footer></main>
@@ -144,6 +144,8 @@ function render(s){
   sync('profileCity',p.city);
   if(document.activeElement!==$('profileShow')&&!state.dirty.profileShow)$('profileShow').checked=!!s.show_profile_in_rooms;
   $('room').textContent=s.room||'fdn:general:v1';
+  // The header names the room the client is really in, not a fixed one.
+  $('roomTitle').textContent=s.room||'fdn:general:v1';
   $('relay').textContent=s.relay_url||'';
   $('fingerprint').textContent=s.fingerprint||s.node_id||'—';
   $('nodeId').textContent=s.node_id||'—';
@@ -230,7 +232,9 @@ window.fdbChatResult=function(r){
   }
 };
 $('ageCheck').onchange=function(){$('ageContinue').disabled=!this.checked};
-$('ageContinue').onclick=function(){send({cmd:'confirm_age'});setTimeout(function(){send({cmd:'enable'})},150)};
+// The age gate and the join are one command: two commands could arrive in
+// the wrong order, and the join would be rejected.
+$('ageContinue').onclick=function(){send({cmd:'confirm_age_enable'})};
 $('join').onclick=function(){send({cmd:'enable'})};
 $('disable').onclick=function(){send({cmd:'disable'})};
 // Dirty tracking: unsaved edits in these fields are never overwritten by

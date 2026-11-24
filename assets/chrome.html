@@ -8,6 +8,8 @@ html[data-chrome] body{margin:0;background:var(--chrome);color:var(--text);font:
 #tabs button span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#tabs .close{opacity:.55;font-size:14px;line-height:1}#tabs .close:hover{opacity:1}
 #tabs .plus{border-radius:8px;padding:4px 10px;background:var(--surface);color:var(--text)}
 #tabs .tab-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);flex:none}
+#tabs .favicon{width:14px;height:14px;border-radius:3px;flex:none;object-fit:cover;background:var(--tab-hover)}
+#tabs .tab-count{font-size:11px;color:var(--muted);padding:0 6px;align-self:center;white-space:nowrap}
 #tabs button[data-source=registry] .tab-dot{background:#2dd4bf}#tabs button[data-source=public] .tab-dot{background:#4f7cff}
 .toolbar{height:64px;display:flex;align-items:center;gap:8px;padding:0 12px}
 .brand{font-weight:650;font-size:13px;white-space:nowrap;margin-right:2px}
@@ -23,10 +25,15 @@ html[data-chrome] body{margin:0;background:var(--chrome);color:var(--text);font:
 body.loading #progress{display:block}
 #statusBubble{position:fixed;left:8px;bottom:8px;z-index:30;max-width:62%;background:var(--chrome);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;box-shadow:0 6px 22px rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .18s ease}
 #statusBubble[hidden]{display:none}
-body.compact #tabs{height:26px}body.compact .toolbar{padding:0 8px;gap:5px}body.compact .icon{padding:6px 8px;min-width:30px}body.compact #url{padding:6px 9px}body.compact .go{padding:6px 11px}
-body.compact #progress{top:26px}body.compact #tabs button{padding:2px 6px;font-size:11px}
+/* The density is the shared kit's switch: the chrome sets data-density and
+   the kit shrinks the paddings and the type. Only the strip height and the
+   progress line belong to the chrome itself. */
+html[data-chrome][data-density=compact] body{font-size:12px}
+html[data-chrome][data-density=compact] #tabs{height:26px}
+html[data-chrome][data-density=compact] #progress{top:26px}
+html[data-chrome][data-density=compact] #tabs button{padding:2px 6px;font-size:11px}
 body.loading #url{opacity:.85}
-</style><style id="customCssStyle"></style></head><body>
+</style><style id="uiKitStyle">__FDB_UI_KIT__</style><style id="customCssStyle"></style></head><body>
 <div id="tabs"></div>
 <div class="toolbar">
   <span class="brand"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 12h17M12 3.5c2.7 2.4 4 5.2 4 8.5s-1.3 6.1-4 8.5c-2.7-2.4-4-5.2-4-8.5s1.3-6.1 4-8.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Free Domain Browser</span>
@@ -50,12 +57,23 @@ body.loading #url{opacity:.85}
 window.__fdbInitialUrl=__FDB_INITIAL_URL__;
 var tabs=[{uid:0,url:window.__fdbInitialUrl||'',label:'New Tab'}];
 var active=0;var lastClosed=null;var nextUid=1;var statusBubbleTimer=null;var currentSettings={theme:'system',density:'comfortable',custom_css:''};
+// The address bar shows the title of the page. The browser keeps the focus
+// in the bar after a navigation, so "the user is typing" is a fact of its
+// own and not a question of the focus.
+var editingUrl=false;
 var REVIEW_INDEX_URL='https://raw.githubusercontent.com/free-domain-name/registry/main/reviews/index.json';
 // The address of the settings tab. The browser turns it into the settings
 // page; the tab strip shows it like any other address.
 var SETTINGS_TAB_URL='fdb://settings';
 var reviewIndex=null;var reviewPromise=null;var reviewDomain=null;
 function current(){return tabs[active]}
+// The icon of a tab comes from the site itself. The browser fetches it and
+// hands it over as a picture, because the chrome bar has no address of its
+// own and cannot load an image by itself. A site that has none keeps the
+// coloured dot, so the strip never shows an empty hole.
+function faviconFor(t){
+  return (t&&t.favicon)?t.favicon:null;
+}
 function sourceKind(url){var u=url||'';if(/^fdn:/i.test(u))return 'registry';return /^https?:/i.test(u)?'public':'idle'}
 function tabForUid(uid){for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid)return tabs[i]}return null}
 function esc(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -74,6 +92,13 @@ function render(){
     b.setAttribute('aria-label','Open '+((t.label||t.url||'New Tab')));
     b.dataset.source=sourceKind(t.url);
     var dot=document.createElement('span');dot.className='tab-dot';b.appendChild(dot);
+    var fav=faviconFor(t);
+    if(fav){
+      var img=document.createElement('img');img.className='favicon';img.alt='';img.src=fav;
+      img.onload=function(){dot.style.display='none'};
+      img.onerror=function(){img.remove()};
+      b.insertBefore(img,dot);
+    }
     var label=document.createElement('span');var text=(t.label||t.url||'New Tab').trim();if(text.length>34)text=text.slice(0,34).trimEnd()+'…';label.textContent=text;b.appendChild(label);
     var close=document.createElement('span');close.className='close';close.textContent='×';close.title='Close tab';close.setAttribute('role','button');close.setAttribute('aria-label','Close tab');
     close.onclick=function(e){e.stopPropagation();closeTab(i)};b.appendChild(close);
@@ -82,18 +107,38 @@ function render(){
     box.appendChild(b);
   });
   var plus=document.createElement('button');plus.className='plus';plus.textContent='+';plus.title='New tab (Cmd/Ctrl+T)';plus.setAttribute('aria-label','New tab (Cmd/Ctrl+T)');plus.onclick=function(){newTab('')};box.appendChild(plus);
+  // The number of open tabs belongs to the strip: a browser with many tabs
+  // shows how many are open without counting them one by one.
+  var count=document.createElement('span');count.className='tab-count';count.id='tabCount';
+  count.textContent=tabs.length+(tabs.length===1?' tab':' tabs');
+  count.title=tabs.length+(tabs.length===1?' open tab':' open tabs');
+  box.appendChild(count);
   // The gear belongs to the settings TAB: it is lit while that tab is the
   // one on screen, not while a sheet covers the page.
   var gear=document.getElementById('settings');if(gear)gear.classList.toggle('active',current().url===SETTINGS_TAB_URL);
   // Never clobber text the user is typing (Tauri guards the same way while a
   // page loads); the field still updates on the next render after blur.
   var field=document.getElementById('url');
-  if(document.activeElement!==field)field.value=current().url||'';
+  // The field shows the title of the page, the way a browser does. The
+  // address stays in the tooltip and comes back when the field is focused.
+  var active_tab=current();
+  if(!editingUrl){
+    var title=(active_tab.label||'').trim();
+    var address=active_tab.url||'';
+    var showTitle=title&&title!==address&&title!=='New Tab'&&title!=='Settings';
+    field.value=showTitle?title:address;
+    field.title=address;
+  }
   var t=current();
   document.getElementById('back').disabled=!t.canBack;
   document.getElementById('forward').disabled=!t.canForward;
   document.getElementById('external').disabled=!isExternal(t.url);
+  // The lock belongs to the tab on screen: it follows a tab switch too.
+  setSec(t.url);
   syncReview();
+  // A strip that overflows keeps the selected tab in sight.
+  var selected=box.querySelector('button.active');
+  if(selected&&selected.scrollIntoView){try{selected.scrollIntoView({block:'nearest',inline:'nearest'})}catch(e){}}
 }
 function newTab(u){
   var uid=nextUid++;
@@ -127,7 +172,13 @@ function closeTab(i){
 }
 function looksLikeSearch(u){return /\s/.test(u)}
 function go(){
+  // The user is on the way somewhere: the bar shows the title again.
+  editingUrl=false;
   var u=document.getElementById('url').value.trim();
+  // The field shows the title of the page. Unless the user typed something
+  // else, the page goes to the address of the page.
+  var t=current();
+  if(t&&u===(t.label||'').trim())u=(t.url||'').trim();
   if(!u){send({cmd:'home'});return}
   if(looksLikeSearch(u)){navigate('https://duckduckgo.com/?q='+encodeURIComponent(u));return}
   // A bare name is handed to the browser as it was typed. The resolver asks
@@ -201,8 +252,9 @@ window.fdbNewTabUrl=function(url){
   var uid=nextUid++;
   tabs.push({uid:uid,url:url,label:'New Tab'});active=tabs.length-1;
   render();
-  send({cmd:'new_tab',uid:uid,url:''});
-  send({cmd:'navigate',url:url,uid:uid});
+  // The address travels with the new tab: a second command could arrive
+  // before the tab has a browser, and the navigation would be lost.
+  send({cmd:'new_tab',uid:uid,url:url});
 };
 window.fdbRestoreTab=function(){if(!lastClosed)return;var u=lastClosed.url;lastClosed=null;newTab(u||'')};
 window.fdbCloseActive=function(){closeTab(active)};
@@ -230,7 +282,7 @@ window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active
 // labels from the handler instead of resetting to a single placeholder tab.
 window.fdbTabs=function(list,activeUid){
   if(!Array.isArray(list)||!list.length)return;
-  tabs=list.map(function(t){return {uid:t.uid||0,url:t.url||'',label:t.label||'New Tab'}});
+  tabs=list.map(function(t){return {uid:t.uid||0,url:t.url||'',label:t.label||'New Tab',favicon:t.favicon||''}});
   nextUid=0;
   for(var i=0;i<tabs.length;i++)nextUid=Math.max(nextUid,tabs[i].uid+1);
   active=0;
@@ -255,12 +307,31 @@ window.fdbStatus=function(text){
 };
 window.fdbSettings=function(s){
   currentSettings={theme:s.theme||'system',density:s.density||'comfortable',custom_css:s.custom_css||''};
-  document.body.classList.toggle('compact',s.density==='compact'||!!s.compact_tabs);
+  // The density is one switch for the whole app: the shared kit reads the
+  // attribute, so the chrome and the internal pages shrink together.
+  var density=s.density==='compact'||s.compact_tabs?'compact':'comfortable';
+  document.documentElement.dataset.density=density;
   applyTheme();
 };
 window.fdbLoad=function(loading,back,forward,uid){
   var t=tabForUid(uid);if(!t)return;t.canBack=!!back;t.canForward=!!forward;
-  if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.body.classList.toggle('loading',!!loading)}
+  if(uid===current().uid){render();document.getElementById('reload').textContent=loading?'✕':'↻';document.getElementById('reload').title=loading?'Stop':'Reload (Cmd/Ctrl+R)';document.getElementById('reload').setAttribute('aria-label',loading?'Stop':'Reload');document.body.classList.toggle('loading',!!loading)}
+};
+// The security indicator says what the connection really is: a lock for
+// https, a warning for plain http and a page for the internal pages, which
+// run from the local disk.
+function setSec(url){
+  var sec=document.getElementById('sec');
+  if(!sec)return;
+  var state=(url&&url.indexOf('https://')===0)?'secure':(url&&url.indexOf('http://')===0)?'warn':'local';
+  sec.textContent=state==='secure'?'🔒':state==='warn'?'⚠':'📄';
+  var label=state==='secure'?'Secure connection':state==='warn'?'Not a secure connection':'Local page';
+  sec.title=label;sec.setAttribute('aria-label',label);
+}
+// The picture of a tab: the browser fetched it and hands it over.
+window.fdbFavicon=function(uid,picture){
+  var t=tabForUid(uid);if(!t||!picture)return;
+  t.favicon=picture;render();
 };
 window.fdbUpdate=function(url,title,uid){
   var t=tabForUid(uid);if(!t)return;
@@ -269,15 +340,22 @@ window.fdbUpdate=function(url,title,uid){
   // The security indicator and visible state belong to the active tab:
   // a background tab finishing its load must not flip the lock icon here.
   if(uid!==current().uid)return;
-  var sec=document.getElementById('sec');
-  if(sec){sec.textContent=(url&&url.indexOf('https://')===0)?'🔒':(url&&url.indexOf('http://')===0)?'⚠':'📄'}
+  setSec(url);
   render();
   syncReview();
 };
 document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')go()});
+// The user types: the bar shows what they write, not the title.
+document.getElementById('url').addEventListener('input',function(){editingUrl=true});
+// Focusing the address bar shows the address, not the title: the user is
+// about to type an address.
+document.getElementById('url').addEventListener('focus',function(){
+  var t=current();this.value=t?(t.url||''):'';this.select();
+});
 document.getElementById('back').onclick=function(){send({cmd:'back'})};
 document.getElementById('forward').onclick=function(){send({cmd:'forward'})};
-document.getElementById('reload').onclick=function(){send({cmd:'reload'})};
+// While the page loads the button is a stop button, and it stops.
+document.getElementById('reload').onclick=function(){send({cmd:document.body.classList.contains('loading')?'stop':'reload'})};
 document.getElementById('home').onclick=function(){send({cmd:'home'})};
 document.getElementById('go').onclick=go;
 document.getElementById('external').onclick=external;

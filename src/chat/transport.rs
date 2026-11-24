@@ -17,7 +17,6 @@ use iroh_gossip::{ALPN, Gossip, api::GossipTopic};
 use super::{config::BootstrapConfig, identity::Identity, protocol::PROTOCOL_VERSION};
 
 pub struct Transport {
-    endpoint: Endpoint,
     gossip: Gossip,
     router: Router,
     lobby_id: EndpointId,
@@ -59,18 +58,15 @@ impl Transport {
             .accept(ALPN, gossip.clone())
             .spawn();
 
+        // The router holds the endpoint, so it stays bound as long as the
+        // transport lives.
         Ok(Self {
-            endpoint,
             gossip,
             router,
             lobby_id,
             relay_url,
             lobby_room: config.lobby_room.clone(),
         })
-    }
-
-    pub fn node_id(&self) -> EndpointId {
-        self.endpoint.id()
     }
 
     pub fn relay_url(&self) -> &RelayUrl {

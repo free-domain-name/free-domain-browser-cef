@@ -80,15 +80,21 @@ pub(crate) fn menu_command(id: usize) -> Option<(&'static str, &'static str)> {
 ///
 /// Linux and Windows use it: there CEF draws its own window and cannot host
 /// a native menu bar, so the menu is shown in a window of its own. The native
-/// menu bar of macOS does the same work.
-fn open_menu_window() {
+/// menu bar of macOS does the same work, so there is nothing to open and the
+/// answer is `false`.
+fn open_menu_window() -> bool {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         let Some(instance) = SimpleHandler::instance() else {
-            return;
+            return false;
         };
         crate::shared::simple_app::create_menu_window(instance);
         eprintln!("[menu] the menu window is opened");
+        true
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        false
     }
 }
 
@@ -105,6 +111,8 @@ enum BridgeAction {
     Recheck(i32, String),
     OpenSettings,
     CloseSettings,
+    /// Look a name up again, forgetting what was picked for it before.
+    Retry(String),
     ToggleChatPanel,
     Review(String),
     About,
@@ -122,6 +130,7 @@ enum BrowserCommandKind {
     Back,
     Forward,
     Reload,
+    Stop,
 }
 
 struct Tab {
@@ -148,9 +157,9 @@ enum TabPage {
 /// it into the settings page; the chrome shows it like any other address.
 const SETTINGS_TAB_URL: &str = "fdb://settings";
 
-// Chrome page layout: tab strip (32) + toolbar (64). The status bar strip is
-// gone, so the content view starts right below the address bar.
-const CHROME_HEIGHT: i32 = 79;
+// The chrome bar has one height for the whole app: the view and the page
+// must agree, or the bottom of the toolbar is cut off.
+const CHROME_HEIGHT: i32 = crate::shared::simple_app::CHROME_HEIGHT;
 const CHAT_PANEL_WIDTH: i32 = 390;
 
 pub struct SimpleHandler {
@@ -172,6 +181,12 @@ pub struct SimpleHandler {
     panel_chat_child: bool,
     pending_uids: VecDeque<(u64, TabPage)>,
     pending_views: Vec<(u64, BrowserView)>,
+    /// A navigation that waits for the browser of its tab: a name that has
+    /// to go through the resolver cannot be loaded before the tab exists.
+    pending_navigations: HashMap<u64, String>,
+    /// The name the browser starts on, when the home page is a name. It goes
+    /// out as soon as the first page has a browser.
+    startup_navigation: Option<String>,
     active_uid: Option<u64>,
     window: Option<Window>,
     is_closing: bool,
@@ -189,7 +204,7 @@ const ERROR_HTML: &str = include_str!("../../../assets/error.html");
 /// components + the compact density). Materialized once next to the page
 /// files and linked from them; inlined for the data:-origin chrome page.
 pub(crate) const UI_KIT_CSS: &str = include_str!("../../../assets/ui-kit.css");
-const APPEARANCE_JS_TEMPLATE: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.density=density}catch(e){}})();</script>"#;
+const APPEARANCE_JS_TEMPLATE: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var density=q.get('density')||'comfortable';var css=q.get('custom_css')||'';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.density=density;if(css){var style=document.getElementById('fdb-appearance');if(!style){style=document.createElement('style');style.id='fdb-appearance';document.head.appendChild(style)}style.textContent=css}}catch(e){}})();</script>"#;
 /// Every internal page links the shared kit itself, so a page also looks
 /// right when it is opened on its own. The link is versioned with the
 /// content of the kit, so a changed stylesheet is never served from CEF's
@@ -264,6 +279,9 @@ fn internal_page_url(html: &str) -> String {
     let query = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("theme", &settings.theme)
         .append_pair("density", &settings.density)
+        // The custom CSS belongs to the page that is born now, not only to
+        // the pages that are open while the user saves it.
+        .append_pair("custom_css", &settings.custom_css)
         .finish();
     url::Url::from_file_path(&path)
         .map(|url| format!("{url}?{query}"))
@@ -295,12 +313,23 @@ fn page_kind_for_url(url: &str) -> TabPage {
     }
 }
 
-fn choice_url(domain: &str, target: &str) -> String {
+fn choice_url(domain: &str, target: &str, public: &str) -> String {
     let query = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("domain", domain)
         .append_pair("target", target)
+        .append_pair("public", public)
         .finish();
     format!("https://fdb.invalid/choose?{query}")
+}
+
+/// What the user picked on the conflict page.
+#[derive(Clone)]
+struct Choice {
+    /// The address the browser loads. A registry name is served by the local
+    /// proxy, so this one only works while the browser runs.
+    target: String,
+    /// The address the system browser can open without the app.
+    public: String,
 }
 
 fn navigation_key(input: &str) -> String {
@@ -319,20 +348,40 @@ fn navigation_key(input: &str) -> String {
         .to_string()
 }
 
-fn remembered_choice(input: &str) -> Option<String> {
-    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
+fn remembered_choice(input: &str) -> Option<Choice> {
+    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, Choice>>> =
         std::sync::OnceLock::new();
     let choices = CHOICES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     let choices = choices.lock().ok()?;
     choices.get(&navigation_key(input)).cloned()
 }
 
-fn remember_choice(domain: &str, target: &str) {
-    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
+fn remember_choice(domain: &str, target: &str, public: &str) {
+    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, Choice>>> =
         std::sync::OnceLock::new();
     let choices = CHOICES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     if let Ok(mut choices) = choices.lock() {
-        choices.insert(navigation_key(domain), target.to_string());
+        choices.insert(
+            navigation_key(domain),
+            Choice {
+                target: target.to_string(),
+                public: if public.is_empty() {
+                    target.to_string()
+                } else {
+                    public.to_string()
+                },
+            },
+        );
+    }
+}
+
+/// Forget what the user picked for a name, so the next visit asks again.
+fn forget_choice(input: &str) {
+    static CHOICES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, Choice>>> =
+        std::sync::OnceLock::new();
+    let choices = CHOICES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    if let Ok(mut choices) = choices.lock() {
+        choices.remove(&navigation_key(input));
     }
 }
 
@@ -352,14 +401,23 @@ fn error_page(failed_url: &str, error_text: &str, error_code: i32) -> String {
 }
 
 fn conflict_page(outcome: &fdn_core::NavigationOutcome) -> String {
+    // The browser loads the registry site through the local proxy; the
+    // system browser needs an address that works without the app.
     let target = crate::proxy::proxy_url(&outcome.domain, &outcome.path)
         .or_else(|| outcome.registry_target.clone())
         .unwrap_or_default();
+    let registry_public = outcome.registry_target.clone().unwrap_or_default();
     let public = outcome.public_url.clone().unwrap_or_default();
     CONFLICT_HTML
         .replace("{{domain}}", &outcome.domain)
-        .replace("{{registry_choice}}", &choice_url(&outcome.domain, &target))
-        .replace("{{public_choice}}", &choice_url(&outcome.domain, &public))
+        .replace(
+            "{{registry_choice}}",
+            &choice_url(&outcome.domain, &target, &registry_public),
+        )
+        .replace(
+            "{{public_choice}}",
+            &choice_url(&outcome.domain, &public, &public),
+        )
         .replace("{{target}}", &target)
 }
 
@@ -457,17 +515,19 @@ fn unavailable_page(outcome: &fdn_core::NavigationOutcome) -> String {
         .replace("{{public_js}}", &public_js)
 }
 
-fn choice_target(url: &str) -> Option<(String, String)> {
+fn choice_target(url: &str) -> Option<(String, String, String)> {
     let parsed = url::Url::parse(url).ok()?;
     if parsed.host_str() != Some("fdb.invalid") || parsed.path() != "/choose" {
         return None;
     }
     let mut domain = None;
     let mut target = None;
+    let mut public = None;
     for (key, value) in parsed.query_pairs() {
         match key.as_ref() {
             "domain" => domain = Some(value.into_owned()),
             "target" => target = Some(value.into_owned()),
+            "public" => public = Some(value.into_owned()),
             _ => {}
         }
     }
@@ -475,7 +535,11 @@ fn choice_target(url: &str) -> Option<(String, String)> {
     if !matches!(url::Url::parse(&target).ok()?.scheme(), "http" | "https") {
         return None;
     }
-    Some((domain.unwrap_or_default(), target))
+    let public = public.unwrap_or_default();
+    if !public.is_empty() && !matches!(url::Url::parse(&public).ok()?.scheme(), "http" | "https") {
+        return None;
+    }
+    Some((domain.unwrap_or_default(), target, public))
 }
 
 /// Parse the synthetic URL used by the chrome bar to request page navigation.
@@ -521,6 +585,8 @@ impl SimpleHandler {
                 panel_chat_child: false,
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
+                pending_navigations: HashMap::new(),
+                startup_navigation: None,
                 active_uid: None,
                 window: None,
                 is_closing: false,
@@ -561,12 +627,25 @@ impl SimpleHandler {
                 tab.page = kind;
             }
         }
-        if url.is_some_and(|value| value.starts_with("file://") || value.starts_with("data:")) {
-            return;
-        }
+        // An internal page (a file:// URL) shows the tab's own address in the
+        // chrome, not the path in the temporary folder, and the indicator
+        // shows a local page rather than the state of the page that was
+        // there before.
+        let display: Option<String> = match url {
+            Some(value) if value.starts_with("file://") || value.starts_with("data:") => {
+                Some(self.tab_display_address(source_id))
+            }
+            Some(value) => Some(value.to_string()),
+            None => None,
+        };
         let Some(uid) = self.tab_uid(source_id) else {
             return;
         };
+        // The icon of the page is fetched by the browser: the chrome bar has
+        // no address of its own and cannot load an image by itself.
+        if let Some(page_url) = url {
+            fetch_favicon(uid, page_url.to_string());
+        }
         let mut chrome = self
             .browser_list
             .iter()
@@ -578,7 +657,7 @@ impl SimpleHandler {
         let Some(frame) = chrome.main_frame() else {
             return;
         };
-        let url = url.map(|value| serde_json::to_string(value).unwrap_or_default());
+        let url = display.map(|value| serde_json::to_string(&value).unwrap_or_default());
         let title = title.map(|value| serde_json::to_string(value).unwrap_or_default());
         let script = match (url, title) {
             (Some(url), Some(title)) => format!("window.fdbUpdate&&fdbUpdate({url},{title},{uid})"),
@@ -710,6 +789,16 @@ impl SimpleHandler {
             .map(|tab| tab.uid)
     }
 
+    /// The address the chrome shows for a tab: the settings tab keeps its
+    /// own address, the other internal pages have none.
+    fn tab_display_address(&self, source_id: i32) -> String {
+        self.tab_uid(source_id)
+            .and_then(|uid| self.tabs.iter().find(|tab| tab.uid == uid))
+            .filter(|tab| tab.page == TabPage::Settings)
+            .map(|_| SETTINGS_TAB_URL.to_string())
+            .unwrap_or_default()
+    }
+
     pub fn register_initial_tabs(&mut self, views: &[BrowserView]) {
         for (uid, view) in views.iter().enumerate() {
             self.register_tab(uid as u64, view.clone(), TabPage::Web);
@@ -736,6 +825,34 @@ impl SimpleHandler {
             view,
             page,
         });
+    }
+
+    /// The browser starts on a name: it is resolved once a browser exists.
+    pub fn set_startup_navigation(&mut self, url: String) {
+        self.startup_navigation = Some(url);
+    }
+
+    /// A tab that has just been created owns this browser.
+    fn claim_browser(&mut self, uid: u64, browser_id: i32) {
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.uid == uid) {
+            tab.browser_id = browser_id;
+        }
+    }
+
+    /// A navigation that was waiting for a browser goes out now that the
+    /// browser exists.
+    fn flush_pending_navigation(&mut self, browser_id: i32) {
+        let Some(uid) = self
+            .tabs
+            .iter()
+            .find(|tab| tab.browser_id == browser_id)
+            .map(|tab| tab.uid)
+        else {
+            return;
+        };
+        if let Some(url) = self.pending_navigations.remove(&uid) {
+            spawn_navigation(browser_id, url);
+        }
     }
 
     /// The settings tab, if one is open. The tab the user is looking at
@@ -1159,6 +1276,13 @@ impl SimpleHandler {
             }
         }
 
+        // The browser may start on a name: it is resolved now that there is
+        // a browser to load it in.
+        if let Some(url) = self.startup_navigation.take() {
+            spawn_navigation(browser.identifier(), url);
+            return;
+        }
+
         if let Some((uid, page)) = self.pending_uids.front().copied() {
             if let Some(position) = self
                 .pending_views
@@ -1168,6 +1292,8 @@ impl SimpleHandler {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
                 self.register_tab(uid, view, page);
+                self.claim_browser(uid, browser.identifier());
+                self.flush_pending_navigation(browser.identifier());
                 self.switch_uid(uid);
             }
             return;
@@ -1195,10 +1321,13 @@ impl SimpleHandler {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
                 self.register_tab(uid, view, page);
+                self.claim_browser(uid, browser.identifier());
+                self.flush_pending_navigation(browser.identifier());
                 self.switch_uid(uid);
             }
             return;
         }
+        self.flush_pending_navigation(browser.identifier());
         if self.tabs.is_empty()
             && let Some(view) = browser_view_get_for_browser(Some(&mut browser))
         {
@@ -1301,13 +1430,12 @@ impl SimpleHandler {
         };
         let url = target_url.to_string();
         if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("fdn://") {
-            if let Some(instance) = SimpleHandler::instance() {
-                let payload = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".to_string());
-                let script = format!("window.fdbNewTabUrl&&fdbNewTabUrl({payload})");
-                if let Ok(inner) = instance.lock() {
-                    inner.chrome_execute(0, &script);
-                }
-            }
+            // The handler is already locked by the caller, so the chrome is
+            // told through the handler itself: a second lock would wait for
+            // the lock that is being held.
+            let payload = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".to_string());
+            let script = format!("window.fdbNewTabUrl&&fdbNewTabUrl({payload})");
+            self.chrome_execute(0, &script);
             return 1;
         }
         // Tauri parity: every window.open is denied, never a new top-level
@@ -1369,6 +1497,11 @@ impl SimpleHandler {
         let Some(frame) = frame else {
             return;
         };
+        // Only the page itself may be replaced by the error page. A missing
+        // image or a blocked script is a part of the page, not the page.
+        if frame.is_main() == 0 {
+            return;
+        }
         let uri = internal_page_url(&error_page(&failed, &text, error_code));
         let uri = CefString::from(uri.as_str());
         frame.load_url(Some(&uri));
@@ -1394,8 +1527,8 @@ impl SimpleHandler {
         };
         let current_id = current.identifier();
         if self.chrome_browser_id != Some(current_id) {
-            if let Some((domain, target)) = choice_target(&url) {
-                remember_choice(&domain, &target);
+            if let Some((domain, target, public)) = choice_target(&url) {
+                remember_choice(&domain, &target, &public);
                 post_page(current_id, target);
                 return 1;
             }
@@ -1540,7 +1673,17 @@ impl SimpleHandler {
                 target_id,
                 BrowserCommandKind::Reload,
             )),
+            "stop" => Some(BridgeAction::BrowserCommand(
+                target_id,
+                BrowserCommandKind::Stop,
+            )),
             "home" => Some(BridgeAction::Home(target_id)),
+            "retry" => value
+                .get("url")
+                .and_then(|url| url.as_str())
+                .map(str::trim)
+                .filter(|url| !url.is_empty())
+                .map(|url| BridgeAction::Retry(url.to_string())),
             "external" => {
                 let url = value.get("url")?.as_str()?.trim();
                 if url.is_empty() {
@@ -1664,6 +1807,7 @@ wrap_download_handler! {
                 .filter(|name| !name.trim().is_empty())
                 .unwrap_or_else(|| "download".to_string());
             let path = unique_download_path(&suggested);
+            eprintln!("[download] {}", path.display());
             let cef_path = CefString::from(path.to_string_lossy().as_ref());
             callback.cont(Some(&cef_path), 0);
             if let Some(instance) = SimpleHandler::instance()
@@ -1694,14 +1838,36 @@ wrap_download_handler! {
     }
 }
 
-fn unique_download_path(suggested: &str) -> std::path::PathBuf {
+/// The folder a download goes into. Windows has no `HOME`, it has a profile
+/// folder, and the downloads of the user live in a known folder of it.
+fn download_directory() -> std::path::PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let profile = std::env::var_os("USERPROFILE")
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOMEDRIVE")
+                    .zip(std::env::var_os("HOMEPATH"))
+                    .map(|(drive, path)| std::path::PathBuf::from(drive).join(path))
+            });
+        if let Some(profile) = profile {
+            let downloads = profile.join("Downloads");
+            if downloads.is_dir() {
+                return downloads;
+            }
+            return profile;
+        }
+    }
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    let directory = home
-        .as_ref()
+    home.as_ref()
         .map(|home| home.join("Downloads"))
         .filter(|directory| directory.is_dir())
         .or_else(|| home.clone())
-        .unwrap_or_else(std::env::temp_dir);
+        .unwrap_or_else(std::env::temp_dir)
+}
+
+fn unique_download_path(suggested: &str) -> std::path::PathBuf {
+    let directory = download_directory();
     let base = std::path::Path::new(suggested)
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -1797,6 +1963,16 @@ wrap_display_handler! {
                     inner.chrome_execute(0, "window.fdbOpenSettings&&fdbOpenSettings()");
                 }
                 Some(BridgeAction::CloseSettings) => close_settings_tab(),
+                Some(BridgeAction::Retry(url)) => {
+                    // "Try again" means the registry is reachable now: the
+                    // old pick must not answer instead of a new lookup.
+                    let name = url
+                        .strip_prefix("fdn://")
+                        .unwrap_or(url.as_str())
+                        .to_string();
+                    forget_choice(&name);
+                    spawn_navigation(browser.identifier(), url);
+                }
                 Some(BridgeAction::ToggleChatPanel) => toggle_chat_panel(),
                 Some(BridgeAction::Review(domain)) => open_review_in_system_browser(domain),
                 Some(BridgeAction::About) => {
@@ -1823,16 +1999,24 @@ wrap_display_handler! {
                     post_browser_command(target_id, kind);
                 }
                 Some(BridgeAction::Home(target_id)) => {
-                    // Tauri parity: the home button shows the new-tab/start
-                    // page. The `home` setting stays the startup URL only.
-                    // The empty-URL update clears the address bar for the tab
-                    // (the page itself is a file:// URL, which update_chrome
-                    // skips), so the chrome reflects a fresh back-to-start tab.
-                    post_page(target_id, internal_page_url(NEWTAB_HTML));
-                    if let Some(instance) = SimpleHandler::instance()
-                        && let Ok(mut handler) = instance.lock() {
-                            handler.update_chrome(target_id, Some(""), None);
-                        }
+                    // The home button goes to the page the settings name, and
+                    // to the start page when they name none. The address is
+                    // resolved like a typed name, so a free-domain name in
+                    // the setting reaches the registry as well.
+                    let home = crate::settings::load().home.trim().to_string();
+                    if home.is_empty() {
+                        // The empty-URL update clears the address bar for the
+                        // tab (the page itself is a file:// URL, which
+                        // update_chrome skips), so the chrome reflects a fresh
+                        // back-to-start tab.
+                        post_page(target_id, internal_page_url(NEWTAB_HTML));
+                        if let Some(instance) = SimpleHandler::instance()
+                            && let Ok(mut handler) = instance.lock() {
+                                handler.update_chrome(target_id, Some(""), None);
+                            }
+                    } else {
+                        spawn_navigation(target_id, home);
+                    }
                 }
                 Some(BridgeAction::External(url)) => {
                     if let Err(error) = open_external(&url)
@@ -1993,9 +2177,11 @@ wrap_keyboard_handler! {
                 // Plain F5 only: with modifiers it belongs to the OS/macOS and
                 // must not trigger a reload.
                 Some("window.fdbReload&&fdbReload()")
-            } else if modifiers == 0 && key == 121 {
-                // F10 opens the menu, the way every other browser does.
-                open_menu_window();
+            } else if modifiers == 0 && key == 121 && open_menu_window() {
+                // F10 opens the menu, the way every other browser does. The
+                // key is only swallowed where it opened something: on macOS
+                // the menu is the native menu bar and there is no window, so
+                // the key belongs to the page.
                 return 1;
             } else {
                 None
@@ -2342,6 +2528,13 @@ fn handle_chat_command(browser_id: i32, message: &str) {
                 .await
                 .map(|snapshot| serde_json::json!(snapshot))
                 .map_err(|error| error.to_string()),
+            // The age gate and the join belong together: the join must not
+            // arrive before the age is stored.
+            "confirm_age_enable" => service
+                .confirm_age_and_enable(tab_id.clone())
+                .await
+                .map(|snapshot| serde_json::json!(snapshot))
+                .map_err(|error| error.to_string()),
             "set_nickname" => {
                 let nickname = value
                     .get("nickname")
@@ -2446,10 +2639,25 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
     } else {
         TabPage::Web
     };
+    // An address that is not a full web address is a name, and a name goes
+    // through the resolver like a typed name does. The browser does not exist
+    // yet, so the navigation waits for it.
+    let name = url.trim().to_string();
+    let needs_resolver = page == TabPage::Web
+        && !name.is_empty()
+        && !name.starts_with("http://")
+        && !name.starts_with("https://")
+        && !name.starts_with("file://")
+        && !name.starts_with("data://");
     let url = match page {
         TabPage::Settings => settings_page_url(&crate::settings::load()),
+        TabPage::Web if needs_resolver => internal_page_url(NEWTAB_HTML),
         TabPage::Web => url,
     };
+    if needs_resolver {
+        let mut handler = inner.lock().expect("Failed to lock inner");
+        handler.pending_navigations.insert(uid, name.clone());
+    }
 
     // Never hold the handler lock across view creation: CEF invokes
     // `on_after_created`, which locks the same mutex. Queue the uid first so
@@ -2536,12 +2744,14 @@ fn open_external(raw: &str) -> Result<(), String> {
         let name = raw.trim_start_matches("fdn://").to_string();
         let domain_key = name.split('/').next().unwrap_or("").to_string();
         let domain_key = domain_key.trim_end_matches(".fdn").to_string();
-        if let Some(target) = remembered_choice(&domain_key)
-            && let Ok(parsed) = url::Url::parse(&target)
+        // The system browser gets the address that works without the app,
+        // not the local proxy of the browser.
+        if let Some(choice) = remembered_choice(&domain_key)
+            && let Ok(parsed) = url::Url::parse(&choice.public)
             && matches!(parsed.scheme(), "http" | "https")
             && parsed.host_str().is_some_and(|host| host != "fdb.invalid")
         {
-            return open_external_http(&target);
+            return open_external_http(&choice.public);
         }
         let raw = raw.to_string();
         std::thread::spawn(move || {
@@ -2550,15 +2760,9 @@ fn open_external(raw: &str) -> Result<(), String> {
                 .build();
             let url = match runtime {
                 Ok(runtime) => runtime.block_on(async move {
-                    let cache = std::env::temp_dir().join("fdn-registry");
-                    let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
-                        return None;
-                    };
-                    let Ok(navigator) = fdn_core::Navigator::new() else {
-                        return None;
-                    };
+                    let (registry, navigator) = resolver()?;
                     let input = raw.trim_start_matches("fdn://");
-                    let outcome = navigator.resolve(&registry, input).await.ok()?;
+                    let outcome = navigator.resolve(registry, input).await.ok()?;
                     if outcome.source == fdn_core::Source::GithubRegistry {
                         outcome.registry_target
                     } else {
@@ -2594,6 +2798,7 @@ fn open_external_http(raw: &str) -> Result<(), String> {
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err("external URLs must be http(s)".to_string());
     }
+    eprintln!("[external] opening {parsed}");
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(target_os = "linux")]
@@ -2630,7 +2835,7 @@ fn spawn_navigation(target_id: i32, target: String) {
         .map(str::to_string)
         .unwrap_or(target);
     if let Some(choice) = remembered_choice(&target) {
-        post_page(target_id, choice);
+        post_page(target_id, choice.target);
         return;
     }
     // Normal web URLs must not wait on registry + public-DNS probes. Only
@@ -2650,14 +2855,10 @@ fn spawn_navigation(target_id: i32, target: String) {
             .build();
         let url = match runtime {
             Ok(runtime) => runtime.block_on(async move {
-                let cache = std::env::temp_dir().join("fdn-registry");
-                let Ok(registry) = fdn_core::RegistryClient::new(cache) else {
+                let Some((registry, navigator)) = resolver() else {
                     return target;
                 };
-                let Ok(navigator) = fdn_core::Navigator::new() else {
-                    return target;
-                };
-                match navigator.resolve(&registry, &target).await {
+                match navigator.resolve(registry, &target).await {
                     Ok(outcome) => match outcome.kind {
                         fdn_core::OutcomeKind::Conflict => {
                             internal_page_url(&conflict_page(&outcome))
@@ -2681,14 +2882,140 @@ fn spawn_navigation(target_id: i32, target: String) {
                                 .unwrap_or(target)
                         }
                     },
-                    Err(_) => target,
+                    Err(_) => unresolved_url(&target),
                 }
             }),
-            Err(_) => target,
+            Err(_) => unresolved_url(&target),
         };
         let mut task = ResolveNavigation::new(target_id, url, generation);
         post_task(ThreadId::UI, Some(&mut task));
     });
+}
+
+/// The address of the icon of a page.
+fn favicon_origin(page_url: &str) -> Option<String> {
+    let parsed = url::Url::parse(page_url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    Some(format!(
+        "{}/favicon.ico",
+        parsed.origin().ascii_serialization()
+    ))
+}
+
+/// The icon of a page, as a picture the chrome can show.
+///
+/// The chrome bar has no address of its own, so the browser refuses to load
+/// an image for it. The browser fetches the icon itself and hands it over
+/// as a picture that needs no address.
+fn fetch_favicon(uid: u64, page_url: String) {
+    let Some(url) = favicon_origin(&page_url) else {
+        return;
+    };
+    // One fetch per address: a page that reloads does not fetch again.
+    {
+        let fetched = favicon_cache()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if fetched.contains_key(&url) {
+            return;
+        }
+    }
+    std::thread::spawn(move || {
+        let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
+            return;
+        };
+        let address = url.clone();
+        let picture = runtime.block_on(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .ok()?;
+            let response = client.get(&address).send().await.ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("image/png")
+                .split(';')
+                .next()
+                .unwrap_or("image/png")
+                .trim()
+                .to_string();
+            if !content_type.starts_with("image/") {
+                return None;
+            }
+            let bytes = response.bytes().await.ok()?;
+            if bytes.is_empty() || bytes.len() > 128 * 1024 {
+                return None;
+            }
+            Some(get_data_uri(&bytes, &content_type))
+        });
+        let Some(picture) = picture else {
+            return;
+        };
+        let mut fetched = favicon_cache()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        fetched.insert(url, picture.clone());
+        drop(fetched);
+        // The chrome gets the picture.
+        let Some(instance) = SimpleHandler::instance() else {
+            return;
+        };
+        let Ok(inner) = instance.lock() else {
+            return;
+        };
+        let script = format!(
+            "window.fdbFavicon&&fdbFavicon({},{})",
+            uid,
+            serde_json::to_string(&picture).unwrap_or_default()
+        );
+        inner.chrome_execute(0, &script);
+    });
+}
+
+/// The icons that were fetched already, by address.
+fn favicon_cache() -> &'static std::sync::Mutex<HashMap<String, String>> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// The resolver of the browser. It is shared: it remembers what the user
+/// picked for a name, and a fresh resolver per navigation would forget it.
+fn resolver() -> Option<(
+    &'static fdn_core::RegistryClient,
+    &'static fdn_core::Navigator,
+)> {
+    static RESOLVER: std::sync::OnceLock<Option<(fdn_core::RegistryClient, fdn_core::Navigator)>> =
+        std::sync::OnceLock::new();
+    RESOLVER
+        .get_or_init(|| {
+            let cache = std::env::temp_dir().join("fdn-registry");
+            let registry = fdn_core::RegistryClient::new(cache).ok()?;
+            let navigator = fdn_core::Navigator::new().ok()?;
+            Some((registry, navigator))
+        })
+        .as_ref()
+        .map(|(registry, navigator)| (registry, navigator))
+}
+
+/// What to load when the resolver could not answer. Only a web address goes
+/// through as it is: a `javascript:` or `data:` address typed into the
+/// address bar must never be loaded.
+fn unresolved_url(target: &str) -> String {
+    if target.starts_with("http://") || target.starts_with("https://") {
+        return target.to_string();
+    }
+    internal_page_url(&error_page(target, "the name could not be resolved", 0))
 }
 
 /// Per-target navigation generation. Bumped by every navigation request so a
@@ -2754,6 +3081,7 @@ wrap_task! {
                 BrowserCommandKind::Back => target.go_back(),
                 BrowserCommandKind::Forward => target.go_forward(),
                 BrowserCommandKind::Reload => target.reload(),
+                BrowserCommandKind::Stop => target.stop_load(),
             }
         }
     }
@@ -3156,7 +3484,22 @@ mod navigation_tests {
         let choice = choice_target(
             "https://fdb.invalid/choose?domain=foo&target=https%3A%2F%2Ffoo.example%2F",
         );
-        assert_eq!(choice, Some(("foo".into(), "https://foo.example/".into())));
+        assert_eq!(
+            choice,
+            Some(("foo".into(), "https://foo.example/".into(), String::new()))
+        );
+        // The address for the system browser travels with the choice.
+        let choice = choice_target(
+            "https://fdb.invalid/choose?domain=foo&target=https%3A%2F%2Ffoo.localhost%3A8080%2F&public=https%3A%2F%2Ffoo.example%2F",
+        );
+        assert_eq!(
+            choice,
+            Some((
+                "foo".into(),
+                "https://foo.localhost:8080/".into(),
+                "https://foo.example/".into()
+            ))
+        );
         assert_eq!(
             choice_target("https://fdb.invalid/choose?domain=foo&target=javascript%3Aalert(1)"),
             None

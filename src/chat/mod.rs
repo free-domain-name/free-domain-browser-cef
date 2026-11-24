@@ -110,7 +110,6 @@ pub const EVENT_STATE: &str = "chat://state";
 pub const EVENT_MESSAGE: &str = "chat://message";
 pub const EVENT_PRESENCE: &str = "chat://presence";
 pub const EVENT_ERROR: &str = "chat://error";
-pub const EVENT_ROOMS: &str = "chat://rooms";
 
 const HEARTBEAT: Duration = Duration::from_secs(15);
 const PROFILE_COOLDOWN: Duration = Duration::from_secs(5 * 60);
@@ -358,10 +357,6 @@ impl ChatService {
         } else {
             self.stop_session().await;
         }
-
-        let _ = self.settings.update(|settings| {
-            settings.panel_enabled = should_run;
-        });
 
         Ok(self.snapshot().await)
     }
@@ -726,6 +721,16 @@ impl ChatService {
             .update(|settings| settings.age_confirmed = true)
             .map_err(ChatError::Storage)?;
         Ok(self.snapshot().await)
+    }
+
+    /// Confirm the age and join the room in one step. The two must not race:
+    /// the age gate rejects a join that arrives before the age is stored, and
+    /// two tasks on the runtime can run them in either order.
+    pub async fn confirm_age_and_enable(&self, tab_id: String) -> Result<Snapshot, ChatError> {
+        self.settings
+            .update(|settings| settings.age_confirmed = true)
+            .map_err(ChatError::Storage)?;
+        self.set_enabled(tab_id, true).await
     }
 
     pub async fn set_active_tab(&self, tab_id: Option<String>) -> Snapshot {

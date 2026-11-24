@@ -6,7 +6,9 @@
 use iroh_gossip::TopicId;
 use sha2::{Digest, Sha256};
 
-pub const LOBBY_ROOM: &str = "fdn:general:v1";
+/// The room the client joins when the lobby is configured. It is the same
+/// value as the configuration default: one room, one name.
+pub use super::config::DEFAULT_LOBBY_ROOM as LOBBY_ROOM;
 
 /// `sha256(room)` is the gossip topic. This mapping must match the server and
 /// every client version; changing it creates a different room.

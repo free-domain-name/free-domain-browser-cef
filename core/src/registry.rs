@@ -31,6 +31,16 @@ use crate::error::{AppError, AppResult};
 pub const REGISTRY_RAW_BASE: &str =
     "https://raw.githubusercontent.com/free-domain-name/registry/main";
 
+/// The base the registry is read from. It can be pointed at another
+/// registry (a mirror, a local copy) with `FDB_REGISTRY_BASE`.
+pub fn registry_base() -> String {
+    std::env::var("FDB_REGISTRY_BASE")
+        .ok()
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| REGISTRY_RAW_BASE.to_string())
+}
+
 /// Number of one-character directories in the shard path.
 pub const SHARD_DEPTH: usize = 4;
 
@@ -148,24 +158,11 @@ impl RegistryClient {
 
     /// Fully qualified raw URL for a record.
     pub fn raw_url(domain: &str) -> String {
-        format!("{REGISTRY_RAW_BASE}/{}", Self::shard_path(domain))
+        format!("{}/{}", registry_base(), Self::shard_path(domain))
     }
 
     pub fn cache_dir(&self) -> &Path {
         &self.cache_dir
-    }
-
-    /// Cache-only lookup used by redirect handling (never performs I/O).
-    pub fn cached(&self, domain: &str) -> Option<RegistryRecord> {
-        let now = SystemTime::now();
-        let memory = self
-            .memory
-            .read()
-            .unwrap_or_else(|poison| poison.into_inner());
-        memory
-            .get(domain)
-            .filter(|entry| entry.is_fresh(now))
-            .and_then(|entry| entry.record.clone())
     }
 
     /// Resolve one name. `Ok(None)` means the registry does not contain it.

@@ -1,6 +1,8 @@
 ; NSIS installer for the portable Windows package.
 ; Invoke from the repository root:
-;   makensis /DSTAGE=<abs stage> /DOUTFILE=<abs output.exe> assets/windows/installer.nsi
+;   makensis /DSTAGE=<abs stage> /DOUTFILE=<abs output.exe> /DVERSION=<version> assets/windows/installer.nsi
+; The version comes from Cargo.toml, so the installer never says a version
+; of its own.
 Unicode true
 !include "MUI2.nsh"
 
@@ -9,6 +11,9 @@ Unicode true
 !endif
 !ifndef OUTFILE
   !define OUTFILE "target\FreeDomainBrowser-CEF-windows-x64-setup.exe"
+!endif
+!ifndef VERSION
+  !define VERSION "0.0.0"
 !endif
 
 Name "Free Domain Browser"
@@ -35,7 +40,7 @@ Section "Free Domain Browser" SecMain
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "DisplayIcon" "$INSTDIR\free-domain-browser-cef.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "Publisher" "Free Domain Browser contributors"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "DisplayVersion" "0.1.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreeDomainBrowserCEF" "DisplayVersion" "${VERSION}"
 SectionEnd
 
 Section "Uninstall"

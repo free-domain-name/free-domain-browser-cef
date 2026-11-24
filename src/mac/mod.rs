@@ -97,6 +97,11 @@ define_class! {
         unsafe fn fdb_settings(&self, _sender: &AnyObject) {
             run_chrome("window.fdbOpenSettings&&fdbOpenSettings()");
         }
+
+        #[unsafe(method(fdbChat:))]
+        unsafe fn fdb_chat(&self, _sender: &AnyObject) {
+            run_chrome("window.fdbToggleChat&&fdbToggleChat()");
+        }
     }
 
     unsafe impl NSObjectProtocol for SimpleAppDelegate {}
@@ -271,6 +276,14 @@ impl SimpleAppDelegate {
                 &NSString::from_str(","),
             );
             let _: () = msg_send![&appearance, setTarget: self];
+            // The chat belongs to the menu on every platform: the other
+            // platforms reach it through the menu window.
+            let chat = file_menu.addItemWithTitle_action_keyEquivalent(
+                &NSString::from_str("Community Chat"),
+                Some(sel!(fdbChat:)),
+                &NSString::from_str(""),
+            );
+            let _: () = msg_send![&chat, setTarget: self];
             file_item.setSubmenu(Some(&file_menu));
 
             let edit_item = main.addItemWithTitle_action_keyEquivalent(

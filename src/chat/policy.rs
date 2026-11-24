@@ -73,10 +73,6 @@ impl Policy {
         self.ignored.remove(&sender.to_string())
     }
 
-    pub fn ignored(&self) -> Vec<String> {
-        self.ignored.iter().cloned().collect()
-    }
-
     pub fn check_send(&mut self, text: &str) -> Result<(), LimitError> {
         let text = text.trim();
         if text.is_empty() {

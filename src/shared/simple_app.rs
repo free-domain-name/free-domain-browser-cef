@@ -5,7 +5,9 @@ use super::simple_handler::*;
 
 /// Height of the fixed HTML chrome bar, in DIP.
 // Chrome page layout: tab strip (32) + toolbar (64) — no status-bar strip.
-const CHROME_HEIGHT: i32 = 79;
+// The two must add up: a view that is shorter than the page cuts the bottom
+// of the toolbar away.
+pub(crate) const CHROME_HEIGHT: i32 = 96;
 
 wrap_window_delegate! {
     struct SimpleWindowDelegate {
@@ -437,14 +439,23 @@ wrap_browser_process_handler! {
             // The home page the user chose, or the start page when there is
             // none. The browser must never open a search engine on its own.
             let home = crate::settings::load().home.trim().to_string();
-            let url = if url.is_empty() {
-                if home.is_empty() {
-                    crate::shared::simple_handler::start_page_url()
-                } else {
-                    home
-                }
+            let requested = if url.is_empty() {
+                home.clone()
             } else {
                 url.as_str().to_string()
+            };
+            // A name is not an address: it goes through the resolver like a
+            // name that is typed into the address bar.
+            let needs_resolver = !requested.is_empty()
+                && !requested.starts_with("http://")
+                && !requested.starts_with("https://")
+                && !requested.starts_with("file://")
+                && !requested.starts_with("data://")
+                && !requested.starts_with("fdn://");
+            let url = if requested.is_empty() || needs_resolver {
+                crate::shared::simple_handler::start_page_url()
+            } else {
+                requested.clone()
             };
             // The chrome shows the address of the page. An internal page has
             // no address worth showing, so its tab starts with an empty one.
@@ -453,9 +464,21 @@ wrap_browser_process_handler! {
                 || url.starts_with("fdn://")
             {
                 url.clone()
+            } else if needs_resolver {
+                requested.clone()
             } else {
                 String::new()
             };
+            if needs_resolver {
+                // The first page of the browser is a name: it is resolved
+                // once the browser exists.
+                if let Some(instance) = SimpleHandler::instance() {
+                    instance
+                        .lock()
+                        .expect("Failed to lock handler")
+                        .set_startup_navigation(requested.clone());
+                }
+            }
             let url = CefString::from(url.as_str());
 
             // Views is enabled by default (add `--use-native` to disable).
@@ -471,8 +494,10 @@ wrap_browser_process_handler! {
                 let chrome_html = include_str!("../../assets/chrome.html")
                     .replace("__FDB_INITIAL_URL__", &initial_tab_json)
                     // data: origins cannot resolve a relative stylesheet;
-                    // inline the shared kit for the chrome page only.
-                    .replace("</head>", &format!("<style>{}</style></head>", UI_KIT_CSS));
+                    // inline the shared kit for the chrome page only. It goes
+                    // into the slot before the custom CSS, so a custom rule
+                    // still wins over the kit.
+                    .replace("__FDB_UI_KIT__", UI_KIT_CSS);
 
                 let chrome_url = get_data_uri(chrome_html.as_bytes(), "text/html");
                 let chrome_url = CefString::from(chrome_url.as_str());

@@ -363,7 +363,10 @@ async fn fetch(
         builder = builder.header(name, value);
     }
     if crate::settings::load().dnt {
+        // The same headers on both paths: the browser's own requests and the
+        // requests the proxy forwards say the same thing.
         builder = builder.header("DNT", "1");
+        builder = builder.header("Sec-GPC", "1");
     }
     if !request.body.is_empty() {
         builder = builder.body(request.body.clone());

@@ -81,7 +81,12 @@ if ($nsisPath) {
   $stageAbs = (Resolve-Path $stage).Path
   $setup = Join-Path (Get-Location) "target/$name-setup.exe"
   Remove-Item -Force $setup -ErrorAction SilentlyContinue
-  & $nsisPath "/DSTAGE=$stageAbs" "/DOUTFILE=$setup" "assets/windows/installer.nsi"
+  # The version comes from the manifest, so the installer never says a
+  # version of its own.
+  $version = (Select-String -Path "Cargo.toml" -Pattern '^version\s*=\s*"([^"]+)"' |
+    Select-Object -First 1).Matches.Groups[1].Value
+  if (-not $version) { throw "could not read the version from Cargo.toml" }
+  & $nsisPath "/DSTAGE=$stageAbs" "/DOUTFILE=$setup" "/DVERSION=$version" "assets/windows/installer.nsi"
   if ($LASTEXITCODE -ne 0) { throw "makensis failed with exit code $LASTEXITCODE" }
   Write-Host "wrote $setup"
 } else {

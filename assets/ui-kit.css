@@ -52,7 +52,10 @@
   --font: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-html[data-theme=light]{
+/* The theme block carries no specificity of its own (:where), so a custom
+ * rule from the settings can override a token: `html[data-theme=light]`
+ * would beat `:root{--accent:...}` and the custom CSS would never work. */
+html:where([data-theme=light]){
   --bg: #eef1f6;
   --chrome: #ffffff;
   --surface: #ffffff;

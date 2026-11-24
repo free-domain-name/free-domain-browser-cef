@@ -159,11 +159,21 @@ fn is_free_namespace(domain: &str) -> bool {
 }
 
 pub fn public_url(domain: &str, path: &str, scheme: &str) -> String {
+    public_url_with_port(domain, path, scheme, None)
+}
+
+/// The public address of a name. A server that is not on the default port
+/// keeps its port: `example.com:8080` is not `example.com`.
+pub fn public_url_with_port(domain: &str, path: &str, scheme: &str, port: Option<u16>) -> String {
     let scheme = match scheme {
         "http" | "https" => scheme,
         _ => "https",
     };
-    format!("{scheme}://{domain}{}", normalize_path(path))
+    let host = match port {
+        Some(port) => format!("{domain}:{port}"),
+        None => domain.to_string(),
+    };
+    format!("{scheme}://{host}{}", normalize_path(path))
 }
 
 fn normalize_path(raw: &str) -> String {
@@ -183,6 +193,8 @@ struct ParsedInput {
     domain: String,
     path: String,
     public_scheme: String,
+    /// The port the user typed, if it is not the default one of the scheme.
+    port: Option<u16>,
     search: bool,
 }
 
@@ -209,6 +221,7 @@ fn parse_input(raw: &str) -> AppResult<ParsedInput> {
             domain: "duckduckgo.com".to_string(),
             path,
             public_scheme: "https".to_string(),
+            port: None,
             search: true,
         });
     }
@@ -258,6 +271,7 @@ fn parse_input(raw: &str) -> AppResult<ParsedInput> {
         domain: host,
         path: normalize_path(&path),
         public_scheme,
+        port: url.port(),
         search: false,
     })
 }
@@ -336,7 +350,12 @@ impl Navigator {
     ) -> AppResult<NavigationOutcome> {
         let parsed = parse_input(raw)?;
         let registry_url = registry_url(&parsed.domain, &parsed.path);
-        let public_url = public_url(&parsed.domain, &parsed.path, &parsed.public_scheme);
+        let public_url = public_url_with_port(
+            &parsed.domain,
+            &parsed.path,
+            &parsed.public_scheme,
+            parsed.port,
+        );
 
         if parsed.search {
             return Ok(NavigationOutcome::navigate(
@@ -510,6 +529,26 @@ mod tests {
         let parsed = parse_input("http://fdn.example.com/b").unwrap();
         assert_eq!(parsed.domain, "example.com");
         assert_eq!(parsed.path, "/b");
+    }
+
+    #[test]
+    fn keeps_the_port_of_an_address() {
+        // A server that is not on the default port keeps it.
+        let parsed = parse_input("http://example.com:8080/a").unwrap();
+        assert_eq!(parsed.domain, "example.com");
+        assert_eq!(parsed.port, Some(8080));
+        assert_eq!(
+            public_url_with_port(
+                &parsed.domain,
+                &parsed.path,
+                &parsed.public_scheme,
+                parsed.port
+            ),
+            "http://example.com:8080/a"
+        );
+        // The default port of the scheme is the same as no port at all.
+        assert_eq!(parse_input("https://example.com:443/").unwrap().port, None);
+        assert_eq!(parse_input("https://example.com/").unwrap().port, None);
     }
 
     #[test]

@@ -74,12 +74,6 @@ impl Identity {
             node_id,
         })
     }
-
-    /// Rotates the identity. The old key is unrecoverable, so callers must warn.
-    pub fn rotate(config_dir: Option<&Path>) -> Result<Self, IdentityError> {
-        delete(config_dir)?;
-        Self::load_or_create(config_dir)
-    }
 }
 
 /// Where the identity file lives for a given config dir; falls back to the

@@ -18,7 +18,8 @@ button.secondary{background:var(--button);color:var(--text)}button.link{backgrou
 </div>
 <script>
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
-document.getElementById('retry').onclick=function(){send({cmd:'navigate',url:'fdn://'+{{domain_js}}})};
+// The retry asks again: the old pick must not answer for the registry.
+document.getElementById('retry').onclick=function(){send({cmd:'retry',url:'fdn://'+{{domain_js}}})};
 var pub=document.getElementById('public');
 if(pub)pub.onclick=function(){send({cmd:'navigate',url:{{public_js}}})};
 document.getElementById('home').onclick=function(){send({cmd:'home'})};
