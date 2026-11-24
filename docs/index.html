@@ -188,6 +188,7 @@
               <li>Real Chromium: identical rendering everywhere</li>
               <li>Portable archives for macOS, Linux and Windows</li>
               <li>Community chat over the iroh service, in a side panel</li>
+              <li>Tabs with the icon of the site, the title in the address bar</li>
             </ul>
             <div class="build-actions">
               <a class="button primary" href="https://github.com/free-domain-name/free-domain-browser-cef/releases">
@@ -217,15 +218,17 @@
             <h3>Registry first, DNS second</h3>
             <p>
               Names are looked up in the community registry before public DNS. When a name exists in both,
-              the browser asks and remembers the answer for the session, so you decide once.
+              the browser asks and remembers the answer for the session, so you decide once. Try again means
+              again: the old answer is forgotten before the registry is asked.
             </p>
           </article>
           <article class="feature">
             <span class="feature-mark" aria-hidden="true">▤</span>
             <h3>Tabs that behave</h3>
             <p>
-              Dynamic tabs with their own titles, closing and shortcuts. The address bar and the window title
-              follow the tab you are looking at, with back, forward, reload and home within reach.
+              Dynamic tabs with their own titles, the icon of the site, closing and shortcuts. The strip
+              counts them and keeps the one you are looking at in sight. A link that wants a window of its
+              own gets a tab, not a second window.
             </p>
           </article>
           <article class="feature">
@@ -233,7 +236,25 @@
             <h3>Chrome as plain HTML</h3>
             <p>
               The bar above the page is one fixed HTML view, with a security indicator, a new tab page and
-              the settings tab. The compact density and the light and dark themes apply to it.
+              the settings tab. The compact density and the light and dark themes apply to it, and so does
+              your own CSS.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-mark" aria-hidden="true">◑</span>
+            <h3>An indicator that tells the truth</h3>
+            <p>
+              The little shield says what the page really is: a secure connection, an ordinary one, or a
+              page of the browser itself. The button turns into a stop while the page loads, and stops it.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-mark" aria-hidden="true">⌂</span>
+            <h3>The home page is your home page</h3>
+            <p>
+              The Home button goes to the address you set in the settings, the same one the browser opens
+              itself. The title of the page stands in the address bar, and the address comes back when you
+              click into it.
             </p>
           </article>
           <article class="feature">
@@ -242,6 +263,8 @@
             <p>
               The community chat opens in a 420&nbsp;px side panel that follows the active tab, with a
               compact drawer for narrow windows. It talks to the ported iroh service over the public relay.
+              The nickname, the profile card, the ignore list and the button that clears the data are all in
+              the panel.
             </p>
           </article>
           <article class="feature">
@@ -258,6 +281,14 @@
             <p>
               Retry error pages, <code>fdn://</code> links handled inside the browser, and community reviews
               that open in a reusable review window of their own.
+            </p>
+          </article>
+          <article class="feature">
+            <span class="feature-mark" aria-hidden="true">↓</span>
+            <h3>Files where you expect them</h3>
+            <p>
+              A download lands in the downloads folder of your system and the browser says where it went.
+              The registry being unreachable is a page with a button, not a dead end.
             </p>
           </article>
         </div>

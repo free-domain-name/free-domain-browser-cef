@@ -7,15 +7,20 @@ Current state: macOS CEF window with a fixed HTML chrome bar in a top
 `BrowserView` and the page in a second `BrowserView`. Yahoo loads top-level, so
 there is no `X-Frame-Options` block and the page cannot paint over the chrome.
 
-Implemented: dynamic tabs with titles/closing/shortcuts, address-bar and title
-sync, back/forward/reload/home, security indicator, new-tab page, settings
-persistence in Rust, registry conflict/claim pages with a per-session choice
-memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
+Implemented: dynamic tabs with titles, the icon of the site, closing and
+shortcuts, a tab count, a popup that becomes a tab, the title of the page in the
+address bar, back/forward/reload/stop/home, a security indicator that says what
+the page really is, new-tab page, settings persistence in Rust (in the config
+folder of the platform, held in memory and checked when they are read),
+registry conflict/claim pages with a per-session choice memory, `fdn://` link
+handling, retry error pages, downloads that land in the downloads folder of the
+platform, and a local chat UI. Settings
 opens in a tab of its own, chat as a 420 px side panel that follows the active
 tab (with a compact drawer), and the community reviews open in the system
 browser, where the review page can ask for a GitHub login.
-The Material light and dark theme and the compact density are applied to the
-chrome and internal pages; the Browser and Edit menus exist on every platform:
+The Material light and dark theme, the compact density and your own CSS are
+applied to the chrome and the internal pages; the Browser and Edit menus exist
+on every platform:
 a native menu bar on macOS and Windows, and a menu window on Linux, where CEF
 draws its own X11 window and cannot host a native one. Press F10 or Alt+F to
 open it. The chat page talks to the ported iroh service. The production relay

@@ -8,6 +8,44 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A link that wants a window of its own no longer hangs the browser. The
+  handler that turns a popup into a tab asked for the lock of the browser
+  while the caller was already holding it, and the browser waited for itself.
+  The popup now becomes a tab of its own, with the address travelling with it.
+- The toolbar is not cut off any more. The chrome view was 79 px tall and the
+  chrome drew 96 px, so 17 px of the toolbar — the bottom of the Go button
+  among them — was clipped. The height of the view and the height of the
+  chrome are one number now, so they cannot drift apart again.
+- The custom CSS reaches the chrome bar. The shared kit was injected after
+  the custom CSS, so a `:root{--accent:...}` of the user lost against the
+  kit's own rule. The kit no longer out-specifies the user, and the custom
+  CSS is part of the bootstrap of every internal page, so a new tab has it
+  too.
+- The Home button goes to the home page of the settings. The setting was read
+  once at startup, and the button always opened the start page.
+- The security indicator says what the page really is. It kept the last
+  page's state on the internal pages, and it called every page a secure
+  connection.
+- The reload button stops the page while it loads. The glyph changed, the
+  command did not: it reloaded again.
+- The settings live in the config folder of the platform. Every platform got
+  the macOS folder under the home directory, so Linux and Windows users found
+  a stray `Library/Application Support`.
+- The settings are held in memory and watched, instead of being read from
+  the disk on every request, and a hand-edited file goes through the same
+  check as one the settings page saved.
+- Both network paths send `Sec-GPC: 1` next to `DNT: 1`. The proxy path sent
+  only one of them.
+- The resolver keeps the port of an address. A name with a port was resolved
+  and then lost it, so the page could not be reached.
+- Only the main frame may show the error page. A missing image replaced the
+  whole page with an error.
+- The system browser gets an address that works without the browser. It got
+  the loopback address of the proxy, which is of no use in another program.
+- A download lands in the downloads folder of the platform, and the browser
+  says where it went.
+- "Try again" asks the registry again. The remembered answer answered first,
+  so the retry button did nothing.
 - The Free Registry is asked first again. The chrome bar added `https://` to
   every name that was typed, and the browser then treated it as a plain web
   address: the registry was never consulted for an ordinary domain, a name
@@ -25,6 +63,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The tabs show the icon of the site, the strip counts them, and the tab you
+  are looking at is kept in sight when the strip overflows. The title of the
+  page stands in the address bar, and the address comes back when you click
+  into it.
+- The chat shows the room it is in, the age gate and the join are one step
+  apart, and the macOS menu has an entry for the community chat.
+- The Windows installer carries the version of the build.
+- Six more journeys, and a framework that can reach the gaps: `unavailable`
+  points the browser at a registry that cannot be reached, `site` covers the
+  icon, the title, the download and the popup, `external` covers the button
+  that opens the system browser, `density` covers the compact density,
+  `keyboard` sends a real key to a content page, and `chat-panel` covers the
+  nickname, the profile, the ignore list and the clear button. Every journey
+  runs against a small site of its own, so none of them depends on the public
+  web.
 - A verification framework. The journeys in `verification/journeys` are the
   written-down version of what the browser must do, and `scripts/verify.sh`
   checks them against the real build: it starts the application binary,
@@ -49,14 +102,22 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of the chrome down. The runner can now send the modifier keys with a key
   event.
 - An audit of the feature list, in `PLAN.md` phase 9. It read the code and
-  measured the running browser in the Linux container, and it lists what the
-  browser does not do yet: a toolbar that is 17 px too tall for its view, a
-  custom CSS that never reaches the chrome, a home setting the Home button
-  ignores, a density that is implemented twice, the settings folder that is
-  the macOS folder on every platform, and the navigation paths that can lose
-  a URL.
+  measured the running browser in the Linux container, and it listed what the
+  browser did not do yet: a toolbar that was 17 px too tall for its view, a
+  custom CSS that never reached the chrome, a home setting the Home button
+  ignored, a density that was implemented twice, the settings folder that was
+  the macOS folder on every platform, and the navigation paths that could lose
+  a URL. The list is closed now: every item of the phase is done and proved by
+  a journey or a test.
 
 ### Changed
+
+- The resolver is shared now, so the browser remembers what the user picked
+  for a name between the navigations. A fresh resolver was built for every
+  navigation and forgot everything.
+- The dead code is gone: the fields of the chat that were written and never
+  read, the registry client that was never used, and the helper that no
+  caller had.
 
 - The CI does not run on every push any more. It runs when it is started by
   hand, and once a week on the cheap gates (the formatting, the clippy, the
@@ -91,6 +152,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Build the native MSI and AppImage installers. The Linux `.deb` and the
   Windows NSIS setup are already produced by the packaging scripts.
+- Deploy the production `fdn-chatd` lobby. The chat client works, but the
+  community room is a deployment of its own, and this repository does not
+  run it.
 
 ### Known limitations
 
