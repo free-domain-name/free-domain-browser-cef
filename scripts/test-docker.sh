@@ -7,7 +7,15 @@ mkdir -p target/docker-out
 "$ENGINE" build -t free-domain-browser-cef-web-test -f Dockerfile.test .
 # The chrome template contains a build-time placeholder; substitute it before
 # loading the page in Chromium so its JavaScript actually runs.
-sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/docker-out/chrome.html
+# The kit is a stylesheet of its own: the chrome page carries it as a
+# placeholder, so the page is put together here, the way the app does it.
+node -e '
+const fs = require("fs");
+const html = fs.readFileSync("assets/chrome.html", "utf8")
+  .replace("__FDB_INITIAL_URL__", JSON.stringify("https://example.com/"))
+  .replace("__FDB_UI_KIT__", fs.readFileSync("assets/ui-kit.css", "utf8"));
+fs.writeFileSync("target/docker-out/chrome.html", html);
+'
 "$ENGINE" run --rm \
   -v "$ROOT/assets:/assets:ro" \
   -v "$ROOT/target/docker-out:/out" \
