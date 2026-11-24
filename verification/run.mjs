@@ -186,12 +186,17 @@ async function runStep(harness, step) {
     }
     case "key": {
       // A key press inside the window, the way the chrome listens for it.
+      // The modifiers are named, because the shortcuts need them.
       await evaluate(
         harness.client,
         `document.dispatchEvent(new KeyboardEvent("keydown", {
            key: ${JSON.stringify(step.key)},
-           code: ${JSON.stringify(step.key)},
+           code: ${JSON.stringify(step.code ?? step.key)},
            keyCode: ${step.keyCode ?? 0},
+           metaKey: ${step.metaKey === true},
+           ctrlKey: ${step.ctrlKey === true},
+           altKey: ${step.altKey === true},
+           shiftKey: ${step.shiftKey === true},
            bubbles: true,
            cancelable: true,
          }));

@@ -42,12 +42,31 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `scripts/verify-linux.sh` runs them inside the container of
   `Dockerfile.linux` on a virtual display, and `scripts/verify-windows.ps1`
   runs them against the packaged build. Both are jobs in the CI workflow.
-- Three more journeys: `conflict` holds the chooser down for a name that is
+- Four more journeys: `conflict` holds the chooser down for a name that is
   in the registry and in public DNS, `chat` holds the chat down from the
-  age gate to the connected room, and `menu-macos` holds the commands of the
-  native macOS menu bar down.
+  age gate to the connected room, `menu-macos` holds the commands of the
+  native macOS menu bar down, and `shortcuts` holds the keyboard shortcuts
+  of the chrome down. The runner can now send the modifier keys with a key
+  event.
+- An audit of the feature list, in `PLAN.md` phase 9. It read the code and
+  measured the running browser in the Linux container, and it lists what the
+  browser does not do yet: a toolbar that is 17 px too tall for its view, a
+  custom CSS that never reaches the chrome, a home setting the Home button
+  ignores, a density that is implemented twice, the settings folder that is
+  the macOS folder on every platform, and the navigation paths that can lose
+  a URL.
 
 ### Changed
+
+- The CI does not run on every push any more. It runs when it is started by
+  hand, and once a week on the cheap gates (the formatting, the clippy, the
+  unit tests and the pages). The heavy jobs — the Linux image with the
+  verification journeys, the macOS build and the Windows package — only run
+  on a manual start, so the GitHub runners are not spent on every commit. The
+  release workflow already worked that way.
+- The documentation no longer promises a dedicated review window: the
+  reviews open in the system browser, where the review page can ask for a
+  GitHub login.
 
 - One theme instead of many. The seven skins are gone: the browser now wears
   a single Material theme, in the light and the dark variant, and the settings
@@ -64,9 +83,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   looking at stays where it is, and switching back to another tab shows that
   tab again. The tab carries the address `fdb://settings`, and the Close
   button and Escape in the settings close that tab.
-- The Rust CI is skipped for pushes that only touch the pages or the
-  markdown. Those pushes run the cheap page check instead of the five
-  browser builds.
+- The Rust CI no longer runs on a push at all. The pages under `docs/` have
+  their own workflow, which is the only check that runs for them, and it
+  costs a few seconds.
 
 ### Open
 

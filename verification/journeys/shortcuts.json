@@ -1,0 +1,125 @@
+{
+  "name": "shortcuts",
+  "description": "The keyboard shortcuts of the chrome work: the address bar, the tabs, the closed tab and the settings.",
+  "steps": [
+    {
+      "do": "key",
+      "key": "l",
+      "ctrlKey": true,
+      "why": "the address bar is asked for"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.activeElement ? document.activeElement.id : '';",
+      "expect": {
+        "equals": "url"
+      },
+      "why": "the address bar has the focus"
+    },
+    {
+      "do": "key",
+      "key": "t",
+      "ctrlKey": true,
+      "why": "a new tab is asked for"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > button:not(.plus)').length;",
+      "expect": {
+        "equals": 2
+      },
+      "why": "the new tab is there"
+    },
+    {
+      "do": "key",
+      "key": "Tab",
+      "ctrlKey": true,
+      "why": "the next tab is asked for"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return Array.from(document.querySelectorAll('#tabs > button:not(.plus)')).findIndex(function(b){return b.className === 'active';});",
+      "expect": {
+        "equals": 0
+      },
+      "why": "the first tab is in front again"
+    },
+    {
+      "do": "key",
+      "key": "2",
+      "ctrlKey": true,
+      "why": "the second tab is asked for"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return Array.from(document.querySelectorAll('#tabs > button:not(.plus)')).findIndex(function(b){return b.className === 'active';});",
+      "expect": {
+        "equals": 1
+      },
+      "why": "the second tab is in front"
+    },
+    {
+      "do": "key",
+      "key": "w",
+      "ctrlKey": true,
+      "why": "tab is closed"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to close the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > button:not(.plus)').length;",
+      "expect": {
+        "equals": 1
+      },
+      "why": "the tab is closed"
+    },
+    {
+      "do": "key",
+      "key": "t",
+      "ctrlKey": true,
+      "shiftKey": true,
+      "why": "the closed tab is asked for again"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > button:not(.plus)').length;",
+      "expect": {
+        "equals": 2
+      },
+      "why": "the closed tab is open again"
+    },
+    {
+      "do": "key",
+      "key": ",",
+      "ctrlKey": true,
+      "why": "the settings are asked for"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to open the settings"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return !!document.querySelector('#tabs > button:not(.plus)[title=\"fdb://settings\"]');",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings got a tab of their own"
+    }
+  ]
+}

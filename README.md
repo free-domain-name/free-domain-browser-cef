@@ -12,8 +12,8 @@ sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages with a per-session choice
 memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
 opens in a tab of its own, chat as a 420 px side panel that follows the active
-tab (with a compact drawer), and community reviews open in a reusable dedicated
-review window.
+tab (with a compact drawer), and the community reviews open in the system
+browser, where the review page can ask for a GitHub login.
 The Material light and dark theme and the compact density are applied to the
 chrome and internal pages; the Browser and Edit menus exist on every platform:
 a native menu bar on macOS and Windows, and a menu window on Linux, where CEF
@@ -140,7 +140,8 @@ docker run --rm --shm-size=1g fdb-cef-linux
 
 The image builds the browser, the helper and the packaging binary, then runs
 the browser on a virtual display and checks that it opens its page and its
-chrome bar. The same two steps run in CI on every push.
+chrome bar. The same steps run in the CI workflow, together with the
+verification journeys.
 
 Hidden smoke test (launches, checks DevTools/targets, kills the app):
 
@@ -197,6 +198,13 @@ portable archives, a Linux `.deb`, and a Windows NSIS setup when the tools are
 available, and attaches them to the GitHub release. The macOS build is signed
 with the Developer ID and notarized when the Apple secrets are configured; MSI
 and AppImage packages are not produced.
+
+The `ci` workflow does not run on every push. It runs when it is started by
+hand from the Actions tab, and once a week on the cheap gates (the formatting,
+the clippy, the unit tests and the pages). The heavy jobs — the Linux image
+with the verification journeys, the macOS build and the Windows package —
+only run on a manual start, so the GitHub runners are not spent on every
+commit.
 
 The Developer ID signature needs the hardened-runtime JIT/library entitlements,
 so the script signs the nested libraries and the helpers first, then the

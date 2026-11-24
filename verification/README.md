@@ -96,12 +96,14 @@ would have reached someone.
 | `chat` | the chat panel opens, asks for the 18+ confirmation and connects to the room |
 | `menu` | the browser menu window opens and its entries work (Linux, Windows) |
 | `menu-macos` | the entries of the native macOS menu bar run their commands (macOS) |
+| `shortcuts` | the keyboard shortcuts of the chrome work: the address bar, the tabs, the closed tab and the settings |
 
 ## What is not covered yet
 
 - The conversation itself. The chat reaches the room, but nothing about a
   message between two clients is checked.
-- The review window and the "Open in System Browser" button.
+- The review buttons and the "Open in System Browser" button. Both hand the
+  address to the system browser, which cannot be checked from inside the app.
 - The unavailable page, which appears when the registry cannot be reached.
 - The native menu bar on macOS and Windows as the user sees it. The menu
   bar is an OS menu and cannot be driven by the DevTools protocol, so the
@@ -110,6 +112,12 @@ would have reached someone.
   cannot be delivered to the window by the DevTools protocol, so the
   journeys open the menu the way the key does instead. The Linux smoke test
   presses the real key with `xdotool`.
+- The density and the custom CSS. The journeys cover the theme only; the
+  defects of both are listed in `PLAN.md`, under Phase 9.
+- The keyboard shortcuts of a content page. The journeys send the key events
+  into the chrome page, which is where the chrome listens for them; the
+  content handler needs a real key.
+- The downloads and the popup to tab.
 
 ## Running it on Linux and Windows
 

@@ -1,15 +1,14 @@
 name: ci
 on:
-  push:
-    branches: [main]
-    # The Rust builds are expensive and the pages under docs/ do not touch
-    # them. A push that only changes the pages skips this workflow; the
-    # pages have their own check in the pages workflow.
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-  pull_request:
+  # The CI runs when a person starts it, and once a week on the cheap gates.
+  # The heavy jobs (the Linux image, the Windows package, the macOS build)
+  # only run on a manual start: a full run costs about an hour of GitHub
+  # runners, and that is too much to spend on every push. The release
+  # workflow works the same way, with a monthly canary instead of a weekly
+  # one.
   workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
 
 jobs:
   lint:
@@ -34,6 +33,8 @@ jobs:
       - run: cargo test -p fdn-core
 
   linux-build:
+    # The heavy jobs only run when the workflow is started by hand.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -67,6 +68,8 @@ jobs:
         run: ./scripts/test-docker.sh
 
   macos-smoke:
+    # The heavy jobs only run when the workflow is started by hand.
+    if: github.event_name == 'workflow_dispatch'
     # `macos-14` was retired as a hosted image; the job was cancelled before
     # it ran a single step. `macos-latest` is the supported label.
     runs-on: macos-latest
@@ -97,6 +100,8 @@ jobs:
           path: ${{ runner.temp }}/free-domain-browser-cef-smoke.log
 
   verify:
+    # The heavy jobs only run when the workflow is started by hand.
+    if: github.event_name == 'workflow_dispatch'
     # The journeys drive the real browser and read what is really there.
     # A build server has no screen, so the browser starts hidden.
     runs-on: macos-latest
@@ -133,6 +138,8 @@ jobs:
           path: verification/artifacts
 
   windows-smoke:
+    # The heavy jobs only run when the workflow is started by hand.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:

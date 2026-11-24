@@ -21,12 +21,15 @@ commits are made here.
 
 ## Verified
 
-- CEF unit tests: 33 passed.
+- CEF unit tests: 34 passed.
 - `fdn-core` Linux tests: 14 passed, 5 live-network ignored.
+- The verification journeys in `verification/journeys`: 14 journeys, 125 of
+  125 steps pass in the Linux container (`scripts/verify-linux.sh`). The same
+  journeys run on Windows against the packaged build and on macOS in the CI.
 - Headless Chromium checks of chrome, status bar, start page, settings and chat
   (including compact side-panel mode) with dynamic DOM assertions.
-- Hidden CEF CDP checks of the settings overlay, chat side panel hide/show while
-  switching tabs, theme switch, review-window reuse and native menu installation.
+- Hidden CEF CDP checks of the settings tab, chat side panel hide/show while
+  switching tabs, theme switch and native menu installation.
 - Linux `.deb` assembly was verified with `dpkg-deb`, and the Windows NSIS
   script was compiled to a PE installer with `makensis` (in Docker).
 - The portable packages carry the CEF runtime: the Linux container smoke test
@@ -37,6 +40,10 @@ commits are made here.
   display name, high-resolution flag and the GPL LICENSE populated. The DMG was
   created, verified (CRC32 valid) and mounted with the app inside.
 - App icons ported from the Tauri project (`assets/icon.{svg,png}`, `icons/`).
+
+The audit behind `PLAN.md`, phase 9, measured the running browser in the Linux
+container and found the defects listed there — among them a toolbar that is
+17 px too tall for its view and a custom CSS that the chrome never sees.
 
 ## Build and test
 
@@ -67,7 +74,7 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Registry-unavailable result | retry / continue-to-public modal | `unavailable.html` with retry and public continuation | match |
 | Registry/public conflict | in-chrome modal | `conflict.html` chooser page | match (presentation differs) |
 | Unregistered claim flow | steps, shard path, JSON, copy, GitHub, async recheck | same in `claim.html` | match |
-| Community reviews | index counts + dedicated review window | index counts + dedicated review window | match |
+| Community reviews | index counts + dedicated review window | index counts, the review page opens in the system browser (the page asks for a GitHub login, which needs a real browser) | changed on purpose |
 | Tabs / history | iframe tabs with JS history (native child-webview path is dormant — `content_mode()` hard-returns `"iframe"`, so CEF's native BrowserView port is the only live native implementation) | native BrowserView per tab with CEF history | match |
 | Reopen tab / numeric tab keys | — (Tauri has neither) | Cmd+Shift+T reopen, Cmd/Ctrl+1..9 keys | CEF ahead |
 | Shortcuts | native menu + chrome keys | chrome keys + content KeyboardHandler (`Cmd/Ctrl+[ ]`, `Alt+←/→`, `Ctrl+Tab`, `Cmd/Ctrl+1..9`) | match |
@@ -86,12 +93,16 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Chat backend | iroh gossip, signed profile cards, per-tab enable | same transport/protocol, per-tab enable, profile cooldown | match |
 | Chat UI | side panel with profile view, ignore list, clear data | 420 px side panel with compact drawer, profile view, ignore list, clear data, age gate | match |
 | App icon / bundle metadata | full icon set + category/description/license | full icon set; macOS category/copyright/display/high-res/icon metadata; Windows icon+version resources; Linux desktop entry; bundled LICENSE | match |
-| Review window | dedicated window | dedicated top-level CEF window | match |
+| Review window | dedicated window | the system browser (the review page needs the GitHub login) | changed on purpose |
 | Mobile (Android/iOS) | supported | not supported by this CEF desktop prototype | not in scope |
 | Installers / release CI | DMG/MSI/NSIS/AppImage/deb | verified macOS `.app` zip + DMG, portable Linux tar.gz + `.deb`, portable Windows zip + NSIS setup; tagged CI workflow builds all three | partial (portable archives, Linux `.deb` and Windows NSIS setup; no MSI/AppImage) |
 
 ## Remaining work
 
+- The defects and half-features of `PLAN.md`, phase 9: a clipped toolbar, the
+  custom CSS that never reaches the chrome, the home setting the Home button
+  ignores, the density that is implemented twice, the settings path that is the
+  macOS path on every platform, and the navigation paths that can lose a URL.
 - Installers are the portable archives, a Linux `.deb` and a Windows NSIS
   setup; MSI and AppImage packages are not produced.
 - The Windows runtime now runs in CI: the job packages the browser, starts the
