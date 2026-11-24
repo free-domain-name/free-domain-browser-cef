@@ -121,10 +121,14 @@
   });
 })();
 
-// The full size picture of the browser opens in a dialog of its own.
+// The full size picture of the browser opens in a dialog of its own. Every
+// picture of the page opens it, and so does the button in the corner of the
+// big one.
 (() => {
-  const zoom = document.querySelector("#heroZoom");
-  if (!zoom) return;
+  const zooms = [...document.querySelectorAll(".zoomable"), document.querySelector("#heroZoom")].filter(
+    (node) => node,
+  );
+  if (!zooms.length) return;
 
   const dialog = document.createElement("dialog");
   dialog.className = "lightbox";
@@ -138,17 +142,32 @@
   dialog.append(image, caption);
   document.body.append(dialog);
 
-  const theme = () => document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const theme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
 
-  zoom.addEventListener("click", () => {
-    const picture = zoom.dataset[theme()];
+  function open(picture, name) {
     if (!picture) return;
     image.setAttribute("src", picture);
-    image.setAttribute("alt", zoom.dataset.label || "");
-    label.textContent = zoom.dataset.label || "";
+    image.setAttribute("alt", name || "");
+    label.textContent = name || "";
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
-  });
+  }
+
+  for (const zoom of zooms) {
+    zoom.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      zoom.click();
+    });
+    zoom.addEventListener("click", () => {
+      // The pictures of the browser follow the theme of the page, so the big
+      // one is the picture of the theme that is on.
+      const picture = zoom.dataset.zoom
+        ? zoom.dataset[`zoom${theme() === "light" ? "Light" : "Dark"}`] || zoom.dataset.zoom
+        : zoom.dataset[theme()];
+      open(picture, zoom.dataset.label || zoom.dataset.altLight || "");
+    });
+  }
 
   close.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => {

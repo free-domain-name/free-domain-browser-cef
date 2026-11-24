@@ -152,14 +152,18 @@
             <div class="preview-aura" aria-hidden="true"></div>
             <img
               id="heroShot"
-              class="theme-shot"
+              class="theme-shot zoomable" tabindex="0" role="button"
               src="assets/browser-dark.png"
               data-light="assets/browser-light.png"
               data-dark="assets/browser-dark.png"
               data-alt-light="The Free Domain Browser CEF build on its start page, in the light theme"
               data-alt-dark="The Free Domain Browser CEF build on its start page, in the dark theme"
+              data-zoom="assets/browser-dark.png"
+              data-zoom-light="assets/browser-light.png"
+              data-zoom-dark="assets/browser-dark.png"
+              data-label="The start page of the browser"
               width="1200"
-              height="820"
+              height="680"
               alt="The Free Domain Browser CEF build on its start page, in the dark theme"
               fetchpriority="high"
             />
@@ -184,9 +188,14 @@
         <div class="shot-grid">
           <figure>
             <img
+              class="zoomable"
+              tabindex="0"
+              role="button"
               src="assets/page-light.png"
+              data-zoom="assets/page-light.png"
+              data-label="A page in a tab of the browser"
               width="1200"
-              height="820"
+              height="680"
               loading="lazy"
               alt="A page in a tab of the browser, with the icon of the site in the tab"
             />
@@ -194,9 +203,14 @@
           </figure>
           <figure>
             <img
+              class="zoomable"
+              tabindex="0"
+              role="button"
               src="assets/settings-light.png"
+              data-zoom="assets/settings-light.png"
+              data-label="The settings of the browser"
               width="1200"
-              height="820"
+              height="680"
               loading="lazy"
               alt="The settings of the browser in a tab of their own"
             />
@@ -204,9 +218,14 @@
           </figure>
           <figure>
             <img
+              class="zoomable"
+              tabindex="0"
+              role="button"
               src="assets/chat-dark.png"
+              data-zoom="assets/chat-dark.png"
+              data-label="The community chat of the browser"
               width="1200"
-              height="820"
+              height="680"
               loading="lazy"
               alt="The community chat open beside the page"
             />

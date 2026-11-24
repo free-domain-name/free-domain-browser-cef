@@ -58,6 +58,17 @@
   border-radius: 12px;
 }
 
+/* The picture is a wide strip, so it is shown in one: the window is smaller
+   than the page is wide, and the browser bar stays readable. */
+.hero-preview {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.hero-preview .zoomable {
+  cursor: zoom-in;
+}
+
 .hero-zoom {
   position: absolute;
   right: 15px;
@@ -125,9 +136,15 @@
 .shot-grid img {
   display: block;
   width: 100%;
+  /* The small pictures are strips: the chrome bar and the top of the page.
+     The whole picture is one click away. */
+  aspect-ratio: 16 / 6;
+  object-fit: cover;
+  object-position: top center;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
+  cursor: zoom-in;
 }
 
 .shot-grid figcaption {

@@ -73,7 +73,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a page in a tab, the settings and the chat. They are taken by
   `scripts/capture-screens.mjs`, which starts the real build on a virtual
   display and photographs the window, so nothing on the page is drawn for the
-  site.
+  site. The pictures are wide strips, the small ones are shorter still, and
+  every one of them opens in its own dialog when it is clicked.
 - The tabs show the icon of the site, the strip counts them, and the tab you
   are looking at is kept in sight when the strip overflows. The title of the
   page stands in the address bar, and the address comes back when you click

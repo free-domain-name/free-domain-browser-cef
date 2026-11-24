@@ -25,6 +25,9 @@ const DISPLAY = process.env.DISPLAY ?? ":99";
 // The page the pictures of a real site show. It is the page of the project
 // itself, so the shot does not depend on a third party.
 const PROJECT_PAGE = "https://free-domain-name.github.io/free-domain-browser-cef/";
+// The height of the pictures. A browser window is a wide strip; the page
+// under the chrome bar is what the picture is about.
+const HEIGHT = 680;
 
 /**
  * The pictures the page shows.
@@ -78,12 +81,19 @@ function wait(ms) {
  * Takes the picture of the window.
  *
  * The window is drawn on the virtual screen, so the screen is taken and the
- * empty border is cut away afterwards.
+ * empty border is cut away afterwards. The bottom of the window is cut off
+ * too: a picture of a browser is a wide strip, not a tall one, and a page
+ * that scrolls says more in its first screen.
  */
 function capture(name) {
   const file = path.join(OUT, `${name}.png`);
   execFileSync("import", ["-display", DISPLAY, "-window", "root", file], { stdio: "ignore" });
   execFileSync("convert", [file, "-trim", "+repage", file], { stdio: "ignore" });
+  const size = execFileSync("identify", ["-format", "%wx%h", file], { encoding: "utf8" });
+  const [width, height] = size.split("x").map(Number);
+  if (height > HEIGHT) {
+    execFileSync("convert", [file, "-crop", `${width}x${HEIGHT}+0+0`, "+repage", file], { stdio: "ignore" });
+  }
   console.log(`  ${name}.png`);
 }
 
