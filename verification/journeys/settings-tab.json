@@ -1,0 +1,113 @@
+{
+  "name": "settings-tab",
+  "description": "The settings page lives in a tab of its own and leaves the other tabs alone.",
+  "steps": [
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 1
+      },
+      "why": "the browser starts with one tab"
+    },
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "pause",
+      "ms": 1200,
+      "why": "the app has a moment to open the settings tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 2
+      },
+      "why": "the settings opened in a tab of its own"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "equals": "fdb://settings"
+      },
+      "why": "the settings tab carries its own address"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings page is open next to the other tabs"
+    },
+    {
+      "do": "click",
+      "selector": "#tabs button:not(.plus)",
+      "why": "the first tab is clicked again"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to switch the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "equals": ""
+      },
+      "why": "the first tab shows its own page again, not the settings"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 2
+      },
+      "why": "the settings tab is still there, waiting in the strip"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "return document.getElementById('theme').value;",
+      "expect": {
+        "equals": "system"
+      },
+      "why": "the settings page itself is still alive in its tab"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('close').click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings page closes itself"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to close the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs button:not(.plus)').length;",
+      "expect": {
+        "equals": 1
+      },
+      "why": "the settings tab is gone from the strip"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "equals": ""
+      },
+      "why": "the first tab is showing again"
+    }
+  ]
+}

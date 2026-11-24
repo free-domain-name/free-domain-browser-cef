@@ -1,0 +1,82 @@
+{
+  "name": "conflict",
+  "description": "A name that is in the Free Registry and in public DNS opens the chooser instead of guessing (the live registry holds google.com).",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "google.com",
+      "why": "a name that exists in both worlds is typed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Choose a site"
+      },
+      "timeout": 30000,
+      "why": "the chooser opens instead of the browser guessing"
+    },
+    {
+      "do": "inPage",
+      "title": "Choose a site",
+      "expression": "return document.querySelector('h1')?.textContent ?? '';",
+      "expect": {
+        "equals": "google.com"
+      },
+      "why": "the chooser names the domain that was asked for"
+    },
+    {
+      "do": "inPage",
+      "title": "Choose a site",
+      "expression": "return Array.from(document.querySelectorAll('a')).map(function(a){return a.textContent.trim();}).join(' | ');",
+      "expect": {
+        "contains": "Open registry site"
+      },
+      "why": "the registry route is offered"
+    },
+    {
+      "do": "inPage",
+      "title": "Choose a site",
+      "expression": "return Array.from(document.querySelectorAll('a')).map(function(a){return a.textContent.trim();}).join(' | ');",
+      "expect": {
+        "contains": "Open public website"
+      },
+      "why": "the public route is offered"
+    },
+    {
+      "do": "inPage",
+      "title": "Choose a site",
+      "expression": "var link = Array.from(document.querySelectorAll('a')).find(function(a){return /registry site/i.test(a.textContent);}); link.click(); return true;",
+      "why": "the registry site is chosen"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Example Domain"
+      },
+      "timeout": 30000,
+      "why": "the registry target of google.com is served"
+    },
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "google.com",
+      "why": "the same name is typed again"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Example Domain"
+      },
+      "timeout": 30000,
+      "why": "the remembered choice sends the name to the registry site without asking again"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "notContains": "Choose a site"
+      },
+      "why": "the chooser does not open a second time"
+    }
+  ]
+}

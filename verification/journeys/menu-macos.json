@@ -1,0 +1,53 @@
+{
+  "name": "menu-macos",
+  "description": "The entries of the native macOS menu bar run their commands. The menu bar itself is an OS menu, so the journey drives the same commands the menu items run.",
+  "steps": [
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > *').length;",
+      "expect": {
+        "atLeast": 1
+      },
+      "why": "the browser starts with one tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "window.fdbNewTab(); return true;",
+      "why": "the New Tab entry of the native menu is run"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelectorAll('#tabs > *').length;",
+      "expect": {
+        "atLeast": 2
+      },
+      "why": "the New Tab entry opened a second tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "window.fdbOpenSettings(); return true;",
+      "why": "the Settings entry of the native menu is run"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to open the settings"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the Settings entry opened the settings tab"
+    }
+  ],
+  "platform": [
+    "darwin"
+  ]
+}

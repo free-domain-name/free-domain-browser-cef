@@ -1,0 +1,139 @@
+{
+  "name": "appearance",
+  "description": "One Material theme: the light and the dark theme show the same chrome, and the selected tab and the settings button read in both.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings tab opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('theme'); field.value = 'light'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": "light"
+      },
+      "why": "the theme is changed to light"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to apply the theme"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.documentElement.dataset.theme;",
+      "expect": {
+        "equals": "light"
+      },
+      "why": "the chrome wears the light theme"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('settings').classList.contains('active');",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings button lights up while the settings tab is in front"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const active = document.querySelector('#tabs button.active'); const gear = document.getElementById('settings'); const tab = getComputedStyle(active); const button = getComputedStyle(gear); return button.backgroundColor === tab.borderBottomColor && button.backgroundColor !== 'rgba(0, 0, 0, 0)';",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings button wears the accent colour, exactly like the selected tab"
+    },
+    {
+      "do": "click",
+      "selector": "#tabs .plus",
+      "why": "a second tab is opened"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to open the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const tabs = [...document.querySelectorAll('#tabs button:not(.plus)')]; const idle = tabs.find((tab) => !tab.classList.contains('active')); const active = tabs.find((tab) => tab.classList.contains('active')); return getComputedStyle(active).backgroundColor !== getComputedStyle(idle).backgroundColor;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the selected tab is painted differently from the idle one in the light theme"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const active = document.querySelector('#tabs button.active'); const style = getComputedStyle(active); return style.borderBottomWidth + ' ' + style.borderBottomColor;",
+      "expect": {
+        "contains": "2px"
+      },
+      "why": "the selected tab carries a two pixel underline"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const idle = [...document.querySelectorAll('#tabs button:not(.plus)')].find((tab) => !tab.classList.contains('active')); const style = getComputedStyle(idle); return style.backgroundColor + ' | ' + style.color;",
+      "expect": {
+        "notEquals": "rgba(0, 0, 0, 0) | rgba(0, 0, 0, 0)"
+      },
+      "why": "the idle tab stays readable instead of disappearing into the strip"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('theme'); field.value = 'dark'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": "dark"
+      },
+      "why": "the theme is changed to dark"
+    },
+    {
+      "do": "pause",
+      "ms": 800,
+      "why": "the app has a moment to apply the theme"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.documentElement.dataset.theme;",
+      "expect": {
+        "equals": "dark"
+      },
+      "why": "the chrome wears the dark theme"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const tabs = [...document.querySelectorAll('#tabs button:not(.plus)')]; const idle = tabs.find((tab) => !tab.classList.contains('active')); const active = tabs.find((tab) => tab.classList.contains('active')); return getComputedStyle(active).backgroundColor !== getComputedStyle(idle).backgroundColor;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the selected tab is painted differently from the idle one in the dark theme too"
+    },
+    {
+      "do": "click",
+      "selector": "#tabs button[title=\"fdb://settings\"]",
+      "why": "the settings tab is clicked again"
+    },
+    {
+      "do": "pause",
+      "ms": 600,
+      "why": "the app has a moment to switch the tab"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const active = document.querySelector('#tabs button.active'); const gear = document.getElementById('settings'); const tab = getComputedStyle(active); const button = getComputedStyle(gear); return button.backgroundColor === tab.borderBottomColor && button.backgroundColor !== 'rgba(0, 0, 0, 0)';",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings button wears the accent colour in the dark theme too"
+    }
+  ]
+}

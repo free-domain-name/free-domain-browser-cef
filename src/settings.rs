@@ -9,10 +9,11 @@ pub struct Settings {
     pub home: String,
     pub cookies: bool,
     pub dnt: bool,
+    /// True when the tab strip is compact. It follows the layout density, so
+    /// there is only one knob for it in the settings.
     pub compact_tabs: bool,
     pub density: String,
     pub theme: String,
-    pub skin: String,
     pub custom_css: String,
 }
 
@@ -28,7 +29,6 @@ impl Default for Settings {
             compact_tabs: false,
             density: "comfortable".to_string(),
             theme: "system".to_string(),
-            skin: "default".to_string(),
             custom_css: String::new(),
         }
     }
@@ -45,18 +45,8 @@ impl Settings {
         if !matches!(settings.density.as_str(), "comfortable" | "compact") {
             settings.density = Settings::default().density;
         }
-        if !matches!(
-            settings.skin.as_str(),
-            "default"
-                | "high-tech"
-                | "futuristic"
-                | "historic"
-                | "victorian"
-                | "amazon"
-                | "terminal"
-        ) {
-            settings.skin = Settings::default().skin;
-        }
+        // The compact tab strip is the compact layout: one knob, one meaning.
+        settings.compact_tabs = settings.density == "compact";
         if settings.custom_css.len() > 24_000 {
             let mut end = 24_000;
             while !settings.custom_css.is_char_boundary(end) {
@@ -139,7 +129,6 @@ mod tests {
             compact_tabs: true,
             theme: "dark".into(),
             density: "compact".into(),
-            skin: "terminal".into(),
             custom_css: "body{background:#000}".into(),
         };
         save_to(&path, &settings).unwrap();
@@ -190,5 +179,15 @@ mod tests {
         let value = serde_json::json!({"home":"  ","cookies":false,"dnt":true});
         assert_eq!(Settings::from_value(&value).unwrap().home, "  ");
         assert!(Settings::default().home.trim().is_empty());
+    }
+
+    #[test]
+    fn the_compact_tab_strip_follows_the_layout_density() {
+        // One knob for the compact layout: the density decides it.
+        let compact = Settings::from_value(&serde_json::json!({"density":"compact"})).unwrap();
+        assert!(compact.compact_tabs);
+        let comfortable =
+            Settings::from_value(&serde_json::json!({"density":"comfortable"})).unwrap();
+        assert!(!comfortable.compact_tabs);
     }
 }

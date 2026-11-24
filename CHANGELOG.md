@@ -6,6 +6,23 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The Free Registry is asked first again. The chrome bar added `https://` to
+  every name that was typed, and the browser then treated it as a plain web
+  address: the registry was never consulted for an ordinary domain, a name
+  that is in both the registry and public DNS went straight to the public
+  site instead of opening the chooser, and a name nobody registered showed
+  the browser error page instead of the page that offers to claim it. The
+  chrome hands the name on as it was typed now, the resolver asks the
+  registry first and only falls back to the public web when the name is not
+  there. The start page opens the conflict sample through `fdn://` as well,
+  like its other registry samples.
+- Escape in the chat no longer closes the panel while the age gate is in
+  front of it. The gate is a fixed overlay, and a fixed element has no
+  `offsetParent`, so the check that guarded the panel always believed the
+  gate was gone.
+
 ### Added
 
 - A verification framework. The journeys in `verification/journeys` are the
@@ -21,9 +38,32 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and unpacks it into the home directory.
 - A check for the pages under `docs/`, so a broken page is caught before it
   reaches the site.
+- The verification journeys now run on Linux and on Windows as well:
+  `scripts/verify-linux.sh` runs them inside the container of
+  `Dockerfile.linux` on a virtual display, and `scripts/verify-windows.ps1`
+  runs them against the packaged build. Both are jobs in the CI workflow.
+- Three more journeys: `conflict` holds the chooser down for a name that is
+  in the registry and in public DNS, `chat` holds the chat down from the
+  age gate to the connected room, and `menu-macos` holds the commands of the
+  native macOS menu bar down.
 
 ### Changed
 
+- One theme instead of many. The seven skins are gone: the browser now wears
+  a single Material theme, in the light and the dark variant, and the settings
+  page keeps only the theme, the layout density and the custom CSS. A skin
+  saved in an older `settings.json` is ignored, and the browser falls back to
+  Material on its own. The chrome and every internal page read their colours
+  from the same token layer now, so the light theme looks like the dark one
+  instead of a washed-out copy of it. The selected tab is a filled surface
+  with an accent underline, and the gear lights up in the accent colour while
+  the settings tab is in front.
+- The settings page opens in a tab of its own. Pressing the gear (or
+  Cmd/Ctrl+, or the Settings entry of the native menu) no longer covers the
+  page with a sheet: the settings get a tab in the strip, the page you were
+  looking at stays where it is, and switching back to another tab shows that
+  tab again. The tab carries the address `fdb://settings`, and the Close
+  button and Escape in the settings close that tab.
 - The Rust CI is skipped for pushes that only touch the pages or the
   markdown. Those pushes run the cheap page check instead of the five
   browser builds.

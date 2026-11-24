@@ -37,7 +37,7 @@ sed 's|__FDB_INITIAL_URL__|"https://example.com/"|' assets/chrome.html > target/
   --headless --no-sandbox --disable-gpu --hide-scrollbars \
   --window-size=1200,760 --screenshot=/out/newtab.png file:///assets/newtab.html
 # Dynamic smoke checks: JS must render the tab strip/menu, settings must expose
-# the skin picker, and chat must expose the profile editor and age gate.
+# the theme picker, and chat must expose the profile editor and age gate.
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/target/docker-out:/out" \
   free-domain-browser-cef-web-test \
@@ -52,7 +52,7 @@ grep -q 'data-source="' target/docker-out/chrome.dom
   -v "$ROOT/assets:/assets:ro" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/settings.html > target/docker-out/settings.dom
-grep -q 'id="skin"' target/docker-out/settings.dom
+grep -q 'id="theme"' target/docker-out/settings.dom
 grep -q 'id="density"' target/docker-out/settings.dom
 "$ENGINE" run --rm --entrypoint chromium \
   -v "$ROOT/assets:/assets:ro" \
@@ -73,6 +73,6 @@ grep -q 'id="ignoreList"' target/docker-out/chat.dom
   -v "$ROOT/assets:/assets:ro" \
   free-domain-browser-cef-web-test \
   --headless --no-sandbox --disable-gpu --hide-scrollbars --virtual-time-budget=2000 --dump-dom file:///assets/newtab.html > target/docker-out/newtab.dom
-grep -q 'data-url="https://google.com"' target/docker-out/newtab.dom
+grep -q 'data-url="fdn://google.com"' target/docker-out/newtab.dom
 echo "web checks passed"
 echo "screenshots: $ROOT/target/docker-out/{chrome,settings,chat,chat-panel,newtab}.png"

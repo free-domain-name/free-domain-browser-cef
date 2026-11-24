@@ -1,6 +1,6 @@
 {
   "name": "settings",
-  "description": "The settings sheet opens and a change reaches the browser.",
+  "description": "The settings tab opens and a change reaches the browser.",
   "steps": [
     {
       "do": "click",
@@ -13,38 +13,38 @@
         "contains": "Settings"
       },
       "timeout": 10000,
-      "why": "the settings sheet opens"
+      "why": "the settings tab opens"
     },
     {
       "do": "inPage",
       "title": "Settings",
-      "expression": "return document.getElementById('skin').value;",
+      "expression": "return document.getElementById('theme').value;",
       "expect": {
-        "equals": "default"
+        "equals": "system"
       },
-      "why": "the settings sheet shows the current skin"
+      "why": "the settings page shows the current theme"
     },
     {
       "do": "inPage",
       "title": "Settings",
-      "expression": "const field = document.getElementById('skin'); field.value = 'terminal'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expression": "const field = document.getElementById('theme'); field.value = 'light'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
       "expect": {
-        "equals": "terminal"
+        "equals": "light"
       },
-      "why": "the skin is changed to terminal"
+      "why": "the theme is changed to light"
     },
     {
       "do": "pause",
       "ms": 800,
-      "why": "the app has a moment to apply the skin"
+      "why": "the app has a moment to apply the theme"
     },
     {
       "do": "evaluate",
-      "expression": "return document.documentElement.dataset.skin;",
+      "expression": "return document.documentElement.dataset.theme;",
       "expect": {
-        "equals": "terminal"
+        "equals": "light"
       },
-      "why": "the browser wears the new skin"
+      "why": "the browser wears the new theme"
     },
     {
       "do": "inPage",
@@ -67,7 +67,7 @@
       "expect": {
         "notEquals": ""
       },
-      "why": "the settings sheet says what happened"
+      "why": "the settings page says what happened"
     }
   ]
 }

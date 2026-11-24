@@ -1,0 +1,59 @@
+{
+  "name": "chat",
+  "description": "The chat panel opens, asks for the 18+ confirmation and connects to the room.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#chat",
+      "why": "the chat button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Free Domain Chat"
+      },
+      "timeout": 15000,
+      "why": "the chat panel opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "return getComputedStyle(document.getElementById('age')).display !== 'none';",
+      "expect": {
+        "equals": true
+      },
+      "why": "the age gate stands in front of the chat"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "var box = document.getElementById('ageCheck'); box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); return document.getElementById('ageContinue').disabled;",
+      "expect": {
+        "equals": false
+      },
+      "why": "the confirmation enables the continue button"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('ageContinue').click(); return true;",
+      "why": "the age gate is accepted"
+    },
+    {
+      "do": "waitForInPage",
+      "title": "Free Domain Chat",
+      "expression": "return /connected/i.test(document.body.innerText);",
+      "timeout": 45000,
+      "why": "the chat reaches the room"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "return getComputedStyle(document.getElementById('age')).display !== 'none';",
+      "expect": {
+        "equals": false
+      },
+      "why": "the age gate is gone once the chat is on"
+    }
+  ]
+}

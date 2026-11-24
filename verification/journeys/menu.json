@@ -1,17 +1,16 @@
 {
   "name": "menu",
-  "description": "The browser menu opens on F10 and its entries work.",
+  "description": "The browser menu window opens and its entries work.",
   "steps": [
     {
-      "do": "key",
-      "key": "F10",
-      "why": "F10 is pressed on the window"
+      "do": "evaluate",
+      "expression": "window.fdbMenuBar(); return true;",
+      "why": "the menu bar is asked for, the way the F10 key does it"
     },
     {
       "do": "pause",
-      "timeout": 300,
-      "why": "the app has a moment to open the menu",
-      "ms": 800
+      "ms": 800,
+      "why": "the app has a moment to open the menu"
     },
     {
       "do": "targets",

@@ -1,25 +1,26 @@
-<html><head><meta charset="utf-8"><title>Unregistered domain</title><style>
-*{box-sizing:border-box}body{margin:0;background:#10151f;color:#e8edf7;font:15px -apple-system,system-ui;padding:48px}
-.card{max-width:760px;margin:auto;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:32px}
-h1{margin:0 0 6px;font-size:26px;word-break:break-all}.badge{display:inline-block;background:#22304a;color:#9dbcff;border-radius:999px;padding:3px 10px;font-size:11px;vertical-align:middle;margin-left:8px}
-p{color:#aebbd0;line-height:1.55}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-button,a.button{display:inline-block;padding:10px 16px;border:0;border-radius:9px;text-decoration:none;background:#4f7cff;color:#fff;font:inherit;cursor:pointer}
-button.secondary,a.button.secondary{background:#2a3446;color:#dce6f7}button.link{background:none;color:#9dbcff;padding:6px 0}
-pre{background:#111722;border:1px solid #2b3548;border-radius:10px;padding:16px;color:#c8d4ea;overflow:auto;font-size:12px;line-height:1.5}
-code{color:#8fb3ff}.path{color:#c8d4ea;background:#111722;border:1px solid #2b3548;border-radius:8px;padding:8px 10px;font-size:12px;word-break:break-all}
-#status{color:#8d9ab1;font-size:12px;margin-left:8px}
+<html><head><meta charset="utf-8"><title>Unregistered domain</title>
+<link rel="stylesheet" href="ui-kit.css"><style>
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font);padding:48px}
+.card{max-width:760px;margin:auto;background:var(--status);border:1px solid var(--border);border-radius:var(--radius-dialog);padding:32px}
+h1{margin:0 0 6px;font-size:26px;word-break:break-all}.badge{display:inline-block;background:var(--status);color:var(--accent);border-radius:999px;padding:3px 10px;font-size:11px;vertical-align:middle;margin-left:8px}
+p{color:var(--muted);line-height:1.55}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+button,a.button{display:inline-block;padding:10px 16px;border:0;border-radius:var(--radius-control);text-decoration:none;background:var(--accent);color:var(--on-accent);font:inherit;cursor:pointer}
+button.secondary,a.button.secondary{background:var(--button);color:var(--text)}button.link{background:none;color:var(--accent);padding:6px 0}
+pre{background:var(--field);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;color:var(--text);overflow:auto;font-size:12px;line-height:1.5}
+code{color:var(--accent)}.path{color:var(--text);background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;word-break:break-all}
+#status{color:var(--muted);font-size:12px;margin-left:8px}
 </style></head><body><div class="card">
 <h1>{{domain}}<span class="badge">{{badge}}</span></h1>
 <p>{{message}}</p>
 <h2 style="font-size:15px;margin:26px 0 8px">How claiming works</h2>
-<ol style="color:#aebbd0;line-height:1.6;padding-left:22px">
+<ol style="color:var(--muted);line-height:1.6;padding-left:22px">
 <li>Fork <code>free-domain-name/registry</code>.</li>
 <li>Create <span class="path">{{path}}</span> with this record:</li>
 </ol>
 <pre id="json">{{json}}</pre>
-<p style="font-size:12px;color:#8290a8;line-height:1.55">GitHub normally keeps this formatting in the new-file editor. If it flattens the JSON, use <strong>Copy JSON</strong> and paste the formatted version.</p>
-<p style="font-size:12px;color:#8290a8;line-height:1.55"><strong>An IP address is enough</strong> — like an A record for HTTP. No domain or DNS record is needed. Replace <span class="mono">203.0.113.10</span> with your server's public IP (add <span class="mono">:port</span> if needed). Keep this an origin: no path, query or fragment — the browser appends the visitor's path. Use <span class="mono">http://</span> for a bare IP; HTTPS certificates are issued to names, not addresses.</p>
-<p style="font-size:12px;color:#8290a8;line-height:1.55">CI checks the shard path, the four fields, the target URL and the TTL. When the target is an IP, the browser sends the free name as <span class="mono">Host</span>, so one address can serve many names.</p>
+<p style="font-size:12px;color:var(--muted);line-height:1.55">GitHub normally keeps this formatting in the new-file editor. If it flattens the JSON, use <strong>Copy JSON</strong> and paste the formatted version.</p>
+<p style="font-size:12px;color:var(--muted);line-height:1.55"><strong>An IP address is enough</strong> — like an A record for HTTP. No domain or DNS record is needed. Replace <span class="mono">203.0.113.10</span> with your server's public IP (add <span class="mono">:port</span> if needed). Keep this an origin: no path, query or fragment — the browser appends the visitor's path. Use <span class="mono">http://</span> for a bare IP; HTTPS certificates are issued to names, not addresses.</p>
+<p style="font-size:12px;color:var(--muted);line-height:1.55">CI checks the shard path, the four fields, the target URL and the TTL. When the target is an IP, the browser sends the free name as <span class="mono">Host</span>, so one address can serve many names.</p>
 <div class="row">
 <button data-external="{{register_url}}">Register on GitHub</button>
 <button class="secondary" id="copy">Copy JSON</button>

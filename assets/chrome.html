@@ -1,21 +1,23 @@
-<html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Free Domain Browser</title><style>
-*{box-sizing:border-box}body{margin:0;background:var(--chrome);color:var(--text);font:13px -apple-system,system-ui;overflow:hidden}
-#tabs{height:32px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--bg);overflow-x:auto;overflow-y:hidden}
-#tabs button{border:0;border-radius:6px 6px 0 0;padding:5px 8px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:220px}
-#tabs button.active{background:var(--chrome);color:var(--text)}#tabs button:not(.active){background:var(--button);color:var(--muted)}
+<html data-chrome="1"><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Free Domain Browser</title><style>
+*{box-sizing:border-box}
+html[data-chrome] body{margin:0;background:var(--chrome);color:var(--text);font:13px/1.45 var(--font);overflow:hidden}
+#tabs{height:32px;display:flex;align-items:flex-end;gap:4px;padding:0 10px;background:var(--tab-strip);overflow-x:auto;overflow-y:hidden}
+#tabs button{border:0;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;padding:4px 10px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;max-width:220px;background:transparent;color:var(--muted)}
+#tabs button:not(.plus):not(.active):hover{background:var(--tab-hover)}
+#tabs button.active{background:var(--surface);color:var(--text);border-bottom-color:var(--accent)}
 #tabs button span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#tabs .close{opacity:.55;font-size:14px;line-height:1}#tabs .close:hover{opacity:1}
-#tabs .plus{border-radius:6px;padding:5px 9px;background:var(--button);color:var(--text)}
+#tabs .plus{border-radius:8px;padding:4px 10px;background:var(--surface);color:var(--text)}
 #tabs .tab-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);flex:none}
 #tabs button[data-source=registry] .tab-dot{background:#2dd4bf}#tabs button[data-source=public] .tab-dot{background:#4f7cff}
 .toolbar{height:64px;display:flex;align-items:center;gap:8px;padding:0 12px}
 .brand{font-weight:650;font-size:13px;white-space:nowrap;margin-right:2px}
 .icon{border:0;border-radius:8px;background:var(--button);color:var(--text);padding:7px 10px;font:inherit;cursor:pointer;min-width:34px}
-.icon.active{background:#2a4a7a;color:#fff}
+.icon.active{background:var(--accent);color:var(--on-accent)}
 .icon:hover{background:var(--button-hover)}.icon:disabled{opacity:.4;cursor:default}
 #sec{font-size:12px;min-width:18px;text-align:center}
 #url{flex:1;background:var(--field);color:var(--field-text);border:0;border-radius:8px;padding:7px 11px;font:inherit;outline:none;min-width:80px}
 #url:focus{box-shadow:0 0 0 2px var(--accent)}
-.go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:7px 14px;font:inherit;cursor:pointer}
+.go{background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:7px 14px;font:inherit;cursor:pointer}
 #progress{display:none;position:fixed;top:32px;left:0;right:0;height:2px;background:var(--accent);transform-origin:0 50%;animation:fdb-progress 1.1s ease-in-out infinite;z-index:9}
 @keyframes fdb-progress{0%{transform:scaleX(.05)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
 body.loading #progress{display:block}
@@ -24,7 +26,7 @@ body.loading #progress{display:block}
 body.compact #tabs{height:26px}body.compact .toolbar{padding:0 8px;gap:5px}body.compact .icon{padding:6px 8px;min-width:30px}body.compact #url{padding:6px 9px}body.compact .go{padding:6px 11px}
 body.compact #progress{top:26px}body.compact #tabs button{padding:2px 6px;font-size:11px}
 body.loading #url{opacity:.85}
-</style><style id="customSkinStyle"></style></head><body>
+</style><style id="customCssStyle"></style></head><body>
 <div id="tabs"></div>
 <div class="toolbar">
   <span class="brand"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 12h17M12 3.5c2.7 2.4 4 5.2 4 8.5s-1.3 6.1-4 8.5c-2.7-2.4-4-5.2-4-8.5s1.3-6.1 4-8.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Free Domain Browser</span>
@@ -47,8 +49,11 @@ body.loading #url{opacity:.85}
 <script>
 window.__fdbInitialUrl=__FDB_INITIAL_URL__;
 var tabs=[{uid:0,url:window.__fdbInitialUrl||'',label:'New Tab'}];
-var active=0;var lastClosed=null;var nextUid=1;var statusBubbleTimer=null;var currentSettings={theme:'system',density:'comfortable',skin:'default',custom_css:''};
+var active=0;var lastClosed=null;var nextUid=1;var statusBubbleTimer=null;var currentSettings={theme:'system',density:'comfortable',custom_css:''};
 var REVIEW_INDEX_URL='https://raw.githubusercontent.com/free-domain-name/registry/main/reviews/index.json';
+// The address of the settings tab. The browser turns it into the settings
+// page; the tab strip shows it like any other address.
+var SETTINGS_TAB_URL='fdb://settings';
 var reviewIndex=null;var reviewPromise=null;var reviewDomain=null;
 function current(){return tabs[active]}
 function sourceKind(url){var u=url||'';if(/^fdn:/i.test(u))return 'registry';return /^https?:/i.test(u)?'public':'idle'}
@@ -59,8 +64,7 @@ function applyTheme(){
   var theme=currentSettings.theme||'system';
   var dark=theme==='dark'||(theme==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme=dark?'dark':'light';
-  document.documentElement.dataset.skin=currentSettings.skin||'default';
-  try{document.getElementById('customSkinStyle').textContent=currentSettings.custom_css||''}catch(e){}
+  try{document.getElementById('customCssStyle').textContent=currentSettings.custom_css||''}catch(e){}
 }
 function render(){
   var box=document.getElementById('tabs');box.innerHTML='';
@@ -78,6 +82,9 @@ function render(){
     box.appendChild(b);
   });
   var plus=document.createElement('button');plus.className='plus';plus.textContent='+';plus.title='New tab (Cmd/Ctrl+T)';plus.setAttribute('aria-label','New tab (Cmd/Ctrl+T)');plus.onclick=function(){newTab('')};box.appendChild(plus);
+  // The gear belongs to the settings TAB: it is lit while that tab is the
+  // one on screen, not while a sheet covers the page.
+  var gear=document.getElementById('settings');if(gear)gear.classList.toggle('active',current().url===SETTINGS_TAB_URL);
   // Never clobber text the user is typing (Tauri guards the same way while a
   // page loads); the field still updates on the next render after blur.
   var field=document.getElementById('url');
@@ -93,6 +100,19 @@ function newTab(u){
   tabs.push({uid:uid,url:u||'',label:'New Tab'});active=tabs.length-1;render();
   send({cmd:'new_tab',uid:uid,url:u||''});
   if(!u)send({cmd:'focus_chrome'});
+}
+// The settings page gets a tab of its own: pressing the gear must never
+// replace the page the user is looking at, and an open settings tab is
+// reused instead of piling up a second one.
+function openSettingsTab(){
+  for(var i=0;i<tabs.length;i++){
+    if(tabs[i].url===SETTINGS_TAB_URL){
+      active=i;render();send({cmd:'select_tab',uid:tabs[i].uid});return
+    }
+  }
+  var uid=nextUid++;
+  tabs.push({uid:uid,url:SETTINGS_TAB_URL,label:'Settings'});active=tabs.length-1;render();
+  send({cmd:'new_tab',uid:uid,url:SETTINGS_TAB_URL});
 }
 function closeTab(i){
   if(tabs.length<2){lastClosed={url:tabs[0].url,label:tabs[0].label};send({cmd:'home'});return}
@@ -110,12 +130,16 @@ function go(){
   var u=document.getElementById('url').value.trim();
   if(!u){send({cmd:'home'});return}
   if(looksLikeSearch(u)){navigate('https://duckduckgo.com/?q='+encodeURIComponent(u));return}
-  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)&&!/^fdn:/i.test(u))u='https://'+u;
+  // A bare name is handed to the browser as it was typed. The resolver asks
+  // the Free Registry first and only falls back to the public web when the
+  // name is not there, so a name in both worlds opens the chooser. Adding
+  // https:// here would turn every name into a plain web address and the
+  // chooser would never open. Rust decides the scheme of the final URL.
   navigate(u);
 }
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
 function navigate(u){var t=current();t.url=u;send({cmd:'navigate',url:u})}
-function settings(){send({cmd:'settings'})}
+function settings(){openSettingsTab()}
 function chat(){send({cmd:'chat'})}
 function about(){send({cmd:'about'})}
 function external(){var u=current().url;if(isExternal(u))send({cmd:'external',url:u});}
@@ -193,7 +217,12 @@ window.fdbToggleChat=function(){chat()};
 window.fdbOpenExternal=function(){external()};
 window.fdbClearCache=function(){clearCache()};
 window.fdbAbout=function(){about()};
-window.fdbSettingsOpen=function(open){var b=document.getElementById('settings');if(b)b.classList.toggle('active',!!open)};
+// Close one tab by uid. The handler asks for this when a page closes itself
+// (the settings tab), because the strip lives in this document.
+window.fdbCloseTab=function(uid){
+  for(var i=0;i<tabs.length;i++){if(tabs[i].uid===uid){closeTab(i);return true}}
+  return false
+};
 window.fdbChatPanel=function(open){var b=document.getElementById('chat');if(b){b.classList.toggle('active',!!open);b.setAttribute('aria-expanded',open?'true':'false')}};
 window.fdbCycleTab=function(delta){if(!tabs.length)return;active=(active+(delta||1)+tabs.length)%tabs.length;render();send({cmd:'select_tab',uid:current().uid})};
 window.fdbSelectTab=function(index){if(index<0||index>=tabs.length)return;active=index;render();send({cmd:'select_tab',uid:current().uid})};
@@ -225,7 +254,7 @@ window.fdbStatus=function(text){
   },3000);
 };
 window.fdbSettings=function(s){
-  currentSettings={theme:s.theme||'system',density:s.density||'comfortable',skin:s.skin||'default',custom_css:s.custom_css||''};
+  currentSettings={theme:s.theme||'system',density:s.density||'comfortable',custom_css:s.custom_css||''};
   document.body.classList.toggle('compact',s.density==='compact'||!!s.compact_tabs);
   applyTheme();
 };

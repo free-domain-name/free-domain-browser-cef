@@ -1,6 +1,6 @@
 {
   "name": "registry",
-  "description": "A name that is not in the registry is looked up in public DNS.",
+  "description": "A name nobody registered is looked up in the registry and in public DNS, and the browser offers to claim it.",
   "steps": [
     {
       "do": "type",
@@ -11,10 +11,37 @@
     {
       "do": "targets",
       "expect": {
-        "contains": "Page could not be loaded"
+        "contains": "Unregistered domain"
       },
-      "timeout": 25000,
-      "why": "the browser says the name does not resolve"
+      "timeout": 30000,
+      "why": "the browser looked the name up instead of failing to load it"
+    },
+    {
+      "do": "inPage",
+      "title": "Unregistered domain",
+      "expression": "return document.querySelector('h1')?.textContent ?? '';",
+      "expect": {
+        "contains": "nothing-here-987654.example"
+      },
+      "why": "the claim page names the domain that was asked for"
+    },
+    {
+      "do": "inPage",
+      "title": "Unregistered domain",
+      "expression": "return document.body.innerText;",
+      "expect": {
+        "contains": "public DNS has no delegation"
+      },
+      "why": "the name was looked up in public DNS as well as in the registry"
+    },
+    {
+      "do": "inPage",
+      "title": "Unregistered domain",
+      "expression": "return document.body.innerText;",
+      "expect": {
+        "contains": "Register on GitHub"
+      },
+      "why": "the page offers the way to claim the name"
     }
   ]
 }

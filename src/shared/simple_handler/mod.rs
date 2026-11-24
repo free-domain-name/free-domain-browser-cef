@@ -128,7 +128,25 @@ struct Tab {
     uid: u64,
     browser_id: i32,
     view: BrowserView,
+    /// What the tab shows. The settings page is a tab of its own, so the
+    /// handler has to know which tab it may close again.
+    page: TabPage,
 }
+
+/// What a tab shows. Only the settings page is special: it is opened from
+/// the chrome, closed from the page itself and reused when the gear is
+/// pressed again.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TabPage {
+    /// A web page or one of the internal pages (start page, error, ...).
+    Web,
+    /// The settings page.
+    Settings,
+}
+
+/// The address the settings tab carries in the tab strip. The browser turns
+/// it into the settings page; the chrome shows it like any other address.
+const SETTINGS_TAB_URL: &str = "fdb://settings";
 
 // Chrome page layout: tab strip (32) + toolbar (64). The status bar strip is
 // gone, so the content view starts right below the address bar.
@@ -140,22 +158,19 @@ pub struct SimpleHandler {
     browser_list: Vec<Browser>,
     chrome_browser_id: Option<i32>,
     chrome_view: Option<View>,
-    settings_view: Option<BrowserView>,
     chat_panel: Option<BrowserView>,
-    settings_open: bool,
     chat_open: bool,
     chat_panel_uid: Option<u64>,
     chat_tabs: HashSet<u64>,
     tabs: Vec<Tab>,
     /// Horizontal container under the chrome bar holding the tab views plus
-    /// the chat/settings overlays. Tauri parity: the site keeps a flex slot
-    /// LEFT of the chat strip, so the chat never covers the page.
+    /// the chat overlay. Tauri parity: the site keeps a flex slot LEFT of
+    /// the chat strip, so the chat never covers the page.
     content_panel: Option<Panel>,
-    /// True while the chat/settings views are children of `content_panel`
-    /// (the tail slots of its box; tabs are always inserted before them).
+    /// True while the chat view is a child of `content_panel` (the tail slot
+    /// of its box; tabs are always inserted before it).
     panel_chat_child: bool,
-    panel_settings_child: bool,
-    pending_uids: VecDeque<u64>,
+    pending_uids: VecDeque<(u64, TabPage)>,
     pending_views: Vec<(u64, BrowserView)>,
     active_uid: Option<u64>,
     window: Option<Window>,
@@ -171,38 +186,37 @@ const UNAVAILABLE_HTML: &str = include_str!("../../../assets/unavailable.html");
 const NEWTAB_HTML: &str = include_str!("../../../assets/newtab.html");
 const ERROR_HTML: &str = include_str!("../../../assets/error.html");
 /// Shared styles for every internal page (Material-flavored tokens +
-/// components + the legacy theme/skin/density overrides). Materialized once
-/// next to the page files and linked from them; inlined for the data:-origin
-/// chrome page.
+/// components + the compact density). Materialized once next to the page
+/// files and linked from them; inlined for the data:-origin chrome page.
 pub(crate) const UI_KIT_CSS: &str = include_str!("../../../assets/ui-kit.css");
-const APPEARANCE_JS_TEMPLATE: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var skin=q.get('skin')||'default';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=skin;root.dataset.density=density}catch(e){}})();</script>"#;
-/// The appearance bootstrap script: reads theme/skin/density from the page
-/// query string, sets the dataset attributes, and links the shared kit. The
-/// kit URL carries a content hash so a changed stylesheet is never served
-/// from CEF's file:// cache after an upgrade.
-fn appearance_bootstrap_script() -> String {
+const APPEARANCE_JS_TEMPLATE: &str = r#"<script>(function(){try{var q=new URLSearchParams(location.search);var theme=q.get('theme')||'system';var density=q.get('density')||'comfortable';var dark=theme==='dark'||(theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.density=density}catch(e){}})();</script>"#;
+/// Every internal page links the shared kit itself, so a page also looks
+/// right when it is opened on its own. The link is versioned with the
+/// content of the kit, so a changed stylesheet is never served from CEF's
+/// file:// cache after an upgrade.
+const KIT_LINK: &str = r#"<link rel="stylesheet" href="ui-kit.css">"#;
+fn versioned_kit_link() -> String {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     UI_KIT_CSS.hash(&mut hasher);
-    let version = hasher.finish();
     format!(
-        r#"<link rel="stylesheet" href="ui-kit.css?v={version:x}">{}"#,
-        APPEARANCE_JS_TEMPLATE
+        r#"<link rel="stylesheet" href="ui-kit.css?v={:x}">"#,
+        hasher.finish()
     )
 }
 
-/// Live-update helper for pages already open (settings overlay, chat panel,
-/// newtab): re-applies the appearance attributes and the user's custom CSS.
+/// Live-update helper for pages already open (the settings tab, the chat
+/// panel, the start page): re-applies the appearance attributes and the
+/// user's custom CSS.
 fn appearance_live_script(settings: &crate::settings::Settings) -> String {
     let payload = serde_json::json!({
         "theme": settings.theme,
-        "skin": settings.skin,
         "density": settings.density,
         "compact_tabs": settings.compact_tabs,
         "custom_css": settings.custom_css,
     });
     format!(
-        r#"(function(){{try{{var s={payload};var dark=s.theme==='dark'||(s.theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.skin=s.skin||'default';root.dataset.density=s.density||'comfortable';var style=document.getElementById('fdb-appearance');if(!style){{style=document.createElement('style');style.id='fdb-appearance';document.head.appendChild(style)}}style.textContent=s.custom_css||'';}}catch(e){{}}}})();"#
+        r#"(function(){{try{{var s={payload};var dark=s.theme==='dark'||(s.theme!=='light'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);var root=document.documentElement;root.dataset.theme=dark?'dark':'light';root.dataset.density=s.density||'comfortable';var style=document.getElementById('fdb-appearance');if(!style){{style=document.createElement('style');style.id='fdb-appearance';document.head.appendChild(style)}}style.textContent=s.custom_css||'';}}catch(e){{}}}})();"#
     )
 }
 
@@ -224,19 +238,24 @@ fn internal_page_url(html: &str) -> String {
         let _ = std::fs::write(&kit, UI_KIT_CSS);
     }
     use std::hash::{Hash, Hasher};
+    let kit_link = versioned_kit_link();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     html.hash(&mut hasher);
+    // The kit version is part of the page name: a changed stylesheet then
+    // means a new page file, and no cache can hold the old look.
+    kit_link.hash(&mut hasher);
     let path = dir.join(format!("{:x}.html", hasher.finish()));
     // Every internal page gets the same appearance bootstrap. The query string
-    // carries theme/skin/density from the Rust settings store.
+    // carries theme/density from the Rust settings store, and the page's own
+    // kit link is versioned so a changed stylesheet is never cached.
     let themed = match html.find("</head>") {
         Some(index) => {
-            let boot = appearance_bootstrap_script();
+            let boot = APPEARANCE_JS_TEMPLATE;
             let mut value = String::with_capacity(html.len() + boot.len());
             value.push_str(&html[..index]);
-            value.push_str(&boot);
+            value.push_str(boot);
             value.push_str(&html[index..]);
-            value
+            value.replace(KIT_LINK, &kit_link)
         }
         None => html.to_string(),
     };
@@ -244,7 +263,6 @@ fn internal_page_url(html: &str) -> String {
     let settings = crate::settings::load();
     let query = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("theme", &settings.theme)
-        .append_pair("skin", &settings.skin)
         .append_pair("density", &settings.density)
         .finish();
     url::Url::from_file_path(&path)
@@ -258,16 +276,23 @@ fn settings_page_url(settings: &crate::settings::Settings) -> String {
         .append_pair("home", &settings.home)
         .append_pair("cookies", if settings.cookies { "1" } else { "0" })
         .append_pair("dnt", if settings.dnt { "1" } else { "0" })
-        .append_pair(
-            "compact_tabs",
-            if settings.compact_tabs { "1" } else { "0" },
-        )
         .append_pair("density", &settings.density)
         .append_pair("theme", &settings.theme)
-        .append_pair("skin", &settings.skin)
         .append_pair("custom_css", &settings.custom_css)
+        // The marker that tells the handler "this tab shows the settings".
+        // A tab that navigates away loses it and is an ordinary tab again.
+        .append_pair("fdbpage", "settings")
         .finish();
     format!("{base}&{query}")
+}
+
+/// What a tab shows, read from the address of its page.
+fn page_kind_for_url(url: &str) -> TabPage {
+    if url.contains("fdbpage=settings") {
+        TabPage::Settings
+    } else {
+        TabPage::Web
+    }
 }
 
 fn choice_url(domain: &str, target: &str) -> String {
@@ -487,16 +512,13 @@ impl SimpleHandler {
                 browser_list: Vec::new(),
                 chrome_browser_id: None,
                 chrome_view: None,
-                settings_view: None,
                 chat_panel: None,
-                settings_open: false,
                 chat_open: false,
                 chat_panel_uid: None,
                 chat_tabs: HashSet::new(),
                 tabs: Vec::new(),
                 content_panel: None,
                 panel_chat_child: false,
-                panel_settings_child: false,
                 pending_uids: VecDeque::new(),
                 pending_views: Vec::new(),
                 active_uid: None,
@@ -527,6 +549,17 @@ impl SimpleHandler {
         };
         if source_id == chrome_id {
             return;
+        }
+        // A tab that leaves the settings page is an ordinary tab again: the
+        // handler must not close the wrong tab when the settings page asks
+        // to be closed.
+        if let Some(url) = url {
+            let kind = page_kind_for_url(url);
+            if let Some(uid) = self.tab_uid(source_id)
+                && let Some(tab) = self.tabs.iter_mut().find(|tab| tab.uid == uid)
+            {
+                tab.page = kind;
+            }
         }
         if url.is_some_and(|value| value.starts_with("file://") || value.starts_with("data:")) {
             return;
@@ -569,12 +602,11 @@ impl SimpleHandler {
             "compact_tabs": settings.compact_tabs,
             "density": settings.density,
             "theme": settings.theme,
-            "skin": settings.skin,
             "custom_css": settings.custom_css,
         });
         let script = format!("window.fdbSettings&&fdbSettings({payload})");
         self.chrome_execute(0, &script);
-        // Live appearance: overlays (settings overlay, chat panel) and tabs on
+        // Live appearance: the settings tab, the chat panel and tabs on
         // internal pages keep their creation-time theme otherwise (Tauri
         // applies appearance document-wide). Public web content is untouched.
         let appearance = appearance_live_script(&settings);
@@ -680,14 +712,14 @@ impl SimpleHandler {
 
     pub fn register_initial_tabs(&mut self, views: &[BrowserView]) {
         for (uid, view) in views.iter().enumerate() {
-            self.register_tab(uid as u64, view.clone());
+            self.register_tab(uid as u64, view.clone(), TabPage::Web);
         }
         if self.active_uid.is_none() {
             self.active_uid = self.tabs.first().map(|tab| tab.uid);
         }
     }
 
-    pub fn register_tab(&mut self, uid: u64, view: BrowserView) {
+    fn register_tab(&mut self, uid: u64, view: BrowserView, page: TabPage) {
         if self.tabs.iter().any(|tab| tab.uid == uid) {
             return;
         }
@@ -702,7 +734,24 @@ impl SimpleHandler {
             uid,
             browser_id,
             view,
+            page,
         });
+    }
+
+    /// The settings tab, if one is open. The tab the user is looking at
+    /// wins: the page that asks to be closed is the one on screen.
+    fn settings_tab_uid(&self) -> Option<u64> {
+        if let Some(uid) = self.active_uid
+            && self
+                .tab(uid)
+                .is_some_and(|tab| tab.page == TabPage::Settings)
+        {
+            return Some(uid);
+        }
+        self.tabs
+            .iter()
+            .find(|tab| tab.page == TabPage::Settings)
+            .map(|tab| tab.uid)
     }
 
     pub fn set_window(&mut self, window: Window) {
@@ -714,15 +763,15 @@ impl SimpleHandler {
     }
 
     /// The hbox container under the chrome bar: tabs left (flex), chat strip
-    /// right, settings full-width while open. The window layout gives this
-    /// panel flex 1; this store only parents children into it.
+    /// right. The window layout gives this panel flex 1; this store only
+    /// parents children into it.
     pub fn set_content_panel(&mut self, panel: Panel) {
         self.content_panel = Some(panel);
     }
 
     /// Insert a tab view into the content panel, always BEFORE the trailing
-    /// overlay children (chat/settings) so the chat strip stays the rightmost
-    /// child. Falls back to no-op when the panel does not exist yet; the
+    /// overlay children (the chat strip) so it stays the rightmost child.
+    /// Falls back to no-op when the panel does not exist yet; the
     /// window-creation path parents the initial tabs itself.
     pub fn attach_tab_view(&mut self, view: &BrowserView) {
         if self.content_panel.is_none() {
@@ -738,15 +787,14 @@ impl SimpleHandler {
         });
     }
 
-    /// Append an overlay view (chat strip or settings) as the last child of
-    /// the content panel with the given kind, and lay the panel out.
+    /// Append an overlay view (the chat strip) as the last child of the
+    /// content panel with the given kind, and lay the panel out.
     fn attach_overlay_view(&mut self, view: &BrowserView, kind: PanelChild) {
         if self.content_panel.is_none() {
             return;
         }
         match kind {
             PanelChild::Chat => self.panel_chat_child = true,
-            PanelChild::Settings => self.panel_settings_child = true,
             PanelChild::Tab => {}
         }
         let child_view = view.clone();
@@ -800,11 +848,6 @@ impl SimpleHandler {
     }
 
     fn layout_overlays(&self, window: &Window) {
-        if let Some(view) = self.settings_view.as_ref() {
-            let view = View::from(view);
-            // Settings covers the whole content panel.
-            view.set_bounds(Some(&Self::panel_bounds(window)));
-        }
         if let Some(view) = self.chat_panel.as_ref() {
             let view = View::from(view);
             view.set_bounds(Some(&Self::chat_bounds(window)));
@@ -814,90 +857,10 @@ impl SimpleHandler {
         }
     }
 
-    /// Tauri parity: the site keeps its flex slot while the chat strip is
-    /// open, so the page stays visible left of the chat. Settings covers the
-    /// full content area, so while it is open the tabs hide beneath it.
-    fn set_all_tabs_visible(&self, visible: i32) {
-        for tab in &self.tabs {
-            let view = View::from(&tab.view);
-            view.set_visible(visible);
-        }
-    }
-
-    pub fn attach_settings_view(&mut self, view: BrowserView) {
-        let Some(window) = self.window.clone() else {
-            return;
-        };
-        if self.chat_open {
-            // Visibility only: the chat session stays enabled (Tauri never
-            // leaves the room when its settings menu opens).
-            self.hide_chat_panel();
-        }
-        self.settings_view = Some(view);
-        self.settings_open = true;
-        let settings_view = self.settings_view.clone();
-        if let Some(settings_view) = settings_view.as_ref() {
-            self.attach_overlay_view(settings_view, PanelChild::Settings);
-        }
-        // Tauri parity: settings is a full-viewport sheet, so the page hides
-        // beneath it (the tabs) instead of fighting the box layout.
-        self.set_all_tabs_visible(0);
-        self.layout_overlays(&window);
-        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
-        if let Some(browser) = self.settings_view.as_ref().and_then(|view| view.browser())
-            && let Some(host) = browser.host()
-        {
-            host.set_focus(1);
-        }
-    }
-
-    pub fn show_settings_view(&mut self) {
-        let Some(window) = self.window.clone() else {
-            return;
-        };
-        if self.chat_open {
-            self.hide_chat_panel();
-        }
-        if let Some(view) = self.settings_view.as_ref() {
-            let view = View::from(view);
-            view.set_visible(1);
-        }
-        if !self.panel_settings_child
-            && let Some(view) = self.settings_view.clone()
-        {
-            self.attach_overlay_view(&view, PanelChild::Settings);
-        }
-        self.settings_open = true;
-        self.set_all_tabs_visible(0);
-        self.layout_overlays(&window);
-        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(true)");
-    }
-
-    pub fn close_settings_view(&mut self) {
-        if let Some(view) = self.settings_view.as_ref() {
-            let view = View::from(view);
-            view.set_visible(0);
-        }
-        self.settings_open = false;
-        if self.active_uid.is_some() {
-            self.set_all_tabs_visible(0);
-            if let Some(uid) = self.active_uid
-                && let Some(tab) = self.tab(uid)
-            {
-                let view = View::from(&tab.view);
-                view.set_visible(1);
-            }
-        }
-        self.chrome_execute(0, "window.fdbSettingsOpen&&fdbSettingsOpen(false)");
-    }
-
     pub fn attach_chat_panel(&mut self, view: BrowserView) {
         let Some(window) = self.window.clone() else {
             return;
         };
-        if self.settings_open {
-            self.close_settings_view();
-        }
         self.chat_panel = Some(view);
         self.chat_panel_uid = self.active_uid;
         if let Some(uid) = self.active_uid {
@@ -930,9 +893,6 @@ impl SimpleHandler {
         let Some(window) = self.window.clone() else {
             return;
         };
-        if self.settings_open {
-            self.close_settings_view();
-        }
         if let Some(view) = self.chat_panel.as_ref() {
             let view = View::from(view);
             view.set_visible(1);
@@ -1012,13 +972,6 @@ impl SimpleHandler {
     fn chrome_state(&mut self) {
         self.chrome_execute(
             0,
-            &format!(
-                "window.fdbSettingsOpen&&fdbSettingsOpen({})",
-                self.settings_open
-            ),
-        );
-        self.chrome_execute(
-            0,
             &format!("window.fdbChatPanel&&fdbChatPanel({})", self.chat_open),
         );
         // Full tab-strip resync: after an F5 reload of the chrome page its JS
@@ -1029,7 +982,8 @@ impl SimpleHandler {
             .map(|tab| {
                 // Tabs on internal pages (newtab/claim/conflict) have no public
                 // URL; they sync as empty "New Tab" entries so every handler
-                // tab still has a strip entry after the reload.
+                // tab still has a strip entry after the reload. The settings tab
+                // keeps its own address, so the gear still finds it.
                 let url = tab
                     .view
                     .browser()
@@ -1038,6 +992,13 @@ impl SimpleHandler {
                             .map(|frame| CefString::from(&frame.url()).to_string())
                     })
                     .unwrap_or_default();
+                if tab.page == TabPage::Settings {
+                    return serde_json::json!({
+                        "uid": tab.uid,
+                        "url": SETTINGS_TAB_URL,
+                        "label": "Settings",
+                    });
+                }
                 let display = if url.starts_with("file://") || url.starts_with("data:") {
                     String::new()
                 } else {
@@ -1073,17 +1034,16 @@ impl SimpleHandler {
             view.set_visible(i32::from(tab.uid == uid));
         }
         // Tauri parity (activateTab): the selected page takes keyboard focus so
-        // keystrokes land in the content, not the chrome strip — unless an
-        // overlay owns focus or the chat panel is about to take it.
+        // keystrokes land in the content, not the chrome strip — unless the
+        // chat panel is about to take it.
         if !self.chat_open
-            && !self.settings_open
             && let Some(tab) = self.tab(uid)
             && let Some(browser) = tab.view.browser()
             && let Some(host) = browser.host()
         {
             host.set_focus(1);
         }
-        if !self.chat_open && !self.settings_open && self.chat_tabs.contains(&uid) {
+        if !self.chat_open && self.chat_tabs.contains(&uid) {
             self.show_chat_panel();
         }
     }
@@ -1199,7 +1159,7 @@ impl SimpleHandler {
             }
         }
 
-        if let Some(uid) = self.pending_uids.front().copied() {
+        if let Some((uid, page)) = self.pending_uids.front().copied() {
             if let Some(position) = self
                 .pending_views
                 .iter()
@@ -1207,7 +1167,7 @@ impl SimpleHandler {
             {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
-                self.register_tab(uid, view);
+                self.register_tab(uid, view, page);
                 self.switch_uid(uid);
             }
             return;
@@ -1226,7 +1186,7 @@ impl SimpleHandler {
                 }
             }
         }
-        if let Some(uid) = self.pending_uids.front().copied() {
+        if let Some((uid, page)) = self.pending_uids.front().copied() {
             if let Some(position) = self
                 .pending_views
                 .iter()
@@ -1234,7 +1194,7 @@ impl SimpleHandler {
             {
                 let (_, view) = self.pending_views.remove(position);
                 self.pending_uids.pop_front();
-                self.register_tab(uid, view);
+                self.register_tab(uid, view, page);
                 self.switch_uid(uid);
             }
             return;
@@ -1242,7 +1202,7 @@ impl SimpleHandler {
         if self.tabs.is_empty()
             && let Some(view) = browser_view_get_for_browser(Some(&mut browser))
         {
-            self.register_tab(0, view);
+            self.register_tab(0, view, TabPage::Web);
             self.active_uid = Some(0);
         }
     }
@@ -1318,7 +1278,7 @@ impl SimpleHandler {
         }
         if let Some(view) = browser_view_get_for_browser(Some(browser)) {
             let uid = self.tabs.len() as u64;
-            self.register_tab(uid, view);
+            self.register_tab(uid, view, TabPage::Web);
             if self.active_uid.is_none() {
                 self.active_uid = Some(uid);
             }
@@ -1449,7 +1409,7 @@ impl SimpleHandler {
             return 0;
         };
         if url == "https://fdb.invalid/settings" {
-            post_page(target_id, internal_page_url(SETTINGS_HTML));
+            post_page(target_id, settings_page_url(&crate::settings::load()));
             return 1;
         }
         if url == "https://fdb.invalid/chat" {
@@ -1829,12 +1789,14 @@ wrap_display_handler! {
             };
             match action {
                 Some(BridgeAction::Navigate(target_id, url)) => spawn_navigation(target_id, url),
-                Some(BridgeAction::OpenSettings) => open_settings_overlay(),
-                Some(BridgeAction::CloseSettings) => {
-                    if let Some(instance) = SimpleHandler::instance() {
-                        instance.lock().expect("Failed to lock handler").close_settings_view();
-                    }
+                Some(BridgeAction::OpenSettings) => {
+                    // The settings page lives in a tab of its own. The chrome
+                    // owns the tab strip, so it creates the tab and tells the
+                    // handler which one it is.
+                    let inner = self.inner.lock().expect("Failed to lock inner");
+                    inner.chrome_execute(0, "window.fdbOpenSettings&&fdbOpenSettings()");
                 }
+                Some(BridgeAction::CloseSettings) => close_settings_tab(),
                 Some(BridgeAction::ToggleChatPanel) => toggle_chat_panel(),
                 Some(BridgeAction::Review(domain)) => open_review_in_system_browser(domain),
                 Some(BridgeAction::About) => {
@@ -2251,35 +2213,22 @@ fn open_review_in_system_browser(domain: String) {
     }
 }
 
-fn open_settings_overlay() {
+/// Close the settings tab. The page asks for this (the Close button and
+/// Escape); the tab strip lives in the chrome document, so the chrome closes
+/// the tab there and sends the close command back.
+fn close_settings_tab() {
     let Some(instance) = SimpleHandler::instance() else {
         return;
     };
-    let (inner, exists) = {
+    let uid = {
         let handler = instance.lock().expect("Failed to lock handler");
-        (handler.weak_self.upgrade(), handler.settings_view.is_some())
+        handler.settings_tab_uid()
     };
-    if exists {
-        instance
-            .lock()
-            .expect("Failed to lock handler")
-            .show_settings_view();
-        return;
-    }
-    let Some(inner) = inner else {
+    let Some(uid) = uid else {
         return;
     };
-    let url = settings_page_url(&crate::settings::load());
-    let Some(view) = create_content_view(inner, &url) else {
-        if let Ok(handler) = instance.lock() {
-            handler.chrome_toast("Could not open settings");
-        }
-        return;
-    };
-    let mut handler = instance.lock().expect("Failed to lock handler");
-    // Parenting happens inside attach_settings_view: the view becomes a
-    // full-width child of the content panel while the tabs hide beneath it.
-    handler.attach_settings_view(view);
+    let handler = instance.lock().expect("Failed to lock handler");
+    handler.chrome_execute(0, &format!("window.fdbCloseTab&&fdbCloseTab({uid})"));
 }
 
 fn toggle_chat_panel() {
@@ -2490,16 +2439,28 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
         }
     }
 
+    // The settings tab carries its own address in the strip; the page behind
+    // it is the internal settings page, built from the saved settings.
+    let page = if url.trim() == SETTINGS_TAB_URL {
+        TabPage::Settings
+    } else {
+        TabPage::Web
+    };
+    let url = match page {
+        TabPage::Settings => settings_page_url(&crate::settings::load()),
+        TabPage::Web => url,
+    };
+
     // Never hold the handler lock across view creation: CEF invokes
     // `on_after_created`, which locks the same mutex. Queue the uid first so
     // the lifecycle callback can associate the browser with this tab.
     {
         let mut handler = inner.lock().expect("Failed to lock inner");
-        handler.pending_uids.push_back(uid);
+        handler.pending_uids.push_back((uid, page));
     }
     let Some(view) = crate::shared::simple_app::create_content_view(inner.clone(), &url) else {
         let mut handler = inner.lock().expect("Failed to lock inner");
-        handler.pending_uids.retain(|pending| *pending != uid);
+        handler.pending_uids.retain(|(pending, _)| *pending != uid);
         return;
     };
     {
@@ -2511,10 +2472,10 @@ fn open_tab(inner: Arc<Mutex<SimpleHandler>>, uid: u64, url: String) {
     }
     let mut handler = inner.lock().expect("Failed to lock inner");
     if handler.tab(uid).is_none() {
-        handler.register_tab(uid, view);
+        handler.register_tab(uid, view, page);
     }
     handler.pending_views.retain(|(pending, _)| *pending != uid);
-    handler.pending_uids.retain(|pending| *pending != uid);
+    handler.pending_uids.retain(|(pending, _)| *pending != uid);
     if handler.tab(uid).is_some() {
         handler.switch_uid(uid);
     }
@@ -2651,6 +2612,12 @@ fn open_external_http(raw: &str) -> Result<(), String> {
 }
 
 fn spawn_navigation(target_id: i32, target: String) {
+    // The settings address opens the settings page in the tab that asked for
+    // it, the same way the gear opens it in a tab of its own.
+    if target.trim() == SETTINGS_TAB_URL {
+        post_page(target_id, settings_page_url(&crate::settings::load()));
+        return;
+    }
     // Navigation ordering guard (Tauri contentChain + per-tab generation): a
     // slow fdn resolve must not land AFTER a later, faster navigation. Every
     // navigation bumps the target's generation; a resolve that completes with
@@ -2816,15 +2783,13 @@ wrap_task! {
 // in this file do (a synchronous CefPostTask can run the task inline, which
 // would deadlock against our own lock).
 
-// What a content-panel child is. The kind is explicit on purpose: the
-// settings sheet shares flex 1 with the tabs, so deriving "is a tab" from
-// the flex value alone misfiled the sheet as a tab and left it hidden.
+// What a content-panel child is. The kind is explicit on purpose: the chat
+// strip shares its row with the tabs, so deriving "is a tab" from the flex
+// value alone would misfile the strip as a tab and leave it hidden.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PanelChild {
     /// A tab page. Only the active tab is visible.
     Tab,
-    /// The settings sheet. Covers the whole content area.
-    Settings,
     /// The chat strip. A column on the right of the page.
     Chat,
 }
@@ -2846,8 +2811,7 @@ wrap_task! {
                 let Some(instance) = SimpleHandler::instance() else { return };
                 let handler = instance.lock().expect("Failed to lock handler");
                 let chrome_view = handler.chrome_view.clone();
-                let overlays = usize::from(handler.panel_chat_child)
-                    + usize::from(handler.panel_settings_child);
+                let overlays = usize::from(handler.panel_chat_child);
                 // switch_uid already made this tab active before the posted
                 // task ran; a brand-new tab must attach VISIBLE, or the whole
                 // panel paints empty when it and the previous tab are hidden.
@@ -2867,11 +2831,10 @@ wrap_task! {
             } else {
                 panel.add_child_view_at(Some(&mut child), panel.child_view_count() as i32);
             }
-            // The settings sheet is a full-area overlay, the chat strip is a
-            // right-hand column, and the tabs share the remaining width.
+            // The chat strip is a right-hand column, and the tabs share the
+            // remaining width.
             let flex = match self.kind {
                 PanelChild::Tab => 1,
-                PanelChild::Settings => 1,
                 PanelChild::Chat => 0,
             };
             if let Some(layout) =
@@ -2889,12 +2852,12 @@ wrap_task! {
                         height: panel_rect.height.max(1),
                     }
                 }
-                PanelChild::Tab | PanelChild::Settings => panel_rect,
+                PanelChild::Tab => panel_rect,
             };
             child.set_bounds(Some(&bounds));
-            // Only a background tab may be invisible. The overlays are
-            // visible as soon as they are attached; hiding the settings
-            // sheet here is what made the first click paint an empty panel.
+            // Only a background tab may be invisible. The overlay is visible
+            // as soon as it is attached; hiding the chat strip here is what
+            // made the first click paint an empty panel.
             child.set_visible(if is_tab && !is_active_tab { 0 } else { 1 });
             panel.layout();
         }

@@ -64,7 +64,7 @@ wrap_window_delegate! {
 
             // Content structure, Tauri parity:
             //   window (vertical box) = [ chrome bar (flex 0), content panel (flex 1) ]
-            //   content panel (horizontal box) = [ active tab (flex 1), chat strip (flex 0), settings (flex 1) ]
+            //   content panel (horizontal box) = [ active tab (flex 1), chat strip (flex 0) ]
             // The site keeps its flex slot left of the chat, so the chat must
             // never cover the page. Popup windows (review) have no chrome bar
             // and keep the simple window-children path.

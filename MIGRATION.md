@@ -75,7 +75,7 @@ The reference app is `/Users/ozkan/projects/tauri-browser` (read-only).
 | Status/progress | statusbar pill + URL + mode, progress bar | transient bottom-left status bubble (hover target / engine status / toasts, auto-hides) and progress bar — persistent bar deliberately removed, modern-browser style | intentional divergence |
 | Theme | system/light/dark across chrome and pages | system/light/dark across chrome and internal pages | match |
 | Density | comfortable/compact across chrome | comfortable/compact chrome and compact internal-page spacing | match |
-| Built-in skins | seven skins across chrome/pages | seven chrome and internal-page palettes | match |
+| Built-in skins | seven skins across chrome/pages | none: one Material theme (light and dark) for the chrome and the internal pages | dropped, on purpose |
 | Custom CSS | 24k chrome CSS editor | 24k chrome CSS editor | match |
 | Settings | in-chrome overlay, instant apply | fixed overlay below the chrome, instant apply, close/Escape | match |
 | Application menu | native OS Browser/Edit menu | native app/Browser/Edit menu on macOS and Windows, a menu window on Linux (CEF draws its own X11 window there), plus the overflow fallback | match |

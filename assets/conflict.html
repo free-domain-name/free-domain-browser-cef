@@ -1,15 +1,16 @@
 <html><head><meta charset="utf-8"><style>
-body{margin:0;background:#10151f;color:#e8edf7;font:15px -apple-system,system-ui;padding:64px}
-.card{max-width:680px;margin:auto;background:#1b2331;border:1px solid #334055;border-radius:16px;padding:32px}
-h1{margin:0 0 8px;font-size:24px}p{color:#aebbd0;line-height:1.5}
-a{display:inline-block;margin:12px 8px 0 0;padding:10px 16px;border-radius:9px;text-decoration:none;background:#4f7cff;color:#fff}
-a.secondary{background:#2a3446;color:#dce6f7}
-code{color:#8fb3ff}</style><title>Choose a site</title></head><body><div class="card">
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font);padding:64px}
+.card{max-width:680px;margin:auto;background:var(--status);border:1px solid var(--border);border-radius:var(--radius-dialog);padding:32px}
+h1{margin:0 0 8px;font-size:24px}p{color:var(--muted);line-height:1.5}
+a{display:inline-block;margin:12px 8px 0 0;padding:10px 16px;border-radius:var(--radius-control);text-decoration:none;background:var(--accent);color:var(--on-accent)}
+a.secondary{background:var(--button);color:var(--text)}
+code{color:var(--accent)}</style><title>Choose a site</title>
+<link rel="stylesheet" href="ui-kit.css"></head><body><div class="card">
 <h1>{{domain}}</h1>
 <p>This name exists in both the Free Domain Registry and public DNS. Choose where to go.</p>
 <a href="{{registry_choice}}">Open registry site</a>
 <a class="secondary" href="{{public_choice}}">Open public website</a>
-<p style="margin:12px 8px 0 0"><a class="secondary" id="cancel" href="#" style="background:none;border:0;color:#9dbcff;padding:6px 0">Cancel — decide later</a></p>
+<p style="margin:12px 8px 0 0"><a class="secondary" id="cancel" href="#" style="background:none;border:0;color:var(--accent);padding:6px 0">Cancel — decide later</a></p>
 <p style="font-size:12px;margin-top:24px">Registry target: <code>{{target}}</code></p>
 <script>
 document.getElementById('cancel').onclick=function(e){e.preventDefault();console.log('fdb:'+JSON.stringify({cmd:'back'}))};

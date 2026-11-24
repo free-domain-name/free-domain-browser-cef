@@ -22,7 +22,7 @@ Status: desktop functionality is ported, including settings/chat overlays, a reu
 - Settings and chat are internal `file://` pages; settings persist in the Rust settings store (`config-dir/settings.json`) and hydrate through URL parameters. Settings opens as a fixed overlay below the chrome and chat as a 420 px side panel.
 - Chat has a working iroh backend, profile cards, ignore/clear controls, per-tab enablement and a compact side-panel drawer.
 - Container tests for `fdn-core` and headless chrome/settings/chat screenshots exist, including compact chat panel mode.
-- Reviews open in a reusable dedicated CEF top-level window; system/light/dark theme, all seven skins and compact density reach the chrome and internal pages.
+- Reviews open in a reusable dedicated CEF top-level window; the Material light and dark theme and the compact density reach the chrome and internal pages.
 - The chat panel tracks the active tab and hides/shows as tabs change.
 - The Browser and Edit menus exist on every platform: a native menu bar on macOS and Windows, and a menu window on Linux, where CEF draws its own X11 window.
 - Container scripts default to the Docker CLI; see README/MIGRATION for the current VM state.
@@ -58,8 +58,8 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
 - [x] Tab titles and address bar sync from content page events.
 - [x] Tab close/new/select and Cmd/Ctrl-T/W, Ctrl-Tab, Cmd-L/R.
 - [x] Real new-tab page with search and shortcuts.
-- [x] Ported Tauri toolbar controls, skins, density and custom CSS.
-- [x] Appearance/skins.
+- [x] Ported Tauri toolbar controls, density and custom CSS.
+- [x] Appearance: one Material theme (light and dark) and the compact density.
 - Acceptance: hidden CDP verified title + URL updates and tab rendering.
 
 ## Phase 3 — independent dynamic tabs

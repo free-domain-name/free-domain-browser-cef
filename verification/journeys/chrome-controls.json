@@ -40,6 +40,16 @@
     },
     {
       "do": "click",
+      "selector": "#tabs button:not(.plus)",
+      "why": "the first tab is looked at again"
+    },
+    {
+      "do": "pause",
+      "ms": 600,
+      "why": "the app has a moment to switch the tab"
+    },
+    {
+      "do": "click",
       "selector": "#home",
       "why": "the home button is pressed"
     },

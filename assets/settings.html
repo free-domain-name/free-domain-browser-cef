@@ -1,63 +1,59 @@
-<html><head><meta charset="utf-8"><title>Settings</title><style>
-*{box-sizing:border-box}body{margin:0;background:#141821;color:#e8edf7;font:14px -apple-system,system-ui;padding:32px 40px}
-h1{font-size:22px;margin:0 0 4px}p.sub{margin:0 0 28px;color:#93a0b8}
+<html><head><meta charset="utf-8"><title>Settings</title>
+<link rel="stylesheet" href="ui-kit.css"><style>
+/* The page carries its layout only; every colour comes from the shared kit,
+ * so the light and the dark theme look the same here. */
+*{box-sizing:border-box}
+body{margin:0;padding:32px 40px}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{margin:0 0 28px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px}
-.card{background:#1d2430;border:1px solid #2b3548;border-radius:12px;padding:18px}
-.card h2{font-size:14px;margin:0 0 12px;color:#c8d4ea;text-transform:uppercase;letter-spacing:.06em}
-label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;color:#c6d0e2}
-input[type=text],select{width:100%;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:9px 11px;font:inherit}
-input[type=checkbox]{width:18px;height:18px;accent-color:#4f7cff}
-textarea{width:100%;min-height:120px;background:#111722;border:1px solid #334055;border-radius:8px;color:#fff;padding:10px;font:12px ui-monospace,menlo,monospace;resize:vertical}
-.note{color:#8290a8;font-size:12px;line-height:1.5;margin-top:10px}
-.pill{display:inline-block;background:#22304a;color:#9dbcff;border-radius:999px;padding:3px 9px;font-size:11px}
+.card h2{font-size:13px;margin:0 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
+input[type=text],select,textarea{width:100%}
+label .fdb-field{margin-top:0}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+textarea.fdb-field{min-height:120px;font:12px var(--font-mono);resize:vertical}
 .wide{grid-column:1/-1}
-button{background:#4f7cff;color:#fff;border:0;border-radius:9px;padding:10px 18px;font:inherit;cursor:pointer}
-#status{color:#8d9ab1;font-size:12px;margin-left:12px}
+#status{margin-left:12px;color:var(--muted);font-size:12px}
 </style></head><body>
-<h1>Settings</h1><p class="sub">Free Domain Browser · CEF prototype</p>
+<h1>Settings</h1><p class="sub">Free Domain Browser · CEF prototype · this page lives in a tab of its own</p>
 <div class="grid">
 <div class="card"><h2>Appearance</h2>
-<label>Theme <select id="theme" title="Theme" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-<label>Skin <select id="skin" title="Skin" aria-label="Skin"><option value="default">Default</option><option value="high-tech">High-Tech</option><option value="futuristic">Futuristic</option><option value="historic">Historic</option><option value="victorian">Victorian</option><option value="amazon">Amazon</option><option value="terminal">Terminal</option></select></label>
-<div id="skinHint" class="note"></div>
-<label>Layout <select id="density" title="Layout density" aria-label="Layout density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
-<label>Compact tab strip <input id="compact_tabs" type="checkbox" title="Use compact tab strip" aria-label="Use compact tab strip"></label>
+<label>Theme <select id="theme" class="fdb-field" title="Theme" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label>Layout <select id="density" class="fdb-field" title="Layout density" aria-label="Layout density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
 <div class="note">Theme and custom CSS apply immediately after saving.</div>
 </div>
 <div class="card"><h2>Navigation</h2>
-<label>Home page</label><input id="home" type="text" value="" title="Home page URL" aria-label="Home page URL" placeholder="The start page (leave empty)">
+<label>Home page</label><input id="home" class="fdb-field" type="text" value="" title="Home page URL" aria-label="Home page URL" placeholder="The start page (leave empty)">
 <div class="note">Registry names like <b>hello.fdn</b> resolve through the sharded GitHub registry before loading.</div>
 </div>
 <div class="card"><h2>Registry</h2><div class="note">Source <span class="pill">GitHub raw</span></div><div class="note">Negative lookup cache: 5 minutes.<br>Record TTL capped at 24 hours.</div></div>
 <div class="card"><h2>Privacy</h2><label>Block third-party cookies <input id="cookies" type="checkbox" checked title="Block third-party cookies" aria-label="Block third-party cookies"></label><label>Send do-not-track <input id="dnt" type="checkbox" title="Send do-not-track header" aria-label="Send do-not-track header"></label></div>
 <div class="card wide"><h2>Custom chrome CSS</h2>
-<textarea id="custom_css" maxlength="24000" title="Custom chrome CSS" aria-label="Custom chrome CSS" placeholder="/* optional: override chrome variables, e.g. :root{--accent:#ff6600} */"></textarea>
+<textarea id="custom_css" class="fdb-field" maxlength="24000" title="Custom chrome CSS" aria-label="Custom chrome CSS" placeholder="/* optional: override chrome variables, e.g. :root{--accent:#ff6600} */"></textarea>
 <div class="note">Applied to the browser chrome only. Maximum 24,000 characters.</div>
 </div>
 </div>
-<button id="save" style="margin-top:20px" title="Save settings" aria-label="Save settings">Save settings</button><button id="close" style="margin-left:8px;background:#2a3446" title="Close settings" aria-label="Close settings">Close settings</button><button id="reset" style="margin-left:8px;background:#2a3446" title="Reset appearance" aria-label="Reset appearance">Reset appearance</button><span id="status"></span>
+<button id="save" class="fdb-btn primary" style="margin-top:20px" title="Save settings" aria-label="Save settings">Save settings</button><button id="close" class="fdb-btn ghost" style="margin-left:8px" title="Close settings" aria-label="Close settings">Close settings</button><button id="reset" class="fdb-btn ghost" style="margin-left:8px" title="Reset appearance" aria-label="Reset appearance">Reset appearance</button><span id="status"></span>
 <script>
-var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),compact_tabs:document.getElementById('compact_tabs'),theme:document.getElementById('theme'),density:document.getElementById('density'),skin:document.getElementById('skin'),custom_css:document.getElementById('custom_css')};
+var fields={home:document.getElementById('home'),cookies:document.getElementById('cookies'),dnt:document.getElementById('dnt'),theme:document.getElementById('theme'),density:document.getElementById('density'),custom_css:document.getElementById('custom_css')};
 // The Rust settings store is authoritative: fields hydrate from the query
 // parameters the chrome passes when opening this page. No localStorage copy.
-try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('compact_tabs'))fields.compact_tabs.checked=q.get('compact_tabs')==='1';if(q.has('theme'))fields.theme.value=q.get('theme');if(q.has('density'))fields.density.value=q.get('density');if(q.has('skin'))fields.skin.value=q.get('skin');if(q.has('custom_css'))fields.custom_css.value=q.get('custom_css');}catch(e){}
+try{var q=new URLSearchParams(location.search);if(q.has('home'))fields.home.value=q.get('home');if(q.has('cookies'))fields.cookies.checked=q.get('cookies')==='1';if(q.has('dnt'))fields.dnt.checked=q.get('dnt')==='1';if(q.has('theme'))fields.theme.value=q.get('theme');if(q.has('density'))fields.density.value=q.get('density');if(q.has('custom_css'))fields.custom_css.value=q.get('custom_css');}catch(e){}
 function send(cmd){console.log('fdb:'+JSON.stringify(cmd))}
-var HINTS={default:'The original clean chrome.', 'high-tech':'Graphite HUD with cyan instrumentation.', futuristic:'Neon glass and violet gradients.', historic:'Parchment paper and ink typography.', victorian:'Deep rose, brass and serif type.', amazon:'Rainforest greens with clay accents.', terminal:'CRT phosphor green on black.'};
-function showHint(){document.getElementById('skinHint').textContent=HINTS[fields.skin.value]||HINTS.default}
-function payload(){return {cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,compact_tabs:fields.compact_tabs.checked,theme:fields.theme.value,density:fields.density.value,skin:fields.skin.value,custom_css:fields.custom_css.value}}
-function preview(){var t=fields.theme.value;var dark=t==='dark'||(t==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.skin=fields.skin.value;document.documentElement.dataset.density=fields.density.value}
+function payload(){return {cmd:'save_settings',home:fields.home.value,cookies:fields.cookies.checked,dnt:fields.dnt.checked,theme:fields.theme.value,density:fields.density.value,custom_css:fields.custom_css.value}}
+function preview(){var t=fields.theme.value;var dark=t==='dark'||(t==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.density=fields.density.value}
 function apply(silent){preview();send(payload());if(!silent)document.getElementById('status').textContent='Saved'}
-['theme','density','skin'].forEach(function(id){fields[id].addEventListener('change',function(){showHint();apply(true)})});
+['theme','density'].forEach(function(id){fields[id].addEventListener('change',function(){apply(true)})});
 fields.custom_css.addEventListener('change',function(){apply(true)});
 document.getElementById('reset').onclick=function(){
   // Tauri confirms before wiping a customized appearance (M2127-2138).
-  var customized=(fields.skin.value&&fields.skin.value!=='default')||(fields.custom_css.value||'').trim()!=='';
-  if(customized&&!window.confirm('Reset appearance to defaults? Your skin and custom CSS will be lost.'))return;
-  fields.theme.value='system';fields.density.value='comfortable';fields.skin.value='default';fields.custom_css.value='';showHint();apply(false)
+  var customized=(fields.custom_css.value||'').trim()!=='';
+  if(customized&&!window.confirm('Reset appearance to defaults? Your custom CSS will be lost.'))return;
+  fields.theme.value='system';fields.density.value='comfortable';fields.custom_css.value='';apply(false)
 };
 document.getElementById('save').onclick=function(){apply(false)};
 document.getElementById('close').onclick=function(){send({cmd:'close_settings'})};
-showHint();
 document.addEventListener('keydown',function(e){if(e.key==='Escape')send({cmd:'close_settings'})});
 </script>
 </body></html>
