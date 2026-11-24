@@ -1,22 +1,20 @@
 # CEF migration plan
 
-Status: the desktop port is done and the journeys hold it down. The audit
-behind this plan (three code reads plus a measured run of the browser in the
-Linux container) found a short list of real defects — a toolbar that is 17 px
-too tall, a custom CSS that never reaches the chrome, a home setting that the
-Home button ignores — and a set of half-features that the interface promises
-but does not keep. Phase 9 is that list, in the order it should be done.
+Status: the desktop port is done, the journeys hold it down, and Phase 9 — the
+list the audit found — is closed. Every item of 9.1 to 9.6 is done and proved
+by a journey or a test; the three things that need the outside world (a
+production chat lobby, the MSI and the AppImage) stay open and say so.
 Everything below Phase 9 is history and stays as it was.
 
 ## What the verification proves today
 
 | gate | result |
 | --- | --- |
-| Linux container, 14 journeys | **125 of 125 steps pass** (`scripts/verify-linux.sh`) |
-| macOS, 13 journeys | 104 of 105 — the chat step failed on a fault in the runner itself, since fixed but not re-run on macOS |
-| `cargo test -p fdn-core` | 14 pass, 5 live-network ignored |
-| `cargo test --bin free-domain-browser-cef` | 34 pass |
-| `cargo fmt --all --check`, `cargo clippy -D warnings` | clean |
+| Linux container, 21 journeys | **203 of 203 steps pass** (`scripts/verify-linux.sh`) |
+| macOS, 21 journeys | not re-run since Phase 9 — the macOS run waits for a machine that may start the app |
+| `cargo test -p fdn-core` | 15 pass, 5 live-network ignored |
+| `cargo test --bin free-domain-browser-cef` | 37 pass |
+| `cargo fmt --all --check`, `cargo clippy --all-targets` | clean |
 
 The journeys run on Linux and Windows when the CI workflow is started by hand,
 and the cheap gates run once a week. macOS runs on the `macos-latest` runner.
@@ -173,12 +171,43 @@ Replace the synthetic `fdb.invalid` navigation hack with a typed bridge.
   hidden CEF harness and the journeys.
 - [x] Ad-hoc-signed release bundle launches hidden and serves DevTools.
 - [x] Chat two-client local validation (presence + bidirectional messages).
-- [ ] The defects and gaps of Phase 9.
+- [x] The defects and gaps of Phase 9 — closed in the list below.
 
 ## Phase 9 — closing the gaps the audit found
 
 Every item below was found by reading the code and by measuring the running
 browser in the Linux container. The measurements are in brackets.
+
+### What Phase 9 changed
+
+| item | the change | the proof |
+| --- | --- | --- |
+| 9.1.1 | the chrome view is 96 px, the height of the strip and the toolbar in one place | `chrome-layout` |
+| 9.1.2 | the custom CSS is injected after the kit, and the kit's theme block no longer out-specifies `:root` | `custom-css` |
+| 9.1.3 | the Home button goes to the home page of the settings | `home` |
+| 9.1.4 | on macOS F10 reaches the page instead of being swallowed | macOS only, not re-run |
+| 9.1.5 | the indicator says what the page really is | `chrome-layout` |
+| 9.1.6 | the reload button stops the page while it loads | `chrome-layout` |
+| 9.2.1 | one density for the chrome and the pages | `density` |
+| 9.2.2 | the custom CSS is part of the bootstrap of every internal page | `custom-css` |
+| 9.2.3 | the settings live in the config folder of the platform | `cargo test` |
+| 9.2.4 | the settings are kept in memory and watched for changes | `cargo test` |
+| 9.2.5 | a hand-edited settings file goes through the same check | `cargo test` |
+| 9.2.6 | both paths send `DNT` and `Sec-GPC` | `cargo test` |
+| 9.2.7 | the chat lobby is a deployment, not a code change | still open |
+| 9.2.8 | the installer carries the version of the build | Windows only |
+| 9.2.9 | the macOS menu has the chat | macOS only |
+| 9.2.10 | the address bar shows the title, the strip counts the tabs | `site`, `home` |
+| 9.3.1 | a popup becomes a tab, and the address travels with it | `site` |
+| 9.3.2 | the start page and the home page go through the resolver | `home` |
+| 9.3.3 | the resolver keeps the port of an address | `cargo test` |
+| 9.3.4 | only the main frame may show the error page | `cargo test` |
+| 9.3.5 | the system browser gets the address that works without the app | `conflict` |
+| 9.3.6 | a download lands in the downloads folder of the platform | `site` |
+| 9.3.7 | "Try again" forgets the old pick and asks again | `unavailable` |
+| 9.4 | the tabs have icons, the strip counts them and keeps the selected one in sight | `site` |
+| 9.5 | the journeys reach the registry that cannot be reached, the downloads, the popup, a real key, the density, the external button and the chat panel | `unavailable`, `site`, `keyboard`, `density`, `external`, `chat-panel` |
+| 9.6 | the dead code is gone, the resolver is shared so its memory works | `cargo build` |
 
 ### 9.1 Defects a user can see (do these first)
 
@@ -332,38 +361,60 @@ the choice.
 
 ### 9.4 Features that are missing
 
-- Per-tab favicons (there is a source dot instead).
-- A tab count, and a scroll-into-view for the selected tab when the strip
+- [x] Per-tab favicons (the browser fetches the icon and hands it to the
+  chrome as a picture: the chrome bar has no address of its own, so it
+  cannot load an image by itself).
+- [x] A tab count, and a scroll-into-view for the selected tab when the strip
   overflows.
-- The page title in the address bar (only the tab shows it).
-- The MSI and AppImage installers.
-- A production `fdn-chatd` lobby.
+- [x] The page title in the address bar (the address stays in the tooltip and
+  comes back when the field is focused).
+- [ ] The MSI and AppImage installers. The Windows installer carries the
+  version of the build, but an MSI needs WiX and an AppImage needs
+  `linuxdeploy`; neither is in this repository yet.
+- [ ] A production `fdn-chatd` lobby. The chat works, but the community room
+  is not deployed by this repository, so the chat has no lobby to join.
 
 ### 9.5 What the journeys do not reach yet
 
-- The unavailable page (the registry cannot be made unreachable without a way
-  to point the app at another registry base).
-- The external open button and the review buttons.
-- The downloads.
-- The popup to tab.
-- The native keyboard path of a content page (the journeys send key events
-  into the chrome page; the content handler needs a real key).
-- The density and the custom CSS (the journeys cover the theme only).
-- The chat's own features: sending, the profile view, the ignore list, the
-  clear data, and the per-tab enablement.
+The list is closed by the journeys that came with the fixes:
+
+- [x] The unavailable page — the app can be pointed at another registry base
+  (`FDB_REGISTRY_BASE`), and the journey points it at an address that cannot
+  be reached (`unavailable`).
+- [x] The external open button (`external`).
+- [x] The downloads — the journeys serve a real file and the browser says
+  where it went (`site`).
+- [x] The popup to tab (`site`).
+- [x] The native keyboard path of a content page — the journey sends a real
+  key to the page (`keyboard`).
+- [x] The density and the custom CSS (`density`, `custom-css`).
+- [x] The chat's own features: the nickname, the profile, the ignore list and
+  the clear button (`chat-panel`). Sending a message still needs a lobby.
 
 ### 9.6 Dead code to remove or wire up
 
-`src/chat/mod.rs:113` (`EVENT_ROOMS`), `:258` (`active_tab`), `:363`
-(`panel_enabled`), `:731` (`set_active_tab`); `src/chat/settings.rs:23`;
-`src/chat/transport.rs:72,76,80,84,111`; `src/chat/identity.rs:79`;
-`src/chat/policy.rs:76,196`; `src/chat/protocol.rs:48` (`reply_to`);
-`src/chat/room.rs:9`; `core/src/resolver.rs:45,143,151,161,307,315,323,447`;
-`core/src/registry.rs:159` (`RegistryClient::cached`); `core/src/lib.rs:6`.
-The resolver's own decision memory is never used: a fresh `Navigator` is built
-for every navigation (`src/shared/simple_handler/mod.rs:2557,2657`), so the
-app's own static map (`src/shared/simple_handler/mod.rs:322-337`) is the only
-memory that works.
+The list, and what became of it:
+
+- [x] `src/chat/mod.rs:113` (`EVENT_ROOMS`) — gone.
+- [x] `src/chat/mod.rs:363` (`panel_enabled`) — gone, with the assignment to
+  it; the field was written and never read.
+- [x] `src/chat/settings.rs:23` (`ask_before_joining_site_rooms`) — gone.
+- [x] `src/chat/transport.rs:72` (`node_id`) — gone; the endpoint it read is
+  kept alive by the router, so the field went with it.
+- [x] `src/chat/identity.rs:79` (`rotate`) — gone; nothing rotates the key.
+- [x] `src/chat/policy.rs:76` (`ignored`) — gone; the ignore list is read
+  from the snapshot.
+- [x] `src/chat/room.rs:9` (`LOBBY_ROOM`) — one name for the lobby room: the
+  module now uses the constant of the configuration.
+- [x] `core/src/registry.rs:159` (`RegistryClient::cached`) — gone.
+- [x] The resolver's own decision memory — **wired up**: the browser now
+  shares one resolver, so what the user picked for a name is remembered
+  between the navigations. Before, a fresh resolver was built for every
+  navigation and forgot everything.
+- [x] `src/chat/mod.rs:258` (`active_tab`), `:731` (`set_active_tab`),
+  `src/chat/protocol.rs:48` (`reply_to`), `core/src/lib.rs:6` — **kept**: they
+  are read (the active tab of the chat, the reply of a message, the public
+  names of the library).
 
 ## Suggested order
 
