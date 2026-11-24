@@ -11,10 +11,10 @@ Implemented: dynamic tabs with titles/closing/shortcuts, address-bar and title
 sync, back/forward/reload/home, security indicator, new-tab page, settings
 persistence in Rust, registry conflict/claim pages with a per-session choice
 memory, `fdn://` link handling, retry error pages, and a local chat UI. Settings
-opens as an overlay below the chrome, chat as a 420 px side panel that follows
-the active tab (with a compact drawer), and community reviews open in a reusable
-dedicated review window.
-System/light/dark theme, all seven skins and compact density are applied to the
+opens in a tab of its own, chat as a 420 px side panel that follows the active
+tab (with a compact drawer), and community reviews open in a reusable dedicated
+review window.
+The Material light and dark theme and the compact density are applied to the
 chrome and internal pages; the Browser and Edit menus exist on every platform:
 a native menu bar on macOS and Windows, and a menu window on Linux, where CEF
 draws its own X11 window and cannot host a native one. Press F10 or Alt+F to
@@ -84,6 +84,14 @@ the DevTools protocol and looks at what is really there. No mock browser and
 no fake network. The whole suite takes about half a minute. The same
 journeys run in CI, where the browser starts hidden because the runner has
 no screen.
+
+The journeys run against every platform:
+
+```sh
+scripts/verify.sh                # macOS, on the build of this tree
+scripts/verify-linux.sh          # Linux, inside the container of Dockerfile.linux
+pwsh scripts/verify-windows.ps1  # Windows, against the packaged build
+```
 
 See [verification/README.md](verification/README.md) for the format of a
 journey and for the list of what is covered.

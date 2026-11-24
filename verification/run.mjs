@@ -83,7 +83,12 @@ for (const file of await journeyFiles()) {
 
 async function journeyFiles() {
   const names = await readdir(journeysDir);
-  return names.filter((name) => name.endsWith(".json")).sort().map((name) => path.join(journeysDir, name));
+  // Hidden files are skipped: macOS keeps a resource fork beside a file as a
+  // `._name` sidecar, and that sidecar is not a journey.
+  return names
+    .filter((name) => name.endsWith(".json") && !name.startsWith("."))
+    .sort()
+    .map((name) => path.join(journeysDir, name));
 }
 
 /** Runs one step of a journey. */
@@ -140,6 +145,41 @@ async function runStep(harness, step) {
         const value = await evaluate(client, step.expression);
         if (step.expect) check(value, step.expect, step.why ?? `the ${step.title} page`);
         return value;
+      } finally {
+        client.close();
+      }
+    }
+    case "waitForInPage": {
+      // Waits for an expression in another page of the same window: the
+      // chat reaching its connected state, for example.
+      const client = await attachToPage(harness.port, step.title);
+      // The expression may be written with or without a leading `return`, so
+      // it is reduced to a value and handed back to the page.
+      const expression = step.expression.trim().replace(/^return\s+/, "").replace(/;$/, "");
+      try {
+        const deadline = Date.now() + (step.timeout ?? 10000);
+        let last = null;
+        let ready = false;
+        while (Date.now() < deadline) {
+          try {
+            last = await evaluate(client, `return (${expression});`);
+            if (last) {
+              ready = true;
+              break;
+            }
+          } catch (error) {
+            last = error.message;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        if (!ready) {
+          throw new Error(
+            `"${step.expression}" was still false in the ${step.title} page after ` +
+              `${step.timeout ?? 10000} ms (last: ${last})`,
+          );
+        }
+        if (step.expect) check(last, step.expect, step.why ?? `the ${step.title} page`);
+        return last;
       } finally {
         client.close();
       }

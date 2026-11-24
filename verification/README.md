@@ -57,6 +57,7 @@ The steps are:
 | `key` | presses a key inside the window |
 | `waitFor` | waits until an expression is true |
 | `waitForSelector` | waits until an element exists |
+| `waitForInPage` | waits until an expression is true in another page of the same window |
 | `targets` | waits until a page with the expected title is open |
 | `inPage` | runs an expression in another page of the same window |
 | `screenshot` | saves a picture of the window |
@@ -85,15 +86,42 @@ would have reached someone.
 | `first-launch` | the browser starts on its own start page, not on a search engine |
 | `chrome-controls` | the settings, chat and home buttons do what they say |
 | `navigation` | a name typed into the address bar resolves and loads |
-| `registry` | a name nobody registered is looked up in public DNS |
+| `registry` | a name nobody registered is looked up in the registry and in public DNS, and the browser offers to claim it |
+| `conflict` | a name that is in both the registry and public DNS opens the chooser, and the choice is remembered |
 | `search` | words without a dot are searched, not treated as a name |
-| `settings` | a change in the settings sheet reaches the browser |
+| `settings` | a change in the settings tab reaches the browser |
+| `appearance` | the light and the dark theme show the same chrome: the selected tab and the settings button read in both |
+| `settings-tab` | the settings get a tab of their own and leave the other tabs alone |
 | `tabs` | a tab can be opened and closed again |
-| `menu` | the browser menu opens on F10 and its entries work (Linux, Windows) |
+| `chat` | the chat panel opens, asks for the 18+ confirmation and connects to the room |
+| `menu` | the browser menu window opens and its entries work (Linux, Windows) |
+| `menu-macos` | the entries of the native macOS menu bar run their commands (macOS) |
 
 ## What is not covered yet
 
-- The conflict chooser. A name that is both in the registry and in public
-  DNS currently goes to the public site without asking.
-- The chat. The panel opens, but nothing about the conversation is checked.
-- The Windows menu bar and the native menus on macOS.
+- The conversation itself. The chat reaches the room, but nothing about a
+  message between two clients is checked.
+- The review window and the "Open in System Browser" button.
+- The unavailable page, which appears when the registry cannot be reached.
+- The native menu bar on macOS and Windows as the user sees it. The menu
+  bar is an OS menu and cannot be driven by the DevTools protocol, so the
+  journeys check the commands its entries run instead.
+- The F10 key itself. A key press is an event of the operating system and
+  cannot be delivered to the window by the DevTools protocol, so the
+  journeys open the menu the way the key does instead. The Linux smoke test
+  presses the real key with `xdotool`.
+
+## Running it on Linux and Windows
+
+The journeys run against the real build of every platform:
+
+```sh
+scripts/verify.sh                # macOS, on the build of this tree
+scripts/verify-linux.sh          # inside the container of Dockerfile.linux
+pwsh scripts/verify-windows.ps1  # Windows, against the packaged build
+```
+
+The Linux script builds the browser inside the container, starts a virtual
+display and runs the journeys there. The Windows script runs them against
+the packaged build, because that is the one that carries the CEF runtime
+next to the executable. Both are also jobs in the CI workflow.

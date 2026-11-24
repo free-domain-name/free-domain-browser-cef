@@ -41,7 +41,9 @@ export function cefBinary() {
 
 /** Starts the CEF build and attaches to its browser window. */
 export async function launchCef(options = {}) {
-  const binary = options.binary ?? cefBinary();
+  // The path is made absolute, because the browser is started in the folder
+  // it lives in.
+  const binary = path.resolve(options.binary ?? cefBinary());
   // The DevTools endpoint listens on IPv6 on some systems, so it is reached
   // by name and not by address.
   const port = options.port ?? (await freePort());
@@ -72,6 +74,9 @@ export async function launchCef(options = {}) {
   const profile = mkdtempSync(path.join(tmpdir(), "fdb-verify-"));
   const child = spawn(binary, args, {
     stdio: ["ignore", "pipe", "pipe"],
+    // The app is started the way a user starts it: from the folder it
+    // lives in. On Windows that is where the CEF runtime is found.
+    cwd: path.dirname(path.resolve(binary)),
     env: {
       ...process.env,
       FDB_SETTINGS_PATH: path.join(profile, "settings.json"),

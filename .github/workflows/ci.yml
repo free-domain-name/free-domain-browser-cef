@@ -42,6 +42,21 @@ jobs:
         run: docker build -f Dockerfile.linux -t fdb-cef-linux .
       - name: Smoke-test the Linux build
         run: docker run --rm --shm-size=1g fdb-cef-linux
+      - name: Run the verification journeys
+        env:
+          # The image already carries the build of this tree.
+          FDB_SKIP_BUILD: "1"
+        run: |
+          mkdir -p verification/artifacts
+          docker run --rm --shm-size=1g \
+            -v "$PWD/verification/artifacts:/app/verification/artifacts" \
+            --entrypoint /app/scripts/verify-linux.sh fdb-cef-linux
+      - name: Upload the screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-screenshots-linux
+          path: verification/artifacts
 
   web-checks:
     runs-on: ubuntu-latest
@@ -88,6 +103,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The runner speaks the DevTools protocol over a WebSocket, which
+          # Node ships from version 20.10 on.
+          node-version: "22"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -117,6 +137,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The runner speaks the DevTools protocol over a WebSocket, which
+          # Node ships from version 20.10 on.
+          node-version: "22"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -136,9 +161,18 @@ jobs:
         env:
           FDB_SMOKE_EXPECT: github.com
         run: ./scripts/smoke-hidden.ps1
+      - name: Run the verification journeys
+        shell: pwsh
+        run: ./scripts/verify-windows.ps1
       - name: Upload CEF log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: cef-smoke-log-windows
           path: ${{ runner.temp }}/free-domain-browser-cef-smoke.*.log
+      - name: Upload the screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-screenshots-windows
+          path: verification/artifacts
