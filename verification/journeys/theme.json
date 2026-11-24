@@ -1,0 +1,96 @@
+{
+  "name": "theme",
+  "description": "The light theme paints the chrome, and the custom CSS of the settings still wins over the theme.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings tab opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const theme = document.getElementById('theme'); theme.value = 'light'; theme.dispatchEvent(new Event('change', { bubbles: true })); return theme.value;",
+      "expect": {
+        "equals": "light"
+      },
+      "why": "the light theme is chosen"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('save').click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings are saved"
+    },
+    {
+      "do": "pause",
+      "ms": 1200,
+      "why": "the app has a moment to apply and to save"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.documentElement).getPropertyValue('--chrome').trim();",
+      "expect": {
+        "equals": "#ffffff"
+      },
+      "why": "the chrome of the light theme is white"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.body).backgroundColor;",
+      "expect": {
+        "equals": "rgb(255, 255, 255)"
+      },
+      "why": "the chrome bar is painted in the light colour"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.documentElement).getPropertyValue('--text').trim();",
+      "expect": {
+        "equals": "#141821"
+      },
+      "why": "the text of the light theme is dark"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('custom_css'); field.value = ':root{--accent:#ff6600}'; field.dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('save').click(); return field.value;",
+      "expect": {
+        "equals": ":root{--accent:#ff6600}"
+      },
+      "why": "a custom colour is typed into the settings and saved"
+    },
+    {
+      "do": "pause",
+      "ms": 1200,
+      "why": "the app has a moment to apply and to save"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();",
+      "expect": {
+        "equals": "#ff6600"
+      },
+      "why": "the custom colour wins over the theme of the kit"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.documentElement).getPropertyValue('--chrome').trim();",
+      "expect": {
+        "equals": "#ffffff"
+      },
+      "why": "the light theme is still in place under the custom CSS"
+    }
+  ]
+}

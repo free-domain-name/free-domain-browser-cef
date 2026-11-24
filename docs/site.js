@@ -75,6 +75,7 @@
   const toggle = document.querySelector("#themeToggle");
   if (!toggle) return;
 
+
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
     const next = theme === "dark" ? "light" : "dark";
@@ -82,6 +83,17 @@
     toggle.title = `Switch to ${next} theme`;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === "dark" ? "#080b12" : "#f4f6fa";
+    // The pictures of the browser follow the theme of the page: the light
+    // picture shows the light theme of the browser, the dark one the dark.
+    for (const shot of document.querySelectorAll(".theme-shot")) {
+      const picture = shot.dataset[theme];
+      if (picture && shot.getAttribute("src") !== picture) shot.setAttribute("src", picture);
+      const alt = shot.dataset[theme === "light" ? "altLight" : "altDark"];
+      if (alt) shot.setAttribute("alt", alt);
+    }
+    for (const label of document.querySelectorAll("[data-theme-label]")) {
+      label.textContent = theme === "dark" ? "Dark" : "Light";
+    }
   }
 
   let saved = null;
@@ -106,5 +118,40 @@
     } catch {
       // Ignore storage failures.
     }
+  });
+})();
+
+// The full size picture of the browser opens in a dialog of its own.
+(() => {
+  const zoom = document.querySelector("#heroZoom");
+  if (!zoom) return;
+
+  const dialog = document.createElement("dialog");
+  dialog.className = "lightbox";
+  const image = document.createElement("img");
+  const caption = document.createElement("figcaption");
+  const label = document.createElement("span");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "Close";
+  caption.append(label, close);
+  dialog.append(image, caption);
+  document.body.append(dialog);
+
+  const theme = () => document.documentElement.dataset.theme === "light" ? "light" : "dark";
+
+  zoom.addEventListener("click", () => {
+    const picture = zoom.dataset[theme()];
+    if (!picture) return;
+    image.setAttribute("src", picture);
+    image.setAttribute("alt", zoom.dataset.label || "");
+    label.textContent = zoom.dataset.label || "";
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  });
+
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
   });
 })();

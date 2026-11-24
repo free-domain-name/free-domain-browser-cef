@@ -11,7 +11,7 @@
 import { spawn } from "node:child_process";
 import { createServer as createSocketServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
-import { appendFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CdpClient, fetchJsonWhenReady, waitFor } from "./cdp.mjs";
@@ -73,6 +73,14 @@ export async function launchCef(options = {}) {
   // Its own profile, so the run never touches the profile of the browser
   // the developer is using and can start next to it.
   const profile = mkdtempSync(path.join(tmpdir(), "fdb-verify-"));
+  // A run may want the browser to start with a given theme or home page, so
+  // the settings are written before it starts.
+  if (options.settings) {
+    writeFileSync(
+      path.join(profile, "settings.json"),
+      JSON.stringify(options.settings, null, 2),
+    );
+  }
   const child = spawn(binary, args, {
     stdio: ["ignore", "pipe", "pipe"],
     // The app is started the way a user starts it: from the folder it

@@ -8,6 +8,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The light theme paints the browser again. The theme of the kit lost against
+  its own dark tokens, so the browser wore the dark theme whatever the
+  settings said. The tokens of the theme now live in a cascade layer of their
+  own: the light theme wins inside the layer, and the custom CSS of the
+  settings wins over the layer, because a rule outside a layer always beats a
+  rule inside one. A journey holds it down now.
 - A link that wants a window of its own no longer hangs the browser. The
   handler that turns a popup into a tab asked for the lock of the browser
   while the caller was already holding it, and the browser waited for itself.
@@ -63,6 +69,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Pictures of the running browser on the page of the project: the start page,
+  a page in a tab, the settings and the chat. They are taken by
+  `scripts/capture-screens.mjs`, which starts the real build on a virtual
+  display and photographs the window, so nothing on the page is drawn for the
+  site.
 - The tabs show the icon of the site, the strip counts them, and the tab you
   are looking at is kept in sight when the strip overflows. The title of the
   page stands in the address bar, and the address comes back when you click

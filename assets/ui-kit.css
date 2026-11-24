@@ -22,6 +22,12 @@
  *   --surface   the raised surface of the chrome (the selected tab)
  * The selected tab shares the toolbar's color, so the two read as one shape
  * and the accent underline says which tab it is. */
+/* The theme tokens live in a cascade layer of their own. A rule outside a
+ * layer always beats a rule inside one, so the custom CSS of the settings
+ * wins over the theme whatever it writes: `:root{--accent:...}` in the
+ * settings beats the theme of the kit. Inside the layer the light theme
+ * still beats the dark one, because it is the more specific rule. */
+@layer theme {
 :root {
   --bg: #12161d;
   --chrome: #1a1f28;
@@ -52,10 +58,9 @@
   --font: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-/* The theme block carries no specificity of its own (:where), so a custom
- * rule from the settings can override a token: `html[data-theme=light]`
- * would beat `:root{--accent:...}` and the custom CSS would never work. */
-html:where([data-theme=light]){
+/* The light theme. It is the more specific rule of the layer, so it wins
+ * over the dark tokens above. */
+html[data-theme=light]{
   --bg: #eef1f6;
   --chrome: #ffffff;
   --surface: #ffffff;
@@ -79,6 +84,7 @@ html:where([data-theme=light]){
   --warn: #b45309;
   --shadow-1: 0 1px 3px rgba(20, 24, 33, .12);
   --shadow-3: 0 3px 14px rgba(20, 24, 33, .14);
+}
 }
 
 /* ---------- 2. Base + type ---------- */

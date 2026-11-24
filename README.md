@@ -101,6 +101,21 @@ pwsh scripts/verify-windows.ps1  # Windows, against the packaged build
 See [verification/README.md](verification/README.md) for the format of a
 journey and for the list of what is covered.
 
+### The pictures of the page
+
+The page of the project shows the browser itself, and the pictures are
+photographs of the running build, not drawings. They are taken on a virtual
+display:
+
+```sh
+Xvfb :99 -screen 0 1400x900x24 &
+DISPLAY=:99 scripts/capture-screens.mjs   # every picture
+DISPLAY=:99 scripts/capture-screens.mjs page-dark   # one picture
+```
+
+The script starts the real browser with the theme it needs, opens the page it
+should show, photographs the window and writes the pictures to `docs/assets`.
+
 ## Requirements
 
 - macOS, x86_64 Linux, or Windows
