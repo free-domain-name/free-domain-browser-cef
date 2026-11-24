@@ -1,0 +1,43 @@
+{
+  "name": "chrome-layout",
+  "description": "The chrome bar fits in its view: the toolbar is not cut off, and the security indicator says what the page really is.",
+  "steps": [
+    {
+      "do": "evaluate",
+      "expression": "const bar = document.querySelector('.toolbar').getBoundingClientRect(); return JSON.stringify({ bottom: Math.round(bar.bottom), view: window.innerHeight });",
+      "why": "the toolbar is measured against the view"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelector('.toolbar').getBoundingClientRect().bottom <= window.innerHeight + 0.5;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the whole toolbar is inside the chrome view"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.querySelector('.toolbar').getBoundingClientRect().bottom <= document.body.scrollHeight;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the chrome page is not taller than the view that holds it"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const sec = document.getElementById('sec'); return sec.getAttribute('aria-label');",
+      "expect": {
+        "equals": "Local page"
+      },
+      "why": "the start page is a local page, and the indicator says so"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const sec = document.getElementById('sec'); return sec.title === sec.getAttribute('aria-label') && sec.title !== 'Secure connection';",
+      "expect": {
+        "equals": true
+      },
+      "why": "the indicator does not claim a secure connection for a local page"
+    }
+  ]
+}

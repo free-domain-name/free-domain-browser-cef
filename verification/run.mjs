@@ -24,6 +24,7 @@ import {
   screenshot,
   listTargets,
   attachToPage,
+  startSite,
 } from "./lib/harness.mjs";
 import { check } from "./lib/assert.mjs";
 
@@ -54,12 +55,16 @@ for (const file of await journeyFiles()) {
   }
 
   console.log(`\n${spec.name} — ${spec.description ?? ""}`);
-  const harness = await launchCef({ url: spec.startUrl });
+  // The site of the journeys: a real page with a title, a favicon, a popup
+  // and a file to download. It is started per journey, so the journeys do
+  // not share a state.
+  const site = await startSite();
+  const harness = await launchCef({ url: spec.startUrl, env: spec.env });
   try {
     for (const step of spec.steps) {
       const description = step.why ?? step.do;
       try {
-        await runStep(harness, step);
+        await runStep(harness, step, site);
         results.push({ journey: spec.name, step: description, ok: true });
         console.log(`  ok    ${description}`);
       } catch (error) {
@@ -73,11 +78,18 @@ for (const file of await journeyFiles()) {
           await writeFile(path.join(artifactsDir, file_name), shot);
           console.log(`        screenshot: verification/artifacts/${file_name}`);
         }
+        // What the browser itself said: the reason a step failed is often in
+        // the log of the process, not in the page.
+        const said = (harness.log ?? []).join("").trim();
+        if (said) {
+          console.log(`        the browser said:\n${said.slice(-1500)}`);
+        }
         break;
       }
     }
   } finally {
     await harness.close();
+    await site.close();
   }
 }
 
@@ -92,25 +104,29 @@ async function journeyFiles() {
 }
 
 /** Runs one step of a journey. */
-async function runStep(harness, step) {
+async function runStep(harness, step, site) {
+  // A journey may point at the site of the run: the port changes with every
+  // run, so the address cannot be written down.
+  const fill = (text) =>
+    String(text ?? "").replaceAll("{{site}}", site?.origin ?? "");
   switch (step.do) {
     case "evaluate": {
-      const value = await evaluate(harness.client, step.expression);
+      const value = await evaluate(harness.client, fill(step.expression));
       if (step.expect) check(value, step.expect, step.why ?? "the value");
       return value;
     }
     case "click": {
       await click(harness.client, step.selector);
       if (step.expect) {
-        const value = await evaluate(harness.client, step.expression ?? "return true;");
+        const value = await evaluate(harness.client, fill(step.expression ?? "return true;"));
         check(value, step.expect, step.why ?? "the click");
       }
       return true;
     }
     case "waitFor": {
-      await waitForExpression(harness.client, step.expression, step.timeout ?? 10000);
+      await waitForExpression(harness.client, fill(step.expression), step.timeout ?? 10000);
       if (step.expect) {
-        const value = await evaluate(harness.client, step.expression);
+        const value = await evaluate(harness.client, fill(step.expression));
         check(value, step.expect, step.why ?? "the wait");
       }
       return true;
@@ -129,7 +145,7 @@ async function runStep(harness, step) {
         `const element = document.querySelector(${JSON.stringify(step.selector)});
          if (!element) return false;
          element.focus();
-         element.value = ${JSON.stringify(step.text ?? "")};
+         element.value = ${JSON.stringify(fill(step.text ?? ""))};
          element.dispatchEvent(new Event("input", { bubbles: true }));
          ${step.press === false ? "" : 'element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));'}
          return true;`,
@@ -142,7 +158,7 @@ async function runStep(harness, step) {
       // settings, the menu, the conflict page.
       const client = await attachToPage(harness.port, step.title);
       try {
-        const value = await evaluate(client, step.expression);
+        const value = await evaluate(client, fill(step.expression));
         if (step.expect) check(value, step.expect, step.why ?? `the ${step.title} page`);
         return value;
       } finally {
@@ -226,6 +242,104 @@ async function runStep(harness, step) {
       }
       if (problem) throw problem;
       return list;
+    }
+    case "clickInPage": {
+      // Clicks inside another page: a link of the site the browser shows.
+      const client = await attachToPage(harness.port, step.title);
+      try {
+        await click(client, step.selector);
+        if (step.expect) {
+          const value = await evaluate(client, fill(step.expression ?? "return true;"));
+          check(value, step.expect, step.why ?? `the click in ${step.title}`);
+        }
+      } finally {
+        client.close();
+      }
+      return true;
+    }
+    case "clickRealInPage": {
+      // A real mouse click in another page. A scripted click has no user
+      // gesture, so a browser refuses to open a popup for it.
+      const client = await attachToPage(harness.port, step.title);
+      try {
+        const point = await evaluate(
+          client,
+          `const element = document.querySelector(${JSON.stringify(step.selector)});
+           if (!element) return null;
+           element.scrollIntoView({ block: "center" });
+           const box = element.getBoundingClientRect();
+           return { x: box.left + box.width / 2, y: box.top + box.height / 2 };`,
+        );
+        if (!point) throw new Error(`there is no element for ${step.selector}`);
+        await client.send("Input.dispatchMouseEvent", {
+          type: "mousePressed",
+          x: point.x,
+          y: point.y,
+          button: "left",
+          clickCount: 1,
+        });
+        await client.send("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x: point.x,
+          y: point.y,
+          button: "left",
+          clickCount: 1,
+        });
+        if (step.expect) {
+          const value = await evaluate(client, fill(step.expression ?? "return true;"));
+          check(value, step.expect, step.why ?? `the click in ${step.title}`);
+        }
+      } finally {
+        client.close();
+      }
+      return true;
+    }
+    case "keyInPage": {
+      // A real key, sent to a page the way a keyboard sends it: the content
+      // handler listens for keys, not for scripted events.
+      const client = await attachToPage(harness.port, step.title);
+      try {
+        await client.send("Input.dispatchKeyEvent", {
+          type: step.type ?? "keyDown",
+          key: step.key,
+          code: step.code ?? step.key,
+          text: step.text,
+          windowsVirtualKeyCode: step.keyCode ?? 0,
+        });
+        if (step.up !== false) {
+          await client.send("Input.dispatchKeyEvent", {
+            type: "keyUp",
+            key: step.key,
+            code: step.code ?? step.key,
+            windowsVirtualKeyCode: step.keyCode ?? 0,
+          });
+        }
+        if (step.expect) {
+          const value = await evaluate(client, fill(step.expression));
+          check(value, step.expect, step.why ?? `the key in ${step.title}`);
+        }
+      } finally {
+        client.close();
+      }
+      return true;
+    }
+    case "logContains": {
+      // What the browser itself said: some things are only visible in the
+      // log of the process, like the place a download went to.
+      const deadline = Date.now() + (step.timeout ?? 10000);
+      let said = "";
+      while (Date.now() < deadline) {
+        said = (harness.log ?? []).join("");
+        if (said.includes(step.text)) break;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      if (!said.includes(step.text)) {
+        throw new Error(
+          `the browser did not say "${step.text}" within ${step.timeout ?? 10000} ms`,
+        );
+      }
+      if (step.expect) check(said, step.expect, step.why ?? "the log of the browser");
+      return true;
     }
     case "screenshot": {
       await mkdir(artifactsDir, { recursive: true });

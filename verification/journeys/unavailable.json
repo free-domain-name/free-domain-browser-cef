@@ -1,0 +1,60 @@
+{
+  "name": "unavailable",
+  "description": "A name whose registry cannot be reached gets the unavailable page, and the retry asks again.",
+  "env": {
+    "FDB_REGISTRY_BASE": "http://127.0.0.1:9/registry"
+  },
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "unreachable.fdn",
+      "why": "a name is typed into the address bar"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Registry unavailable"
+      },
+      "timeout": 20000,
+      "why": "the registry cannot be reached, so the unavailable page opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Registry unavailable",
+      "expression": "const retry = document.getElementById('retry'); return !!retry && !retry.disabled;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the unavailable page offers a retry"
+    },
+    {
+      "do": "inPage",
+      "title": "Registry unavailable",
+      "expression": "const home = document.getElementById('home'); return !!home;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the unavailable page offers the start page"
+    },
+    {
+      "do": "inPage",
+      "title": "Registry unavailable",
+      "expression": "document.getElementById('retry').click(); return true;",
+      "why": "the retry is pressed"
+    },
+    {
+      "do": "pause",
+      "ms": 1500,
+      "why": "the app asks the registry again"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Registry unavailable"
+      },
+      "timeout": 20000,
+      "why": "the registry is still unreachable, so the page stays"
+    }
+  ]
+}

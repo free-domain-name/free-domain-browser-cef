@@ -1,0 +1,39 @@
+{
+  "name": "external",
+  "description": "The external button hands the address of the page to the system browser.",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "{{site}}/",
+      "why": "the site of the journeys is opened"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Test page"
+      },
+      "timeout": 20000,
+      "why": "the page loads"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('external').disabled;",
+      "expect": {
+        "equals": false
+      },
+      "why": "the external button is ready for a web page"
+    },
+    {
+      "do": "click",
+      "selector": "#external",
+      "why": "the external button is pressed"
+    },
+    {
+      "do": "logContains",
+      "text": "[external] opening",
+      "timeout": 15000,
+      "why": "the browser tries to open the address in the system browser"
+    }
+  ]
+}

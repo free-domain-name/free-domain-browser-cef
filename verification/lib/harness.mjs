@@ -9,8 +9,9 @@
 // then drives that running window through the DevTools protocol.
 
 import { spawn } from "node:child_process";
-import { createServer } from "node:net";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer as createSocketServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { appendFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CdpClient, fetchJsonWhenReady, waitFor } from "./cdp.mjs";
@@ -18,7 +19,7 @@ import { CdpClient, fetchJsonWhenReady, waitFor } from "./cdp.mjs";
 /** Asks the system for a port nobody is using. */
 export function freePort() {
   return new Promise((resolve, reject) => {
-    const server = createServer();
+    const server = createSocketServer();
     server.on("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const { port } = server.address();
@@ -81,6 +82,9 @@ export async function launchCef(options = {}) {
       ...process.env,
       FDB_SETTINGS_PATH: path.join(profile, "settings.json"),
       FDB_CACHE_DIR: path.join(profile, "cache"),
+      // A journey may point the app at another registry, to reach the paths
+      // that cannot be reached otherwise.
+      ...(options.env ?? {}),
     },
   });
   const log = [];
@@ -231,6 +235,72 @@ export async function waitForExpression(client, expression, timeout = 10000) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`"${expression}" was still false after ${timeout} ms (last: ${last})`);
+}
+
+/**
+ * Starts a small site the journeys can use.
+ *
+ * The browser needs real pages to load: a page with a title, a favicon, a
+ * link that opens a popup and a file that downloads. Everything the journeys
+ * need lives here, so no journey depends on the public web.
+ */
+export async function startSite() {
+  const port = await freePort();
+  // A small teal square: a real PNG, so the browser really decodes it.
+  const favicon = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mPQvbKfJMQwqmFUw/DVAACZM8AQ9/spKwAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const pages = {
+    "/": `<!doctype html><html><head><meta charset="utf-8"><title>Test page</title>
+<link rel="icon" href="/favicon.ico"></head><body>
+<h1>Test page</h1>
+<p id="hello">The site of the verification journeys.</p>
+<input id="field" type="text" aria-label="a field">
+<a id="popup" href="/popup" target="_blank" rel="noopener">Open a popup</a>
+<a id="download" href="/download.txt" download>Download a file</a>
+</body></html>`,
+    "/popup": `<!doctype html><html><head><meta charset="utf-8"><title>Popup page</title>
+</head><body><h1 id="popup-here">The popup</h1></body></html>`,
+  };
+  const server = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    try {
+      appendFileSync("/tmp/fdb-site-requests.log", `${request.method} ${url.pathname}\n`);
+    } catch {
+      /* The log is a help for the debug, not a must. */
+    }
+    if (url.pathname === "/favicon.ico") {
+      response.writeHead(200, { "Content-Type": "image/png", "Content-Length": favicon.length });
+      response.end(favicon);
+      return;
+    }
+    if (url.pathname === "/download.txt") {
+      const body = "a downloaded file\n";
+      response.writeHead(200, {
+        "Content-Type": "text/plain",
+        "Content-Disposition": 'attachment; filename="fdb-download.txt"',
+        "Content-Length": Buffer.byteLength(body),
+      });
+      response.end(body);
+      return;
+    }
+    const page = pages[url.pathname];
+    if (!page) {
+      response.writeHead(404, { "Content-Type": "text/plain" });
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    response.end(page);
+  });
+  await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
+  return {
+    origin: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
 }
 
 /** Takes a screenshot of the window and returns the PNG bytes. */

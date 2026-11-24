@@ -1,0 +1,74 @@
+{
+  "name": "custom-css",
+  "description": "The custom CSS of the settings reaches the chrome, and the chrome wears it.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings tab opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('custom_css'); field.value = ':root{--accent:#ff6600}'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": ":root{--accent:#ff6600}"
+      },
+      "why": "a custom colour is typed into the settings"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('save').click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings are saved"
+    },
+    {
+      "do": "pause",
+      "ms": 1200,
+      "why": "the app has a moment to apply and to save"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();",
+      "expect": {
+        "equals": "#ff6600"
+      },
+      "why": "the chrome wears the custom colour"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('customCssStyle').textContent.includes('#ff6600');",
+      "expect": {
+        "equals": true
+      },
+      "why": "the custom CSS sits in the chrome's own style element"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const style = document.getElementById('uiKitStyle'); const custom = document.getElementById('customCssStyle'); return !!(style && custom) && (style.compareDocumentPosition(custom) & Node.DOCUMENT_POSITION_FOLLOWING) === Node.DOCUMENT_POSITION_FOLLOWING;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the custom CSS comes after the shared kit, so it wins"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return getComputedStyle(document.querySelector('.go')).backgroundColor;",
+      "expect": {
+        "equals": "rgb(255, 102, 0)"
+      },
+      "why": "a button of the chrome is painted with the custom colour"
+    }
+  ]
+}

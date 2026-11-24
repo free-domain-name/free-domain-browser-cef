@@ -1,0 +1,55 @@
+{
+  "name": "keyboard",
+  "description": "A real key reaches the page the user is looking at.",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "{{site}}/",
+      "why": "the site of the journeys is opened"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Test page"
+      },
+      "timeout": 20000,
+      "why": "the page loads"
+    },
+    {
+      "do": "inPage",
+      "title": "Test page",
+      "expression": "const field = document.getElementById('field'); field.focus(); return document.activeElement === field;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the field of the page has the focus"
+    },
+    {
+      "do": "keyInPage",
+      "title": "Test page",
+      "key": "a",
+      "code": "KeyA",
+      "keyCode": 65,
+      "text": "a",
+      "expression": "return document.getElementById('field').value;",
+      "expect": {
+        "equals": "a"
+      },
+      "why": "the key reaches the page"
+    },
+    {
+      "do": "keyInPage",
+      "title": "Test page",
+      "key": "b",
+      "code": "KeyB",
+      "keyCode": 66,
+      "text": "b",
+      "expression": "return document.getElementById('field').value;",
+      "expect": {
+        "equals": "ab"
+      },
+      "why": "the next key reaches the page too"
+    }
+  ]
+}

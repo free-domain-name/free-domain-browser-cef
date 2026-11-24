@@ -1,0 +1,99 @@
+{
+  "name": "chat-panel",
+  "description": "The chat panel has its own features: the nickname, the profile, the ignore list and the clear button.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#chat",
+      "why": "the chat button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Free Domain Chat"
+      },
+      "timeout": 15000,
+      "why": "the chat panel opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "var box = document.getElementById('ageCheck'); box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('ageContinue').click(); return true;",
+      "why": "the age gate is accepted"
+    },
+    {
+      "do": "pause",
+      "ms": 1500,
+      "why": "the panel has a moment to start"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "const field = document.getElementById('nickname'); field.value = 'journey'; field.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('saveNick').click(); return true;",
+      "why": "a nickname is typed and saved"
+    },
+    {
+      "do": "waitForInPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('nickname').value === 'journey'",
+      "timeout": 15000,
+      "why": "the nickname is kept by the chat"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "const field = document.getElementById('profileDescription'); field.value = 'A traveller of the free web'; field.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('saveProfile').click(); return true;",
+      "why": "a profile is typed and saved"
+    },
+    {
+      "do": "waitForInPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('profileDescription').value === 'A traveller of the free web'",
+      "timeout": 15000,
+      "why": "the profile is kept by the chat"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "return document.getElementById('ignoreEmpty').textContent;",
+      "expect": {
+        "contains": "Nobody is ignored"
+      },
+      "why": "the ignore list starts empty"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('clearData').click(); return document.getElementById('clearHint').textContent;",
+      "expect": {
+        "contains": "signing key"
+      },
+      "why": "the clear button asks before it erases anything"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('clearData').click(); return document.getElementById('clearData').textContent;",
+      "expect": {
+        "contains": "Clearing"
+      },
+      "why": "the second click clears the local data"
+    },
+    {
+      "do": "waitForInPage",
+      "title": "Free Domain Chat",
+      "expression": "document.getElementById('clearData').textContent === 'Clear local chat data'",
+      "timeout": 15000,
+      "why": "the button is ready again after the data is gone"
+    },
+    {
+      "do": "inPage",
+      "title": "Free Domain Chat",
+      "expression": "return document.getElementById('roomTitle').textContent;",
+      "expect": {
+        "contains": ":"
+      },
+      "why": "the panel shows the room it is in"
+    }
+  ]
+}

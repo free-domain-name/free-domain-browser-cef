@@ -1,0 +1,107 @@
+{
+  "name": "site",
+  "description": "A real page: the favicon, the title in the address bar, the download and the popup.",
+  "steps": [
+    {
+      "do": "type",
+      "selector": "#url",
+      "text": "{{site}}/",
+      "why": "the site of the journeys is opened"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Test page"
+      },
+      "timeout": 20000,
+      "why": "the page loads"
+    },
+    {
+      "do": "waitFor",
+      "expression": "document.querySelectorAll('#tabs img.favicon').length > 0",
+      "timeout": 15000,
+      "why": "the tab shows the icon of the site"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const img = document.querySelector('#tabs img.favicon'); return img && img.complete && img.naturalWidth > 0;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the icon of the site is really loaded"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "contains": "Test page"
+      },
+      "why": "the address bar shows the title of the page"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('tabCount').textContent;",
+      "expect": {
+        "contains": "1 tab"
+      },
+      "why": "the strip counts the open tabs"
+    },
+    {
+      "do": "clickInPage",
+      "title": "Test page",
+      "selector": "#download",
+      "why": "the download link of the page is pressed"
+    },
+    {
+      "do": "logContains",
+      "text": "[download]",
+      "timeout": 15000,
+      "why": "the browser says where the download goes"
+    },
+    {
+      "do": "logContains",
+      "text": "fdb-download",
+      "timeout": 15000,
+      "why": "the download keeps the name of the file"
+    },
+    {
+      "do": "waitFor",
+      "expression": "document.getElementById('statusBubble').textContent.indexOf('Download') >= 0",
+      "timeout": 15000,
+      "why": "the chrome tells the user about the download"
+    },
+    {
+      "do": "inPage",
+      "title": "Test page",
+      "expression": "const link = document.getElementById('popup'); link.focus(); return document.activeElement === link;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the popup link of the page has the focus"
+    },
+    {
+      "do": "keyInPage",
+      "title": "Test page",
+      "key": "Enter",
+      "code": "Enter",
+      "keyCode": 13,
+      "why": "the popup link of the page is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Popup page"
+      },
+      "timeout": 20000,
+      "why": "the popup opens as a tab of its own"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('tabCount').textContent;",
+      "expect": {
+        "contains": "2 tabs"
+      },
+      "why": "the strip counts the two tabs"
+    }
+  ]
+}

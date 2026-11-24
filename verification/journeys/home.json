@@ -1,0 +1,71 @@
+{
+  "name": "home",
+  "description": "The home button goes to the home page of the settings, and to the start page when the settings name none.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings tab opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('home'); field.value = 'http://example.com'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": "http://example.com"
+      },
+      "why": "a home page is typed into the settings"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('save').click(); return true;",
+      "expect": {
+        "equals": true
+      },
+      "why": "the settings are saved"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to save"
+    },
+    {
+      "do": "click",
+      "selector": "#home",
+      "why": "the home button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Example Domain"
+      },
+      "timeout": 20000,
+      "why": "the home page of the settings opens"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').value;",
+      "expect": {
+        "contains": "Example Domain"
+      },
+      "why": "the address bar shows the title of the page"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.getElementById('url').title;",
+      "expect": {
+        "contains": "example.com"
+      },
+      "why": "the address of the page stays in the tooltip of the bar"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "name": "density",
+  "description": "The compact density is one switch for the whole app: the chrome and the pages shrink together.",
+  "steps": [
+    {
+      "do": "click",
+      "selector": "#settings",
+      "why": "the settings button is pressed"
+    },
+    {
+      "do": "targets",
+      "expect": {
+        "contains": "Settings"
+      },
+      "timeout": 10000,
+      "why": "the settings tab opens"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('density'); field.value = 'compact'; field.dispatchEvent(new Event('change', { bubbles: true })); return field.value;",
+      "expect": {
+        "equals": "compact"
+      },
+      "why": "the density is changed to compact"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "document.getElementById('save').click(); return true;",
+      "why": "the settings are saved"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to apply the density"
+    },
+    {
+      "do": "evaluate",
+      "expression": "return document.documentElement.dataset.density;",
+      "expect": {
+        "equals": "compact"
+      },
+      "why": "the chrome reads the density"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const strip = document.getElementById('tabs'); return Math.round(strip.getBoundingClientRect().height);",
+      "expect": {
+        "equals": 26
+      },
+      "why": "the tab strip is the compact height"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "return document.documentElement.dataset.density;",
+      "expect": {
+        "equals": "compact"
+      },
+      "why": "the settings page reads the same density"
+    },
+    {
+      "do": "inPage",
+      "title": "Settings",
+      "expression": "const field = document.getElementById('density'); field.value = 'comfortable'; field.dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('save').click(); return true;",
+      "why": "the density goes back to comfortable"
+    },
+    {
+      "do": "pause",
+      "ms": 1000,
+      "why": "the app has a moment to apply the density"
+    },
+    {
+      "do": "evaluate",
+      "expression": "const strip = document.getElementById('tabs'); return Math.round(strip.getBoundingClientRect().height);",
+      "expect": {
+        "equals": 32
+      },
+      "why": "the tab strip is the comfortable height again"
+    }
+  ]
+}
